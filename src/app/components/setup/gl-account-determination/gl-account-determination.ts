@@ -77,7 +77,14 @@ function emptyRow(): GlAccountDeterminationRow {
 }
 
 function debitCreditLabel(value: string): string {
-  return value.trim().toLowerCase() === 'credit' ? 'Credit' : 'Debit';
+  const normalizedValue = value.trim().toLowerCase();
+  if (normalizedValue === 'credit') {
+    return 'Credit';
+  }
+  if (normalizedValue === 'debit') {
+    return 'Debit';
+  }
+  return '';
 }
 
 @Component({
@@ -93,6 +100,7 @@ export class GlAccountDeterminationComponent implements OnInit {
   private readonly businessPartnerService = inject(GatePassBusinessPartnerService);
 
   readonly branchNameForDisplay = formatBranchNameForDisplay;
+  readonly debitCreditLabelForDisplay = debitCreditLabel;
   readonly branchOptions = GL_ACCOUNT_BRANCH_OPTIONS;
   readonly debitCreditOptions = GL_ACCOUNT_DEBIT_CREDIT_OPTIONS;
   readonly formOptions = GL_ACCOUNT_FORM_OPTIONS;
@@ -555,6 +563,7 @@ export class GlAccountDeterminationComponent implements OnInit {
       CctCode: row.costCenterType.trim(),
       branch: glAccountBranchCode(row.branch),
       debit_credit_type: row.debitCreditType.trim().toUpperCase(),
+      debitCreditType: row.debitCreditType.trim().toUpperCase(),
       vendor_for_expense_reimbursement: this.vendorForExpenseReimbursement.trim(),
       vendor_for_loans: this.vendorForLoans.trim(),
       vendor_for_advances: this.vendorForAdvances.trim(),

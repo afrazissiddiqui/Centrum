@@ -285,7 +285,7 @@
                     <td>{{ record.Name }}</td>
                     <td>{{ record.CctName }}</td>
                     <td>{{ branchNameForDisplay(record.Branch) }}</td>
-                    <td>{{ record.DebitCreditType }}</td>
+                    <td>{{ debitCreditLabelForDisplay(record.DebitCreditType) || 'Not set' }}</td>
                     <td class="col-action">
                       <button
                         type="button"

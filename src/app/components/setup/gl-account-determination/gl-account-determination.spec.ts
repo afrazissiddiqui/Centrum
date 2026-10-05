@@ -78,6 +78,53 @@ describe('GlAccountDeterminationComponent', () => {
     expect(payload.costCenterType).toBe('COS');
   });
 
+  it('does not show Debit in the editor when the saved record has no debit/credit value', () => {
+    component.editRecord({
+      Id: 101,
+      Form: 9,
+      Type: 'Salary',
+      Code: '1000',
+      Name: 'Cash',
+      Branch: 'AHCP_HO',
+      DebitCreditType: '',
+      BusinessPartner: 'BP-01',
+      CctCode: 'COS',
+      CctName: 'Cost of Sales',
+      VendorForExpenseReimbursement: '',
+      VendorForLoans: '',
+      VendorForAdvances: '',
+    });
+
+    expect(component.rows[0].debitCreditType).toBe('');
+  });
+
+  it('shows the saved debit/credit value in title case in the listing', () => {
+    component.savedRecords.set([
+      {
+        Id: 101,
+        Form: 9,
+        Type: 'Salary',
+        Code: '1000',
+        Name: 'Cash',
+        Branch: 'AHCP_HO',
+        DebitCreditType: 'DEBIT',
+        BusinessPartner: 'BP-01',
+        CctCode: 'COS',
+        CctName: 'Cost of Sales',
+        VendorForExpenseReimbursement: '',
+        VendorForLoans: '',
+        VendorForAdvances: '',
+      },
+    ]);
+    fixture.detectChanges();
+
+    const savedLine = fixture.nativeElement.querySelector(
+      '.list-table tbody tr',
+    ) as HTMLTableRowElement;
+
+    expect(savedLine.cells[9].textContent?.trim()).toBe('Debit');
+  });
+
   it('does not submit a row when every mapping field matches a saved line', () => {
     const service = TestBed.inject(GlAccountDeterminationService);
     const addSpy = spyOn(service, 'addGlAccountDetermination').and.callThrough();

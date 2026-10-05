@@ -18,6 +18,7 @@ describe('GlAccountDeterminationService', () => {
     name: 'Cash',
     branch: '2',
     debit_credit_type: 'DEBIT',
+    debitCreditType: 'DEBIT',
     business_partner: 'BP-01',
     costCenterType: 'COS',
     CctCode: 'COS',
@@ -67,5 +68,34 @@ describe('GlAccountDeterminationService', () => {
     request.flush({ status: true, message: 'Saved' });
 
     expect(response).toEqual({ status: true, message: 'Saved' });
+  });
+
+  it('maps the debit/credit value from the list response for saved lines', () => {
+    let records: unknown;
+    service.fetchGlAccountDeterminations().subscribe((result) => {
+      records = result;
+    });
+
+    const request = httpMock.expectOne(apiUrl('gl-account-determination-list'));
+    request.flush({
+      status: true,
+      data: [
+        {
+          id: 1,
+          type: 'Salary',
+          code: '1000',
+          name: 'Cash',
+          branch: '2',
+          form: 'Job Specification Form',
+          debitCreditType: 'CREDIT',
+        },
+      ],
+    });
+
+    expect(records).toEqual(
+      jasmine.arrayContaining([
+        jasmine.objectContaining({ DebitCreditType: 'CREDIT' }),
+      ]),
+    );
   });
 });

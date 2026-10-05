@@ -12,6 +12,7 @@ export interface GlAccountDeterminationAddPayload {
   name: string;
   branch: string;
   debit_credit_type: string;
+  debitCreditType: string;
   business_partner: string;
   costCenterType: string;
   CctCode: string;
@@ -345,6 +346,9 @@ export class GlAccountDeterminationService {
         'DebitCreditType',
         'debitCreditType',
         'debit_credit_type',
+        'Debit_Credit_Type',
+        'debitCredit',
+        'debit_credit',
       ]),
       BusinessPartner: this.pickString(sources, [
         'BusinessPartner',
