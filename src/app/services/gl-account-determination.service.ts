@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, map, tap } from 'rxjs';
 import { glAccountBranchLabel } from '../components/setup/gl-account-determination/gl-account-branch.options';
 import { apiUrl } from '../config/api.config';
+import { formatSapApiFailureMessage } from '../utils/api-error.util';
 
 export interface GlAccountDeterminationAddPayload {
   form: number | string;
@@ -76,7 +77,14 @@ export class GlAccountDeterminationService {
   }
 
   addGlAccountDetermination(payload: GlAccountDeterminationAddPayload): Observable<unknown> {
-    return this.http.post(GL_ACCOUNT_DETERMINATION_ADD_URL, payload);
+    return this.http.post<unknown>(GL_ACCOUNT_DETERMINATION_ADD_URL, payload).pipe(
+      map((response) =>
+        this.ensureSuccessfulMutationResponse(
+          response,
+          'GL Account Determination row could not be saved.',
+        ),
+      ),
+    );
   }
 
   updateGlAccountDetermination(
@@ -84,7 +92,14 @@ export class GlAccountDeterminationService {
     payload: GlAccountDeterminationAddPayload,
   ): Observable<unknown> {
     const identifier = encodeURIComponent(String(id));
-    return this.http.post(`${GL_ACCOUNT_DETERMINATION_UPDATE_URL}/${identifier}`, payload);
+    return this.http.post<unknown>(`${GL_ACCOUNT_DETERMINATION_UPDATE_URL}/${identifier}`, payload).pipe(
+      map((response) =>
+        this.ensureSuccessfulMutationResponse(
+          response,
+          'GL Account Determination row could not be updated.',
+        ),
+      ),
+    );
   }
 
   fetchGlAccountDeterminations(): Observable<GlAccountDeterminationRecord[]> {
@@ -126,7 +141,25 @@ export class GlAccountDeterminationService {
 
   deleteGlAccountDetermination(id: string | number): Observable<unknown> {
     const identifier = encodeURIComponent(String(id));
-    return this.http.delete(`${GL_ACCOUNT_DETERMINATION_DELETE_URL}/${identifier}`);
+    return this.http.delete<unknown>(`${GL_ACCOUNT_DETERMINATION_DELETE_URL}/${identifier}`).pipe(
+      map((response) =>
+        this.ensureSuccessfulMutationResponse(
+          response,
+          'GL Account Determination row could not be deleted.',
+        ),
+      ),
+    );
+  }
+
+  private ensureSuccessfulMutationResponse(response: unknown, fallback: string): unknown {
+    if (response && typeof response === 'object' && !Array.isArray(response)) {
+      const result = response as Record<string, unknown>;
+      if (result['status'] === false || result['success'] === false) {
+        throw new Error(formatSapApiFailureMessage(response, fallback));
+      }
+    }
+
+    return response;
   }
 
   private extractApiItems(response: unknown): Array<Record<string, unknown>> {

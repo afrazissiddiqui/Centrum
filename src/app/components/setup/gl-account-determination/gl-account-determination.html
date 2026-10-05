@@ -193,15 +193,6 @@
                   <td class="col-action">
                     <button
                       type="button"
-                      class="btn-duplicate-row"
-                      [disabled]="saving()"
-                      (click)="duplicateRow(row.id)"
-                      title="Duplicate row"
-                    >
-                      Duplicate
-                    </button>
-                    <button
-                      type="button"
                       class="btn-remove-row"
                       [disabled]="saving()"
                       (click)="removeRow(row.id)"
@@ -226,6 +217,20 @@
       <div class="form-panel list-panel">
         <div class="form-panel-head">
           <h3 class="form-panel-title">Saved lines</h3>
+          <div class="panel-actions">
+            @if (selectedRecordIds().size > 0) {
+              <span class="selection-count">{{ selectedRecordIds().size }} selected</span>
+            }
+            <button
+              type="button"
+              class="btn-delete-selected"
+              [disabled]="selectedRecordIds().size === 0 || deleting() || saving()"
+              (click)="deleteSelectedRecords()"
+              [attr.aria-busy]="deleting()"
+            >
+              {{ deleting() ? 'Deleting…' : 'Delete selected' }}
+            </button>
+          </div>
         </div>
 
         @if (loadingList()) {
@@ -237,6 +242,16 @@
             <table class="entry-table list-table">
               <thead>
                 <tr>
+                  <th class="selection-column">
+                    <input
+                      type="checkbox"
+                      class="selection-checkbox"
+                      aria-label="Select all saved lines"
+                      [checked]="allSavedRecordsSelected()"
+                      [disabled]="deleting() || saving() || loadingList()"
+                      (change)="toggleAllRecordSelection($event)"
+                    />
+                  </th>
                   <th class="col-sr">SR No.</th>
                   <th>Form</th>
                   <th>Business Partner</th>
@@ -252,6 +267,16 @@
               <tbody>
                 @for (record of savedRecords(); track record.Id; let index = $index) {
                   <tr>
+                    <td class="selection-column">
+                      <input
+                        type="checkbox"
+                        class="selection-checkbox"
+                        [attr.aria-label]="'Select line ' + (index + 1) + ': ' + record.Type + ' (' + record.Code + ')'"
+                        [checked]="selectedRecordIds().has(record.Id)"
+                        [disabled]="!record.Id || deleting() || saving()"
+                        (change)="toggleRecordSelection(record.Id, $event)"
+                      />
+                    </td>
                     <td class="col-sr">{{ index + 1 }}</td>
                     <td>{{ formNameForValue(record.Form) }}</td>
                     <td>{{ record.BusinessPartner }}</td>

@@ -6,7 +6,7 @@ import {
   GatePassBusinessPartnerService,
 } from '../../gate-pass/gate-pass-business-partner.service';
 import { GatePassBusinessPartnerSearchInputComponent } from '../../gate-pass/business-partner-search-input/business-partner-search-input';
-import { finalize } from 'rxjs';
+import { catchError, concatMap, finalize, from, map, of, toArray } from 'rxjs';
 import { AlertService } from '../../../services/alert.service';
 import { formatBranchNameForDisplay } from '../../../utils/branch-name.util';
 import {
@@ -106,6 +106,7 @@ export class GlAccountDeterminationComponent implements OnInit {
   readonly openAccountSearch = signal<{ rowId: string; field: 'code' | 'name' } | null>(null);
   readonly accountSearchPosition = signal({ top: 0, left: 0, width: 0 });
   readonly savedRecords = signal<GlAccountDeterminationRecord[]>([]);
+  readonly selectedRecordIds = signal<Set<number>>(new Set());
   readonly editingId = signal<number | null>(null);
   readonly openFormSearch = signal<string | null>(null);
 
@@ -233,24 +234,6 @@ export class GlAccountDeterminationComponent implements OnInit {
     this.rows = [...this.rows, emptyRow()];
   }
 
-  duplicateRow(rowId: string): void {
-    const rowToDuplicate = this.rows.find((row) => row.id === rowId);
-    if (!rowToDuplicate) {
-      return;
-    }
-
-    const duplicateRow: GlAccountDeterminationRow = {
-      ...rowToDuplicate,
-      id: newId(),
-    };
-
-    this.rows = [
-      ...this.rows.slice(0, this.rows.findIndex((row) => row.id === rowId) + 1),
-      duplicateRow,
-      ...this.rows.slice(this.rows.findIndex((row) => row.id === rowId) + 1),
-    ];
-  }
-
   removeRow(rowId: string): void {
     if (this.rows.length <= 1) {
       this.alertService.validation('At least one row is required.');
@@ -273,6 +256,14 @@ export class GlAccountDeterminationComponent implements OnInit {
     }
 
     const editingId = this.editingId();
+    const duplicateRowIndex = this.findDuplicateRowIndex(this.rows, editingId);
+    if (duplicateRowIndex !== null) {
+      this.alertService.validation(
+        `Row ${this.savedRecords().length + duplicateRowIndex + 1}: This GL Account Determination already exists.`,
+      );
+      return;
+    }
+
     if (editingId !== null) {
       this.updateRecord(editingId, this.rows[0]);
       return;
@@ -329,6 +320,101 @@ export class GlAccountDeterminationComponent implements OnInit {
     this.resetForm();
   }
 
+  toggleRecordSelection(recordId: number, event: Event): void {
+    if (!recordId || this.deleting() || this.saving()) {
+      return;
+    }
+
+    const checked = (event.currentTarget as HTMLInputElement).checked;
+    this.selectedRecordIds.update((selected) => {
+      const next = new Set(selected);
+      if (checked) {
+        next.add(recordId);
+      } else {
+        next.delete(recordId);
+      }
+      return next;
+    });
+  }
+
+  toggleAllRecordSelection(event: Event): void {
+    if (this.deleting() || this.saving()) {
+      return;
+    }
+
+    const checked = (event.currentTarget as HTMLInputElement).checked;
+    this.selectedRecordIds.set(
+      checked
+        ? new Set(this.savedRecords().map((record) => record.Id).filter((id) => id > 0))
+        : new Set(),
+    );
+  }
+
+  allSavedRecordsSelected(): boolean {
+    const selectableRecords = this.savedRecords().filter((record) => record.Id > 0);
+    const selected = this.selectedRecordIds();
+    return selectableRecords.length > 0 && selectableRecords.every((record) => selected.has(record.Id));
+  }
+
+  async deleteSelectedRecords(): Promise<void> {
+    const selectedIds = [...this.selectedRecordIds()].filter((id) =>
+      this.savedRecords().some((record) => record.Id === id),
+    );
+    if (this.deleting() || this.saving() || selectedIds.length === 0) {
+      return;
+    }
+
+    const result = await this.alertService.confirm(
+      'Delete selected GL account determinations?',
+      `Remove ${selectedIds.length} selected line(s) from the list?`,
+    );
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    this.deleting.set(true);
+    from(selectedIds)
+      .pipe(
+        concatMap((id) =>
+          this.glAccountService.deleteGlAccountDetermination(id).pipe(
+            map(() => ({ id, deleted: true as const })),
+            catchError((error: unknown) => of({ id, deleted: false as const, error })),
+          ),
+        ),
+        toArray(),
+        finalize(() => this.deleting.set(false)),
+      )
+      .subscribe((results) => {
+        const deletedIds = results.filter((result) => result.deleted).map((result) => result.id);
+        const failedResults = results.filter((result) => !result.deleted);
+        this.selectedRecordIds.set(new Set(failedResults.map((result) => result.id)));
+        this.loadSavedRecords();
+
+        if (failedResults.length === 0) {
+          this.alertService.success(
+            'Deleted',
+            `${deletedIds.length} GL Account Determination line(s) deleted successfully.`,
+          );
+          return;
+        }
+
+        const firstFailure = failedResults[0];
+        const failureMessage = formatApiErrorMessage(
+          firstFailure.error,
+          'One or more selected lines could not be deleted.',
+        );
+        if (deletedIds.length === 0) {
+          void this.alertService.error('Delete Failed', failureMessage);
+          return;
+        }
+
+        void this.alertService.warning(
+          'Some Lines Were Not Deleted',
+          `${deletedIds.length} line(s) deleted; ${failedResults.length} failed. ${failureMessage}`,
+        );
+      });
+  }
+
   private resetForm(): void {
     this.editingId.set(null);
     this.rows = [emptyRow()];
@@ -381,6 +467,10 @@ export class GlAccountDeterminationComponent implements OnInit {
       .subscribe({
         next: (records) => {
           this.savedRecords.set(records);
+          const recordIds = new Set(records.map((record) => record.Id).filter((id) => id > 0));
+          this.selectedRecordIds.update(
+            (selected) => new Set([...selected].filter((id) => recordIds.has(id))),
+          );
         },
         error: (error: unknown) => {
           void this.alertService.error(
@@ -471,6 +561,72 @@ export class GlAccountDeterminationComponent implements OnInit {
     };
   }
 
+  private findDuplicateRowIndex(
+    rows: GlAccountDeterminationRow[],
+    excludedRecordId: number | null,
+  ): number | null {
+    const existingKeys = new Set(
+      this.savedRecords()
+        .filter((record) => record.Id !== excludedRecordId)
+        .map((record) => this.recordDuplicateKey(record)),
+    );
+
+    for (let index = 0; index < rows.length; index++) {
+      const key = this.payloadDuplicateKey(this.toPayload(rows[index]));
+      if (existingKeys.has(key)) {
+        return index;
+      }
+      existingKeys.add(key);
+    }
+
+    return null;
+  }
+
+  private payloadDuplicateKey(payload: GlAccountDeterminationAddPayload): string {
+    return JSON.stringify([
+      this.normalizeFormValue(payload.form),
+      this.normalizeDuplicateValue(payload.type),
+      this.normalizeDuplicateValue(payload.code),
+      this.normalizeDuplicateValue(payload.name),
+      this.normalizeDuplicateValue(glAccountBranchCode(payload.branch)),
+      this.normalizeDuplicateValue(payload.debit_credit_type),
+      this.normalizeDuplicateValue(payload.business_partner),
+      this.normalizeDuplicateValue(payload.costCenterType),
+      this.normalizeDuplicateValue(payload.vendor_for_expense_reimbursement ?? ''),
+      this.normalizeDuplicateValue(payload.vendor_for_loans ?? ''),
+      this.normalizeDuplicateValue(payload.vendor_for_advances ?? ''),
+    ]);
+  }
+
+  private recordDuplicateKey(record: GlAccountDeterminationRecord): string {
+    return JSON.stringify([
+      this.normalizeFormValue(record.Form),
+      this.normalizeDuplicateValue(record.Type),
+      this.normalizeDuplicateValue(record.Code),
+      this.normalizeDuplicateValue(record.Name),
+      this.normalizeDuplicateValue(glAccountBranchCode(record.Branch)),
+      this.normalizeDuplicateValue(record.DebitCreditType),
+      this.normalizeDuplicateValue(record.BusinessPartner),
+      this.normalizeDuplicateValue(record.CctCode),
+      this.normalizeDuplicateValue(record.VendorForExpenseReimbursement),
+      this.normalizeDuplicateValue(record.VendorForLoans),
+      this.normalizeDuplicateValue(record.VendorForAdvances),
+    ]);
+  }
+
+  private normalizeFormValue(value: number | string): string {
+    const normalized = String(value).trim().toLowerCase();
+    const option = this.formOptions.find(
+      (item) =>
+        String(item.value) === normalized || item.name.trim().toLowerCase() === normalized,
+    );
+    return option ? String(option.value) : normalized;
+  }
+
+  private normalizeDuplicateValue(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
   formNameForValue(value: number | string): string {
     if (typeof value === 'string' && value.trim()) {
       return value.trim();
@@ -519,6 +675,7 @@ export class GlAccountDeterminationComponent implements OnInit {
       },
       error: (error: unknown) => {
         this.saving.set(false);
+        this.loadSavedRecords();
         void this.alertService.error(
           'Save Failed',
           formatApiErrorMessage(error, 'Failed to save GL Account Determination row.'),

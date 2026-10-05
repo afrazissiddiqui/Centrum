@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { AlertService } from '../../../services/alert.service';
 import { GlAccountDeterminationService } from '../../../services/gl-account-determination.service';
 import {
@@ -54,47 +54,6 @@ describe('GlAccountDeterminationComponent', () => {
     fixture.detectChanges();
   });
 
-  it('duplicates the selected row without mutating the original values', () => {
-    component.rows = [
-      {
-        id: 'row-1',
-        formName: 'Job Specification Form',
-        formValue: 1,
-        glItemType: 'Salary',
-        salaryGlAccountCode: '1000',
-        salaryGlAccountName: 'Cash',
-        businessPartner: 'BP-01',
-        costCenterType: 'Department',
-        branch: 'Islamabad',
-        debitCreditType: 'Debit',
-      },
-      {
-        id: 'row-2',
-        formName: 'Application Form',
-        formValue: 2,
-        glItemType: 'Expense',
-        salaryGlAccountCode: '2000',
-        salaryGlAccountName: 'Expense',
-        businessPartner: 'BP-02',
-        costCenterType: 'Project',
-        branch: 'Karachi',
-        debitCreditType: 'Credit',
-      },
-    ];
-
-    component.duplicateRow('row-1');
-
-    expect(component.rows.length).toBe(3);
-    const duplicate = component.rows[1];
-    expect(duplicate.id).not.toBe('row-1');
-    expect(duplicate.formName).toBe('Job Specification Form');
-    expect(duplicate.glItemType).toBe('Salary');
-    expect(duplicate.salaryGlAccountCode).toBe('1000');
-    expect(duplicate.businessPartner).toBe('BP-01');
-    expect(duplicate.costCenterType).toBe('Department');
-    expect(component.rows[0].salaryGlAccountCode).toBe('1000');
-  });
-
   it('renders Cost Center Type options from the service', () => {
     const select = fixture.nativeElement.querySelector(
       'select[name^="costCenterType-"]',
@@ -117,5 +76,161 @@ describe('GlAccountDeterminationComponent', () => {
 
     expect(payload.CctCode).toBe('COS');
     expect(payload.costCenterType).toBe('COS');
+  });
+
+  it('does not submit a row when every mapping field matches a saved line', () => {
+    const service = TestBed.inject(GlAccountDeterminationService);
+    const addSpy = spyOn(service, 'addGlAccountDetermination').and.callThrough();
+    const row = {
+      ...component.rows[0],
+      formName: 'Job Specification Form',
+      formValue: 1,
+      glItemType: 'Salary',
+      salaryGlAccountCode: '1000',
+      salaryGlAccountName: 'Cash',
+      businessPartner: 'BP-01',
+      costCenterType: 'COS',
+      branch: 'AHCP_HO',
+      debitCreditType: 'Debit',
+    };
+    component.rows = [row];
+    component.savedRecords.set([
+      {
+        Id: 101,
+        Form: 1,
+        Type: 'Salary',
+        Code: '1000',
+        Name: 'Cash',
+        Branch: '2',
+        DebitCreditType: 'DEBIT',
+        BusinessPartner: 'BP-01',
+        CctCode: 'COS',
+        CctName: 'Cost of Sales',
+        VendorForExpenseReimbursement: '',
+        VendorForLoans: '',
+        VendorForAdvances: '',
+      },
+    ]);
+
+    component.submitForm();
+
+    expect(addSpy).not.toHaveBeenCalled();
+    expect(TestBed.inject(AlertService).validation).toHaveBeenCalledWith(
+      'Row 2: This GL Account Determination already exists.',
+    );
+  });
+
+  it('allows a row that differs from a saved line by one mapping field', () => {
+    const service = TestBed.inject(GlAccountDeterminationService);
+    const addSpy = spyOn(service, 'addGlAccountDetermination').and.callThrough();
+    component.rows = [
+      {
+        ...component.rows[0],
+        formName: 'Job Specification Form',
+        formValue: 1,
+        glItemType: 'Salary',
+        salaryGlAccountCode: '1000',
+        salaryGlAccountName: 'Cash',
+        businessPartner: 'BP-01',
+        costCenterType: 'COS',
+        branch: 'AHCP_Faisalabad',
+        debitCreditType: 'Debit',
+      },
+    ];
+    component.savedRecords.set([
+      {
+        Id: 101,
+        Form: 1,
+        Type: 'Salary',
+        Code: '1000',
+        Name: 'Cash',
+        Branch: '2',
+        DebitCreditType: 'DEBIT',
+        BusinessPartner: 'BP-01',
+        CctCode: 'COS',
+        CctName: 'Cost of Sales',
+        VendorForExpenseReimbursement: '',
+        VendorForLoans: '',
+        VendorForAdvances: '',
+      },
+    ]);
+
+    component.submitForm();
+
+    expect(addSpy).toHaveBeenCalledTimes(1);
+    expect(addSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({ branch: '3' }),
+    );
+  });
+
+  it('deletes the selected saved lines and refreshes the listing', async () => {
+    const service = TestBed.inject(GlAccountDeterminationService);
+    const deleteSpy = spyOn(service, 'deleteGlAccountDetermination').and.returnValue(of({}));
+    const records = [
+      { Id: 101, Type: 'Salary', Code: '1000' },
+      { Id: 102, Type: 'Expense', Code: '2000' },
+    ].map((partialRecord) => ({
+      Form: 'Job Specification Form',
+      Name: 'Account',
+      Branch: 'AHCP_HO',
+      DebitCreditType: 'DEBIT',
+      BusinessPartner: 'BP-01',
+      CctCode: 'COS',
+      CctName: 'Cost of Sales',
+      VendorForExpenseReimbursement: '',
+      VendorForLoans: '',
+      VendorForAdvances: '',
+      ...partialRecord,
+    }));
+    spyOn(service, 'fetchGlAccountDeterminations').and.returnValue(of([]));
+    component.savedRecords.set(records);
+    component.selectedRecordIds.set(new Set([101, 102]));
+
+    await component.deleteSelectedRecords();
+
+    expect(deleteSpy).toHaveBeenCalledTimes(2);
+    expect(deleteSpy).toHaveBeenCalledWith(101);
+    expect(deleteSpy).toHaveBeenCalledWith(102);
+    expect(component.savedRecords()).toEqual([]);
+    expect(component.selectedRecordIds().size).toBe(0);
+    expect(TestBed.inject(AlertService).success).toHaveBeenCalledWith(
+      'Deleted',
+      '2 GL Account Determination line(s) deleted successfully.',
+    );
+  });
+
+  it('keeps failed lines selected when bulk deletion partially fails', async () => {
+    const service = TestBed.inject(GlAccountDeterminationService);
+    const records = [
+      { Id: 101, Type: 'Salary', Code: '1000' },
+      { Id: 102, Type: 'Expense', Code: '2000' },
+    ].map((partialRecord) => ({
+      Form: 'Job Specification Form',
+      Name: 'Account',
+      Branch: 'AHCP_HO',
+      DebitCreditType: 'DEBIT',
+      BusinessPartner: 'BP-01',
+      CctCode: 'COS',
+      CctName: 'Cost of Sales',
+      VendorForExpenseReimbursement: '',
+      VendorForLoans: '',
+      VendorForAdvances: '',
+      ...partialRecord,
+    }));
+    spyOn(service, 'deleteGlAccountDetermination').and.callFake((id) =>
+      Number(id) === 101 ? of({}) : throwError(() => new Error('Delete was rejected.')),
+    );
+    spyOn(service, 'fetchGlAccountDeterminations').and.returnValue(of([records[1]]));
+    component.savedRecords.set(records);
+    component.selectedRecordIds.set(new Set([101, 102]));
+
+    await component.deleteSelectedRecords();
+
+    expect(component.savedRecords()).toEqual([records[1]]);
+    expect([...component.selectedRecordIds()]).toEqual([102]);
+    expect(TestBed.inject(AlertService).warning).toHaveBeenCalledWith(
+      'Some Lines Were Not Deleted',
+      '1 line(s) deleted; 1 failed. Delete was rejected.',
+    );
   });
 });

@@ -1,164 +1,139 @@
-<div class="setup-layout">
-  <div class="setup-content">
-    <div class="setup-body">
-      <div class="setup-intro">
-        <h2>Overtime List</h2>
-        <p>View employee overtime hours, rates, and exceptional overtime.</p>
+<div class="overtime-list-view">
+  <div id="table-toolbar" class="overtime-list-toolbar">
+    <div class="overtime-list-title" role="heading" aria-level="2">
+      Overtime ({{ records().length }}) · Filtered ({{ filteredRecords().length }})
+    </div>
+
+    <div class="overtime-list-actions">
+      <label class="overtime-search">
+        <span class="visually-hidden">Search overtime records</span>
+        <input
+          type="search"
+          [ngModel]="searchText()"
+          (ngModelChange)="onSearchChange($event)"
+          name="overtime-search"
+          placeholder="Search..."
+        />
+      </label>
+      <button type="button" class="overtime-tool-button" (click)="showColumnSettings.set(true)" aria-label="View settings" title="View settings">
+        ⚙
+      </button>
+      <button type="button" class="overtime-refresh" [disabled]="loading()" (click)="loadRecords()">
+        {{ loading() ? 'Loading…' : 'Refresh' }}
+      </button>
+    </div>
+  </div>
+
+  @if (showColumnSettings()) {
+    <div class="overtime-dialog-backdrop" (click)="showColumnSettings.set(false)"></div>
+    <section class="overtime-column-settings" role="dialog" aria-modal="true" aria-labelledby="overtime-column-settings-title">
+      <div class="overtime-column-settings__header">
+        <h3 id="overtime-column-settings-title">View Settings</h3>
+        <button type="button" (click)="showColumnSettings.set(false)" aria-label="Close view settings">×</button>
       </div>
-
-      <div class="form-panel">
-        <div class="form-panel-head">
-          <div>
-            <h3 class="form-panel-title">Overtime Records</h3>
-            <p class="panel-subtitle">
-              Showing {{ paginationStart() }} to {{ paginationEnd() }} of {{ filteredRecords().length }} filtered records
-            </p>
-          </div>
-          <div class="panel-actions">
-            <app-table-filter
-              [config]="overtimeTableFilter"
-              [data]="filterRows()"
-              (applied)="onTableFilterApplied()"
-            />
+      <div class="overtime-column-settings__body">
+        @for (column of columns(); track column.key) {
+          <label>
             <input
-              type="search"
-              class="search-input"
-              [ngModel]="searchText()"
-              (ngModelChange)="onSearchChange($event)"
-              name="overtime-search"
-              placeholder="Search records…"
+              type="checkbox"
+              [checked]="column.visible"
+              (change)="setColumnVisibility(column.key, $event)"
             />
-            <button type="button" class="btn-refresh" [disabled]="loading()" (click)="loadOvertimeList(true)">
-              {{ loading() ? 'Loading…' : 'Refresh' }}
-            </button>
-            <button
-              type="button"
-              class="btn-post"
-              [disabled]="posting() || loading() || attendanceFilterLoading() || workingHoursLoading() || workstationLoading() || !filteredRecords().length"
-              (click)="postEntries()"
-            >
-              {{ posting() ? 'Posting…' : 'Post Entries' }}
-            </button>
-          </div>
-        </div>
-
-        @if (loading()) {
-          <div class="panel-message">Loading overtime list…</div>
-        } @else {
-          @if (attendanceFilterLoading() || workingHoursLoading()) {
-            <div class="panel-message">Loading attendance hours…</div>
-          }
-          <div class="table-wrap">
-            <table class="entry-table">
-              <thead>
-                <tr>
-                  <th class="col-sr">SR No.</th>
-                  @for (column of columns; track column.key) {
-                    <th>{{ column.label }}</th>
-                  }
-                </tr>
-              </thead>
-              <tbody>
-                @if (!records().length) {
-                  <tr>
-                    <td [attr.colspan]="columns.length + 1" class="table-empty-cell">
-                      No overtime records found.
-                    </td>
-                  </tr>
-                } @else if (!filteredRecords().length) {
-                  <tr>
-                    <td [attr.colspan]="columns.length + 1" class="table-empty-cell">
-                      No records match your search.
-                    </td>
-                  </tr>
-                } @else {
-                  @for (record of paginatedRecords(); track record.id; let index = $index) {
-                    <tr>
-                      <td class="col-sr">{{ (currentPage() - 1) * pageSize() + index + 1 }}</td>
-                      @for (column of columns; track column.key) {
-                        <td>
-                          @if (column.key === 'shift' && record.shiftLookupLoading) {
-                            <span>Loading shift…</span>
-                          } @else if (column.key === 'shift' && record.shiftLookupFailed) {
-                            <span class="shift-warning" role="status">Warning: Shift assignment unavailable</span>
-                          } @else if (column.key === 'shift' && !record.shift) {
-                            <span class="shift-warning" role="status">Warning: No shift allotted</span>
-                          } @else if (column.key === 'overtimeRate') {
-                            <input type="number" class="entry-number" min="0" step="0.01" [ngModel]="record.overtimeRate" (ngModelChange)="updateEntryValue(record, 'overtimeRate', $event)" [attr.aria-label]="'Overtime rate for ' + record.employeeName" />
-                          } @else if (column.key === 'exceptionalOt') {
-                            <input type="number" class="entry-number" min="0" step="0.01" [ngModel]="record.exceptionalOt" (ngModelChange)="updateEntryValue(record, 'exceptionalOt', $event)" [attr.aria-label]="'Exceptional overtime for ' + record.employeeName" />
-                          } @else {
-                            {{ cellValue(record, column.key) }}
-                          }
-                        </td>
-                      }
-                    </tr>
-                  }
-                }
-              </tbody>
-            </table>
-          </div>
-
-          <div class="table-pagination" aria-label="Overtime list pagination">
-            <div class="pagination-info">
-              Showing {{ paginationStart() }} to {{ paginationEnd() }} of {{ filteredRecords().length }} entries
-            </div>
-            <div class="pagination-controls">
-              <button type="button" [disabled]="currentPage() === 1" (click)="setPage(currentPage() - 1)">
-                Previous
-              </button>
-              <div class="page-numbers">
-                @for (item of paginationItems(); track trackPaginationItem($index, item)) {
-                  @switch (item.kind) {
-                    @case ('page') {
-                      <button
-                        type="button"
-                        [class.active]="item.page === currentPage()"
-                        [attr.aria-current]="item.page === currentPage() ? 'page' : null"
-                        (click)="setPage(item.page)"
-                      >
-                        {{ item.page }}
-                      </button>
-                    }
-                    @case ('ellipsis') {
-                      <button
-                        type="button"
-                        class="pagination-ellipsis"
-                        [attr.aria-label]="'Jump to page ' + item.jumpTo"
-                        [title]="'Jump to page ' + item.jumpTo"
-                        (click)="setPage(item.jumpTo)"
-                      >
-                        ...
-                      </button>
-                    }
-                    @case ('last') {
-                      <button
-                        type="button"
-                        [class.active]="totalPages() === currentPage()"
-                        [attr.aria-current]="totalPages() === currentPage() ? 'page' : null"
-                        (click)="setPage(totalPages())"
-                      >
-                        {{ totalPages() }}
-                      </button>
-                    }
-                  }
-                }
-              </div>
-              <button type="button" [disabled]="currentPage() === totalPages()" (click)="setPage(currentPage() + 1)">
-                Next
-              </button>
-            </div>
-            <label class="page-size-selector">
-              <span>Rows</span>
-              <select [ngModel]="pageSize()" (ngModelChange)="onPageSizeChange($event)" name="overtime-page-size">
-                @for (size of pageSizeOptions; track size) {
-                  <option [ngValue]="size">{{ size }}</option>
-                }
-              </select>
-            </label>
-          </div>
+            {{ column.label }}
+          </label>
         }
       </div>
+    </section>
+  }
+
+  <div class="overtime-table-wrap">
+    <table class="overtime-table">
+      <thead>
+        <tr>
+          <th class="overtime-row-number">#</th>
+          @for (column of visibleColumns(); track column.key) {
+            <th>{{ column.label }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @if (loading()) {
+          <tr>
+            <td [attr.colspan]="visibleColumns().length + 1" class="overtime-empty">Loading overtime records…</td>
+          </tr>
+        } @else if (!records().length) {
+          <tr>
+            <td [attr.colspan]="visibleColumns().length + 1" class="overtime-empty">No overtime records to display.</td>
+          </tr>
+        } @else if (!filteredRecords().length) {
+          <tr>
+            <td [attr.colspan]="visibleColumns().length + 1" class="overtime-empty">No records match your search.</td>
+          </tr>
+        } @else {
+          @for (record of paginatedRecords(); track record.id; let index = $index) {
+            <tr>
+              <td class="overtime-row-number">{{ paginationStart() + index }}</td>
+              @for (column of visibleColumns(); track column.key) {
+                <td>{{ formatCellValue(column.key, record.values[column.key]) }}</td>
+              }
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="overtime-pagination" aria-label="Overtime list pagination">
+    <div class="overtime-pagination-info">
+      @if (filteredRecords().length) {
+        Showing {{ paginationStart() }} to {{ paginationEnd() }} of {{ filteredRecords().length }} entries
+      } @else {
+        No entries to display
+      }
+    </div>
+    <div class="overtime-pagination-bottom">
+      <div class="overtime-pagination-controls">
+        <button type="button" [disabled]="currentPage() === 1" (click)="setPage(currentPage() - 1)">Previous</button>
+        <div class="overtime-page-numbers">
+          @for (item of paginationItems(); track trackPaginationItem($index, item)) {
+            @switch (item.kind) {
+              @case ('page') {
+                <button
+                  type="button"
+                  [class.active]="item.page === currentPage()"
+                  [attr.aria-current]="item.page === currentPage() ? 'page' : null"
+                  (click)="setPage(item.page)"
+                >{{ item.page }}</button>
+              }
+              @case ('ellipsis') {
+                <button
+                  type="button"
+                  class="overtime-ellipsis"
+                  [attr.aria-label]="'Go to page ' + item.jumpTo"
+                  (click)="setPage(item.jumpTo)"
+                >…</button>
+              }
+              @case ('last') {
+                <button
+                  type="button"
+                  [class.active]="totalPages() === currentPage()"
+                  [attr.aria-current]="totalPages() === currentPage() ? 'page' : null"
+                  (click)="setPage(totalPages())"
+                >Last</button>
+              }
+            }
+          }
+        </div>
+        <button type="button" [disabled]="currentPage() >= totalPages()" (click)="setPage(currentPage() + 1)">Next</button>
+      </div>
+      <label class="overtime-page-size">
+        <span class="visually-hidden">Rows per page</span>
+        <select [ngModel]="pageSize()" (ngModelChange)="onPageSizeChange($event)" name="overtime-page-size">
+          @for (size of pageSizeOptions; track size) {
+            <option [ngValue]="size">Show {{ size }}</option>
+          }
+        </select>
+      </label>
     </div>
   </div>
 </div>

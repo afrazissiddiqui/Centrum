@@ -89,6 +89,103 @@
   font-size: 14px;
 }
 
+.list-panel .table-wrap {
+  overflow-x: auto;
+}
+
+.list-table {
+  min-width: 1240px;
+  table-layout: auto;
+}
+
+.list-table th,
+.list-table td {
+  overflow-wrap: anywhere;
+}
+
+.list-table th:nth-child(1),
+.list-table td:nth-child(1) {
+  min-width: 42px;
+  width: 42px;
+}
+
+.list-table th:nth-child(2),
+.list-table td:nth-child(2) {
+  min-width: 56px;
+}
+
+.list-table th:nth-child(3),
+.list-table td:nth-child(3) {
+  min-width: 160px;
+}
+
+.list-table th:nth-child(4),
+.list-table td:nth-child(4) {
+  min-width: 130px;
+}
+
+.list-table th:nth-child(5),
+.list-table td:nth-child(5) {
+  min-width: 160px;
+}
+
+.list-table th:nth-child(6),
+.list-table td:nth-child(6) {
+  min-width: 160px;
+}
+
+.list-table th:nth-child(7),
+.list-table td:nth-child(7) {
+  min-width: 150px;
+}
+
+.list-table th:nth-child(8),
+.list-table td:nth-child(8) {
+  min-width: 130px;
+}
+
+.list-table th:nth-child(9),
+.list-table td:nth-child(9) {
+  min-width: 130px;
+}
+
+.list-table th:nth-child(10),
+.list-table td:nth-child(10) {
+  min-width: 100px;
+}
+
+.list-table th:nth-child(11),
+.list-table td:nth-child(11) {
+  min-width: 100px;
+}
+
+.panel-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.selection-count {
+  color: #5f6b7a;
+  font-size: 13px;
+}
+
+.selection-column {
+  text-align: center !important;
+  width: 4%;
+}
+
+.selection-checkbox {
+  accent-color: #4f46b8;
+  cursor: pointer;
+  height: 16px;
+  width: 16px;
+}
+
+.selection-checkbox:disabled {
+  cursor: not-allowed;
+}
+
 .btn-add-row {
   background: #ffffff;
   border: 1px solid #4f46b8;
@@ -104,27 +201,10 @@
   background: #f5f3ff;
 }
 
-.btn-duplicate-row {
-  background: #eef2ff;
-  border: 1px solid #818cf8;
-  border-radius: 6px;
-  color: #3730a3;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  margin-right: 6px;
-  padding: 6px 8px;
-}
-
-.btn-duplicate-row:hover:not(:disabled) {
-  background: #e0e7ff;
-}
-
 .btn-add-row:disabled,
 .btn-submit-form:disabled,
 .btn-remove-row:disabled,
-.btn-edit-row:disabled,
-.btn-duplicate-row:disabled {
+.btn-edit-row:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -140,43 +220,43 @@
   width: 100%;
 }
 
-.entry-table th:nth-child(2),
-.entry-table td:nth-child(2) {
+.entry-table:not(.list-table) th:nth-child(2),
+.entry-table:not(.list-table) td:nth-child(2) {
   width: 14%;
 }
 
-.entry-table th:nth-child(3),
-.entry-table td:nth-child(3) {
+.entry-table:not(.list-table) th:nth-child(3),
+.entry-table:not(.list-table) td:nth-child(3) {
   width: 12%;
 }
 
-.entry-table th:nth-child(4),
-.entry-table td:nth-child(4) {
+.entry-table:not(.list-table) th:nth-child(4),
+.entry-table:not(.list-table) td:nth-child(4) {
   width: 14%;
 }
 
-.entry-table th:nth-child(5),
-.entry-table td:nth-child(5) {
+.entry-table:not(.list-table) th:nth-child(5),
+.entry-table:not(.list-table) td:nth-child(5) {
   width: 15%;
 }
 
-.entry-table th:nth-child(6),
-.entry-table td:nth-child(6) {
+.entry-table:not(.list-table) th:nth-child(6),
+.entry-table:not(.list-table) td:nth-child(6) {
   width: 14%;
 }
 
-.entry-table th:nth-child(7),
-.entry-table td:nth-child(7) {
+.entry-table:not(.list-table) th:nth-child(7),
+.entry-table:not(.list-table) td:nth-child(7) {
   width: 11%;
 }
 
-.entry-table th:nth-child(8),
-.entry-table td:nth-child(8) {
+.entry-table:not(.list-table) th:nth-child(8),
+.entry-table:not(.list-table) td:nth-child(8) {
   width: 10%;
 }
 
-.entry-table th:nth-child(9),
-.entry-table td:nth-child(9) {
+.entry-table:not(.list-table) th:nth-child(9),
+.entry-table:not(.list-table) td:nth-child(9) {
   width: 8%;
 }
 
@@ -294,6 +374,26 @@
 
 .btn-edit-row:hover {
   color: #352f8f;
+}
+
+.btn-delete-selected {
+  background: #c0392b;
+  border: 1px solid #c0392b;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+}
+
+.btn-delete-selected:hover:not(:disabled) {
+  background: #922b21;
+}
+
+.btn-delete-selected:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .form-footer {
