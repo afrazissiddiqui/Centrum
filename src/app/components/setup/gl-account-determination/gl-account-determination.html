@@ -154,13 +154,17 @@
                     />
                   </td>
                   <td>
-                    <input
-                      type="text"
-                      class="field-input"
+                    <select
+                      class="field-select"
                       [(ngModel)]="row.costCenterType"
                       [name]="'costCenterType-' + row.id"
-                      placeholder="Cost Center Type"
-                    />
+                      [disabled]="saving() || loadingCostCenterTypes()"
+                    >
+                      <option value="">Select Cost Center Type</option>
+                      @for (option of costCenterTypeOptions(); track option.CctCode) {
+                        <option [value]="option.CctCode">{{ option.CctName }}</option>
+                      }
+                    </select>
                   </td>
                   <td>
                     <select
@@ -254,7 +258,7 @@
                     <td>{{ record.Type }}</td>
                     <td>{{ record.Code }}</td>
                     <td>{{ record.Name }}</td>
-                    <td>{{ record.CostCenterType }}</td>
+                    <td>{{ record.CctName }}</td>
                     <td>{{ branchNameForDisplay(record.Branch) }}</td>
                     <td>{{ record.DebitCreditType }}</td>
                     <td class="col-action">

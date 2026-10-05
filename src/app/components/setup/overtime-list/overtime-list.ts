@@ -30,7 +30,8 @@ type OvertimeColumnKey =
   | 'shiftHours'
   | 'overtimeHours'
   | 'overtimeRate'
-  | 'exceptionalOt';
+  | 'exceptionalOt'
+  | 'totalCost';
 
 interface OvertimeTableColumn {
   key: OvertimeColumnKey;
@@ -72,6 +73,10 @@ export class OvertimeListComponent implements OnInit {
   readonly currentPage = signal(1);
   readonly pageSize = signal(10);
   readonly pageSizeOptions = [5, 10, 20, 50];
+  readonly periodFrom = signal(formatIsoDate(new Date()));
+  readonly periodTo = signal(formatIsoDate(new Date()));
+  readonly selectedEmployeeIds = signal<string[]>([]);
+  readonly selectedShift = signal('');
   readonly overtimeTableFilter = OVERTIME_TABLE_FILTER;
   readonly overtimeDataFilter: TableFilterConfig = {
     ...OVERTIME_TABLE_FILTER,
@@ -85,15 +90,42 @@ export class OvertimeListComponent implements OnInit {
   readonly columns: OvertimeTableColumn[] = [
     { key: 'employeeId', label: 'Employee ID' },
     { key: 'employeeName', label: 'Employee Name' },
-    { key: 'shift', label: 'Assigned Shift' },
-    { key: 'workingHour', label: 'Working Hour' },
-    { key: 'shiftHours', label: 'Shift Hours' },
-    { key: 'overtimeHours', label: 'Overtime Hours' },
-    { key: 'overtimeRate', label: 'Overtime Rate' },
+    { key: 'overtimeHours', label: 'Total Overtime Hours' },
+    { key: 'overtimeRate', label: 'Total Overtime Rate' },
+    { key: 'totalCost', label: 'Total Cost' },
     { key: 'exceptionalOt', label: 'Exceptional OT' },
   ];
 
   readonly totalRecords = computed(() => this.records().length);
+  readonly employeeOptions = computed(() => {
+    const employees = new Map<string, string>();
+    for (const record of this.records()) {
+      if (record.employeeId) {
+        employees.set(record.employeeId, record.employeeName || record.employeeId);
+      }
+    }
+    return Array.from(employees, ([id, name]) => ({ id, name }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  });
+  readonly employeeSelectionLabel = computed(() => {
+    const selectedIds = this.selectedEmployeeIds();
+    if (!selectedIds.length || selectedIds.length === this.employeeOptions().length) {
+      return 'All Employees';
+    }
+    const names = this.employeeOptions()
+      .filter((employee) => selectedIds.includes(employee.id))
+      .map((employee) => employee.name);
+    return names.length <= 2 ? names.join(', ') : `${names.slice(0, 2).join(', ')} +${names.length - 2} more`;
+  });
+  readonly shiftOptions = computed(() => {
+    const shifts = new Set<string>();
+    for (const record of this.records()) {
+      for (const shift of record.shift.split(',').map((value) => value.trim()).filter(Boolean)) {
+        shifts.add(this.shiftLabel(shift));
+      }
+    }
+    return Array.from(shifts).sort((left, right) => left.localeCompare(right));
+  });
 
   readonly filterRows = computed<OvertimeFilterRow[]>(() => this.records().map((record) => ({
     record,
@@ -103,6 +135,44 @@ export class OvertimeListComponent implements OnInit {
     employeeId: record.employeeId,
     employeeIdNumber: this.employeeIdNumber(record.employeeId),
   })));
+
+  readonly totalOvertimeMinutes = computed(() => this.filteredRecords().reduce(
+    (total, record) => total + (this.overtimeMinutes(record) ?? 0),
+    0,
+  ));
+  readonly totalOvertimeHours = computed(() => this.totalOvertimeMinutes() / 60);
+  readonly totalCost = computed(() => this.filteredRecords().reduce((total, record) => {
+    const minutes = this.overtimeMinutes(record);
+    return total + (minutes === null ? 0 : (minutes / 60) * record.overtimeRate);
+  }, 0));
+  readonly employeesWithOvertime = computed(() => this.filteredRecords().filter(
+    (record) => (this.overtimeMinutes(record) ?? 0) > 0,
+  ).length);
+  readonly recentOvertimeDays = computed(() => {
+    const filteredRecords = this.filteredRecords();
+    return this.attendanceService.slots().flatMap((slot) => {
+      if (slot.status !== 'Present') {
+        return [];
+      }
+      const record = filteredRecords.find(
+        (item) => canonicalAttendanceKey(item.employeeId) === canonicalAttendanceKey(slot.employeeKey),
+      );
+      if (!record) {
+        return [];
+      }
+      const shiftMinutes = this.shiftDurationMinutes(record);
+      if (shiftMinutes === null) {
+        return [];
+      }
+      const overtimeMinutes = Math.max(0, slot.workingMinutes - shiftMinutes);
+      return overtimeMinutes > 0
+        ? [{ employeeId: record.employeeId, employeeName: record.employeeName, date: slot.date, overtimeMinutes }]
+        : [];
+    }).sort((left, right) => right.date.localeCompare(left.date));
+  });
+  readonly recentOvertimeRecords = computed(() => this.filteredRecords().filter(
+    (record) => (this.overtimeMinutes(record) ?? 0) > 0,
+  ));
 
   readonly filteredRecords = computed(() => {
     const query = this.searchText().trim().toLowerCase();
@@ -317,19 +387,38 @@ export class OvertimeListComponent implements OnInit {
       return 'Loading…';
     }
 
+    const minutes = this.overtimeMinutes(record);
+    if (minutes === null) {
+      return '—';
+    }
+
+    if (minutes === 0) {
+      return '0h';
+    }
+    return formatWorkingDuration(minutes);
+  }
+
+  private overtimeMinutes(record: OvertimeListRecord): number | null {
+    if (this.workingHoursLoading() || record.shiftLookupLoading || this.workstationLoading()) {
+      return null;
+    }
+
     const workingHours = this.attendanceWorkingHours().get(canonicalAttendanceKey(record.employeeId));
     const workingMinutes = workingHours ? this.durationTextToMinutes(workingHours) : null;
     const shiftMinutes = this.shiftDurationMinutes(record);
     if (workingMinutes === null || shiftMinutes === null) {
-      return '—';
+      return null;
     }
 
-    const overtimeMinutes = Math.max(0, workingMinutes - shiftMinutes);
-    if (overtimeMinutes === 0) {
-      return '0h';
-    }
-    const duration = formatWorkingDuration(Math.abs(overtimeMinutes));
-    return overtimeMinutes < 0 ? `-${duration}` : duration;
+    return Math.max(0, workingMinutes - shiftMinutes);
+  }
+
+  private shiftLabel(shiftCode: string): string {
+    const workstation = this.workstationForShiftCode(shiftCode);
+    return workstation?.name.trim()
+      || workstation?.description.trim()
+      || workstation?.code.trim()
+      || shiftCode;
   }
 
   private durationTextToMinutes(value: string): number | null {

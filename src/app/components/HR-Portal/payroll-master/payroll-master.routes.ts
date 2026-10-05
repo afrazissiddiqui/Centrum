@@ -6,6 +6,8 @@ import { AddPayrollProcessComponent } from './payroll-processing/add-payroll-pro
 import { AttendanceManagmentComponent } from './attendance-managment/attendance-managment';
 import { TaxManagmentComponent } from './tax-managment/tax-managment';
 import { TaxComputationComponent } from './tax-computation/tax-computation';
+import { BonusComponent } from './bonus/bonus';
+import { BonusAddComponent } from './bonus/bonus-add';
 
 export const payrollMasterRoutes: Routes = [
   {
@@ -31,6 +33,8 @@ export const payrollMasterRoutes: Routes = [
       { path: 'attendance-managment', component: AttendanceManagmentComponent, canActivate: [requirePermission('attendance_managment_form', 'list')] },
       { path: 'tax-managment', component: TaxManagmentComponent, canActivate: [requirePermission('tax_allowance_form', 'list')] },
       { path: 'tax-computation', component: TaxComputationComponent, canActivate: [requirePermission('tax_computation_form', 'list')] },
+      { path: 'bonus/create', component: BonusAddComponent, canActivate: [requirePermission('tax_computation_form', 'add')] },
+      { path: 'bonus', component: BonusComponent, canActivate: [requirePermission('tax_computation_form', 'list')] },
     ],
   },
 ];

@@ -1,0 +1,59 @@
+<form class="bonus-entry" [formGroup]="bonusForm" (ngSubmit)="save()">
+  <app-page-toolbar [showSidebarToggle]="true" (sidebarToggle)="toggleSidebar()">
+    <button class="btn-default" pageToolbarActions type="button" (click)="cancel()">Cancel</button>
+    <button class="btn-default" pageToolbarActions type="submit">Save</button>
+  </app-page-toolbar>
+
+  <main class="bonus-form-main">
+    <header class="bonus-form-heading">
+      <h1>Add Bonus</h1>
+    </header>
+
+    <section class="bonus-form-section" aria-labelledby="bonus-employee-details-title">
+      <h2 id="bonus-employee-details-title">Employee and Bonus Details</h2>
+
+      <div class="bonus-form-fields">
+        <div class="bonus-form-field">
+          <label for="bonus-employee-id">Employee ID</label>
+          <input id="bonus-employee-id" type="text" formControlName="employeeId" autocomplete="off" />
+          @if (bonusForm.controls.employeeId.touched && bonusForm.controls.employeeId.invalid) {
+            <span class="bonus-form-error">Employee ID is required.</span>
+          }
+        </div>
+
+        <div class="bonus-form-field">
+          <label for="bonus-employee-name">Employee Name</label>
+          <input id="bonus-employee-name" type="text" formControlName="employeeName" autocomplete="off" />
+          @if (bonusForm.controls.employeeName.touched && bonusForm.controls.employeeName.invalid) {
+            <span class="bonus-form-error">Employee name is required.</span>
+          }
+        </div>
+
+        <div class="bonus-form-field">
+          <label for="bonus-gross-cash">Gross Salary in Cash</label>
+          <input id="bonus-gross-cash" type="number" min="0" step="0.01" formControlName="grossSalaryCash" />
+        </div>
+
+        <div class="bonus-form-field">
+          <label for="bonus-gross-bank">Gross Salary in Bank</label>
+          <input id="bonus-gross-bank" type="number" min="0" step="0.01" formControlName="grossSalaryBank" />
+        </div>
+
+        <div class="bonus-form-field">
+          <label for="bonus-cash">Bonus in Cash</label>
+          <input id="bonus-cash" type="number" min="0" step="0.01" formControlName="bonusCash" />
+        </div>
+
+        <div class="bonus-form-field">
+          <label for="bonus-bank">Bonus in Bank</label>
+          <input id="bonus-bank" type="number" min="0" step="0.01" formControlName="bonusBank" />
+        </div>
+
+        <div class="bonus-form-field">
+          <span class="bonus-form-field__label" id="bonus-total-label">Total Bonus</span>
+          <output aria-labelledby="bonus-total-label">{{ totalBonus | number: '1.2-2' }}</output>
+        </div>
+      </div>
+    </section>
+  </main>
+</form>

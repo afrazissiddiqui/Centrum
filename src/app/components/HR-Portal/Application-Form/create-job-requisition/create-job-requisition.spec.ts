@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { CreateJobRequisitionComponent } from './create-job-requisition';
 import { ApplicationFormService } from '../../../../services/application-form.service';
+import { DepartmentsPrService } from '../../../../services/departments-pr.service';
 import { JobSpecificationService } from '../../../../services/job-specification.service';
 import { LeaveTypeService } from '../../../../services/leave-type.service';
 import { GatePassItemMasterService } from '../../../gate-pass/gate-pass-item-master.service';
@@ -24,6 +25,7 @@ describe('CreateJobRequisitionComponent validation', () => {
       { fetchLeaveTypes: () => ({ subscribe: () => undefined }) } as unknown as LeaveTypeService,
       { listAllocatableAssets: () => [] } as unknown as GatePassItemMasterService,
       { ensureLoaded: () => ({ subscribe: () => undefined }), departmentNames: () => [] } as unknown as GatePassDepartmentService,
+      { ensureLoaded: () => of([]) } as unknown as DepartmentsPrService,
       { warning: () => undefined, error: () => undefined } as unknown as AlertService,
       { markForCheck: () => undefined } as unknown as ChangeDetectorRef,
     );
@@ -71,6 +73,7 @@ describe('CreateJobRequisitionComponent validation', () => {
           provide: GatePassDepartmentService,
           useValue: { ensureLoaded: () => of([]), departmentNames: () => [] },
         },
+        { provide: DepartmentsPrService, useValue: { ensureLoaded: () => of([]) } },
         { provide: AlertService, useValue: { warning: () => undefined, error: () => undefined } },
       ],
     }).compileComponents();
@@ -89,5 +92,141 @@ describe('CreateJobRequisitionComponent validation', () => {
     fixture.detectChanges();
 
     expect((fixture.componentInstance as any).legacyCode()).toBe('EL-1025');
+  });
+
+  it('restores the saved cost center when editing an application', () => {
+    const record = {
+      EmployeeCode: 'EMP-00000001',
+      EmployeeName: 'Test Employee',
+      Department: 'HR',
+      EmployeeNature: '—',
+      Designation: 'Developer',
+      ReportingManager: '—',
+      EmploymentType: '—',
+      EmploymentStatus: 'Permanent',
+      EmploymentCategory: '—',
+      status: 'Permanent',
+      detail: {
+        personalInfo: {
+          personName: 'Test Employee',
+          firstName: 'Test',
+          middleName: '',
+          lastName: 'Employee',
+          fatherOrHusbandName: '',
+          gender: 'Male',
+          maritalStatus: 'Single',
+          dateOfBirth: '',
+          nationality: 'Pakistani',
+          religion: 'Islam',
+          bloodGroup: '',
+          nationalIdCardNo: '',
+          incomeTaxNo: '',
+          contactNumber: '',
+          emergencyContactNumber: '',
+          street: '',
+          streetNo: '',
+          buildingFloorRoom: '',
+          city: '',
+          state: '',
+          country: 'Pakistan',
+          zipCode: '',
+          employmentNature: 'Permanent',
+          employmentCategory: 'Permanent',
+          employmentStatus: 'Permanent',
+          departmentInAhcp: 'HR',
+          designation: 'Developer',
+          jobDescription: '',
+          roleSalary: '',
+          workGradeLevel: '',
+          branchLocation: 'Karachi',
+          costCenter: 'CC-124',
+          reportingManager: '',
+          remarks: '',
+        },
+        education: [],
+        pastExperience: [],
+        remuneration: {
+          paymentMode: 'Bank',
+          basicSalary: '',
+          accountTitle: '',
+          bankName: '',
+          branchName: '',
+          accountNo: '',
+          accountType: '',
+          effectiveDate: '',
+          taxPercentage: '',
+          dateOfJoining: '',
+          advancePercentAllowed: '',
+          loanAmountAllowed: '',
+          maximumLoanCapacity: '',
+          maximumAdvanceCapacity: '',
+          allowancesApplicable: 'Yes',
+          overTimeApplicable: 'No',
+          eobiApplicable: 'Yes',
+          providentApplicable: 'No',
+          socialSecurityApplicable: 'No',
+          fuelLimit: '',
+          medicalAllowances: '',
+          fuelAllowances: '',
+          mobileAllowances: '',
+          carAllowances: '',
+          otherAllowances: '',
+          leaveType: '',
+          leaveDays: '',
+          leavesAvailed: '',
+          remainingLeaves: '',
+          totalLeaves: '',
+          gratuityBalance: '',
+          grauity: '',
+          leaveEligibilityCriteria: '',
+          cashSalaryPercentage: '',
+        },
+        leaveManagement: [],
+        hrSettings: {
+          employeeMaster: '',
+          salaryStructure: '',
+          attendanceShiftManagement: 'No',
+          loanAdvancesForm: '',
+          requestStatus: 'Pending',
+          leaveManagement: 'Enabled',
+        },
+        loginDetails: {
+          employeeCode: 'EMP-00000001',
+          legacyCode: '',
+          employeeName: 'Test Employee',
+          userId: '1',
+          password: '',
+          status: '1',
+        },
+        attachments: [],
+        requisition: {
+          copyExisting: false,
+          reqId: '',
+          internalJobTitle: 'Developer',
+          hiringManager: '',
+          recruiter: '',
+          recruitmentCollaborator: '',
+          requisitionAdministrator: '',
+          recruitmentCoordinator: '',
+          hrAdministrator: '',
+          company: '',
+          department: 'HR',
+          division: '',
+          location: 'Karachi',
+          costCenter: 'CC-124',
+        },
+        assets: {
+          assetAllocated: '',
+          assetOitmCode: '',
+          allocationStatus: '',
+          allocationDate: '',
+          allocationDateType: '',
+        },
+      },
+    } as any;
+
+    (component as any).populateFromRecord(record);
+
+    expect((component as any).costCenter()).toBe('CC-124');
   });
 });

@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ApplicationFormService } from './application-form.service';
 
 describe('ApplicationFormService', () => {
@@ -32,5 +32,27 @@ describe('ApplicationFormService', () => {
     expect(service.normalizeEmployeeCodeValue('Emp-00003312')).toBe('Emp-00000255');
     expect(service.normalizeEmployeeCodeValue('Emp-00003313')).toBe('Emp-00000256');
     expect(service.normalizeEmployeeCodeValue('Emp-00003314')).toBe('Emp-00000257');
+  });
+
+  it('loads Cost Center from nested remuneration data for profile updates', () => {
+    const record = (service as any).mapApiItemToFullRecord({
+      id: 7,
+      employeeCode: 'Emp-00000001',
+      remuneration: { costCenter: 'CC-124' },
+    });
+
+    expect(record.detail.personalInfo.costCenter).toBe('CC-124');
+    expect(record.detail.requisition.costCenter).toBe('CC-124');
+  });
+
+  it('includes a null Cost Center in the employee profile update body', () => {
+    service.updateEmployeeProfile(7, { costCenter: null } as any).subscribe();
+
+    const httpMock = TestBed.inject(HttpTestingController);
+    const request = httpMock.expectOne((req) => req.url.endsWith('/employee-profile-update/7'));
+
+    expect(request.request.body.costCenter).toBeNull();
+    expect(request.request.body.remuneration.costCenter).toBeNull();
+    request.flush({});
   });
 });

@@ -12,6 +12,7 @@ export const PAYROLL_MASTER_SIDEBAR_SECTIONS: SidebarSection[] = [
       { id: 'attendance-managment', label: 'Attendance Managment', route: '/payroll-master/attendance-managment', access: { moduleSlug: 'attendance_managment_form', action: 'list' } },
       { id: 'tax-managment', label: 'Tax Allowance Form', route: '/payroll-master/tax-managment', access: { moduleSlug: 'tax_allowance_form', action: 'list' } },
       { id: 'tax-computation', label: 'Tax Computation', route: '/payroll-master/tax-computation', access: { moduleSlug: 'tax_computation_form', action: 'list' } },
+      { id: 'bonus', label: 'Bonus', route: '/payroll-master/bonus', access: { moduleSlug: 'tax_computation_form', action: 'list' } },
       // { id: 'payroll-setup', label: 'Payroll Setup', route: '/payroll-master/payroll-setup' }
     ]
   }
@@ -26,6 +27,9 @@ export function payrollMasterActiveItemFromUrl(url: string): string {
   }
   if (url.includes('/payroll-master/tax-computation')) {
     return 'tax-computation';
+  }
+  if (url.includes('/payroll-master/bonus')) {
+    return 'bonus';
   }
   // if (url.includes('/payroll-master/payroll-setup')) {
   //   return 'payroll-setup';

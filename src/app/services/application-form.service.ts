@@ -381,6 +381,7 @@ export interface EmployeeProfileAddPayload {
   department: string;
   departmentInAhcp?: string | null;
   branchLocation: string;
+  costCenter: string | null;
   designation: string;
   jobDescription: string;
   roleSalary: string;
@@ -930,6 +931,7 @@ export class ApplicationFormService {
       designation: personal.designation,
       jobDescription: personal.jobDescription,
       roleSalary: personal.roleSalary || personal.workGradeLevel,
+      costCenter: toNullableString(personal.costCenter),
       cashSalaryPercentage: toNullableApiNumber(remuneration.cashSalaryPercentage),
       basicSalary: toApiNumber(remuneration.basicSalary),
       paymentMode: paymentModeForApi(remuneration.paymentMode),
@@ -1137,6 +1139,7 @@ export class ApplicationFormService {
       branchName: payload.branchName,
       accountNo: payload.accountNo,
       accountType: payload.accountType,
+      costCenter: payload.costCenter,
       effectiveDate: payload.effectiveDate,
       taxPercentage: payload.taxPercentage,
       dateOfJoining: payload.dateOfJoining,
@@ -2192,7 +2195,7 @@ export class ApplicationFormService {
             pick('branch', 'branch') ||
             pick('location', 'location'),
         ),
-        costCenter: pick('costCenter', 'cost_center'),
+        costCenter: pickRem('costCenter', 'cost_center') || pick('costCenter', 'cost_center'),
         reportingManager:
           pick('reportingManager', 'reporting_manager') ||
           pick('hiringManager', 'hiring_manager'),
@@ -2312,7 +2315,7 @@ export class ApplicationFormService {
         division: summary.EmploymentType !== '—' ? summary.EmploymentType : '',
         location:
           pick('branchLocation', 'branch_location') || pick('branch', 'branch') || pick('location', 'location'),
-        costCenter: pick('costCenter', 'cost_center'),
+        costCenter: pickRem('costCenter', 'cost_center') || pick('costCenter', 'cost_center'),
       },
       assets: this.mapApiAssets(item),
     };

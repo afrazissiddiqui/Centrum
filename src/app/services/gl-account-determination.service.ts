@@ -12,7 +12,8 @@ export interface GlAccountDeterminationAddPayload {
   branch: string;
   debit_credit_type: string;
   business_partner: string;
-  cost_center_type: string;
+  costCenterType: string;
+  CctCode: string;
   vendor_for_expense_reimbursement?: string;
   vendor_for_loans?: string;
   vendor_for_advances?: string;
@@ -27,7 +28,8 @@ export interface GlAccountDeterminationRecord {
   Branch: string;
   DebitCreditType: string;
   BusinessPartner: string;
-  CostCenterType: string;
+  CctCode: string;
+  CctName: string;
   VendorForExpenseReimbursement: string;
   VendorForLoans: string;
   VendorForAdvances: string;
@@ -38,11 +40,17 @@ export interface GlAccountOption {
   name: string;
 }
 
+export interface CostCenterTypeOption {
+  CctCode: string;
+  CctName: string;
+}
+
 const GL_ACCOUNT_DETERMINATION_LIST_URL = apiUrl('gl-account-determination-list');
 const GL_ACCOUNT_DETERMINATION_ADD_URL = apiUrl('gl-account-determination-add');
 const GL_ACCOUNT_DETERMINATION_UPDATE_URL = apiUrl('gl-account-determination-update');
 const GL_ACCOUNT_DETERMINATION_DELETE_URL = apiUrl('gl-account-determination-delete');
 const INVENTORY_ACCOUNTS_URL = apiUrl('inventory_accounts');
+const COST_CENTER_TYPES_URL = apiUrl('cost_center_types');
 const EXPENSE_REIMBURSEMENT_FORM_VALUE = 6;
 const LOAN_ADVANCE_FORM_VALUE = 7;
 
@@ -58,6 +66,12 @@ export class GlAccountDeterminationService {
   fetchGlAccountOptions(): Observable<GlAccountOption[]> {
     return this.http.get<unknown>(INVENTORY_ACCOUNTS_URL).pipe(
       map((response) => this.extractInventoryAccountOptions(response)),
+    );
+  }
+
+  fetchCostCenterTypeOptions(): Observable<CostCenterTypeOption[]> {
+    return this.http.get<unknown>(COST_CENTER_TYPES_URL).pipe(
+      map((response) => this.extractCostCenterTypeOptions(response)),
     );
   }
 
@@ -206,10 +220,86 @@ export class GlAccountDeterminationService {
     return options;
   }
 
+  private extractCostCenterTypeOptions(response: unknown): CostCenterTypeOption[] {
+    const options: CostCenterTypeOption[] = [];
+    const visit = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      if (typeof value === 'string') {
+        const name = value.trim();
+        if (name) {
+          options.push({ CctCode: name, CctName: name });
+        }
+        return;
+      }
+      if (!value || typeof value !== 'object') {
+        return;
+      }
+
+      const record = value as Record<string, unknown>;
+      const list = Object.entries(record).find(([key, item]) =>
+        ['data', 'items', 'results', 'records', 'list', 'cost_center_types', 'costCenterTypes']
+          .includes(key) && (Array.isArray(item) || (item !== null && typeof item === 'object')),
+      );
+      if (list) {
+        visit(list[1]);
+        return;
+      }
+
+      const code = this.pickString([record], [
+        'CctCode',
+        'cctCode',
+        'cct_code',
+        'cost_center_type_code',
+        'costCenterTypeCode',
+        'code',
+      ]);
+      const name = this.pickString([record], [
+        'CctName',
+        'cctName',
+        'cct_name',
+        'cost_center_type_name',
+        'costCenterTypeName',
+        'CostCenterType',
+        'costCenterType',
+        'name',
+        'description',
+        'label',
+      ]);
+      if (code || name) {
+        options.push({ CctCode: code || name, CctName: name || code });
+        return;
+      }
+
+      Object.values(record).forEach(visit);
+    };
+
+    visit(response);
+    return [...new Map(options.map((option) => [option.CctCode.toLowerCase(), option])).values()];
+  }
+
   private mapApiItemToRecord(item: Record<string, unknown>): GlAccountDeterminationRecord {
     const sources = [item];
     const formValueRaw = this.pickString(sources, ['Form', 'form', 'FormName', 'form_name', 'FormId', 'form_id']);
     const formValue = formValueRaw !== '' && /^\d+$/.test(formValueRaw) ? Number.parseInt(formValueRaw, 10) : formValueRaw;
+
+    const costCenterTypeCode = this.pickString(sources, [
+      'CctCode',
+      'cctCode',
+      'cct_code',
+      'costCenterType',
+      'cost_center_type',
+      'CostCenterType',
+    ]);
+    const costCenterTypeName = this.pickString(sources, [
+      'CctName',
+      'cctName',
+      'cct_name',
+      'costCenterTypeName',
+      'cost_center_type_name',
+    ]);
 
     return {
       Id: this.pickNumber(sources, ['Id', 'id', 'ID']),
@@ -228,11 +318,8 @@ export class GlAccountDeterminationService {
         'businessPartner',
         'business_partner',
       ]),
-      CostCenterType: this.pickString(sources, [
-        'CostCenterType',
-        'costCenterType',
-        'cost_center_type',
-      ]),
+      CctCode: costCenterTypeCode || costCenterTypeName,
+      CctName: costCenterTypeName || costCenterTypeCode,
       VendorForExpenseReimbursement: this.pickString(sources, [
         'VendorForExpenseReimbursement',
         'vendorForExpenseReimbursement',

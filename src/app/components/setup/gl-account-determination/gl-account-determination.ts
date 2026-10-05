@@ -14,6 +14,7 @@ import {
   GlAccountOption,
   GlAccountDeterminationRecord,
   GlAccountDeterminationService,
+  CostCenterTypeOption,
 } from '../../../services/gl-account-determination.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
 import {
@@ -99,7 +100,9 @@ export class GlAccountDeterminationComponent implements OnInit {
   readonly deleting = signal(false);
   readonly loadingList = signal(false);
   readonly loadingAccountOptions = signal(false);
+  readonly loadingCostCenterTypes = signal(false);
   readonly accountOptions = signal<GlAccountOption[]>([]);
+  readonly costCenterTypeOptions = signal<CostCenterTypeOption[]>([]);
   readonly openAccountSearch = signal<{ rowId: string; field: 'code' | 'name' } | null>(null);
   readonly accountSearchPosition = signal({ top: 0, left: 0, width: 0 });
   readonly savedRecords = signal<GlAccountDeterminationRecord[]>([]);
@@ -113,6 +116,7 @@ export class GlAccountDeterminationComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadAccountOptions();
+    this.loadCostCenterTypeOptions();
     this.loadSavedRecords();
     this.businessPartnerService.ensureAllLoaded().subscribe();
   }
@@ -311,7 +315,7 @@ export class GlAccountDeterminationComponent implements OnInit {
         salaryGlAccountCode: record.Code,
         salaryGlAccountName: record.Name,
         businessPartner: record.BusinessPartner,
-        costCenterType: record.CostCenterType,
+        costCenterType: record.CctCode,
         branch: record.Branch,
         debitCreditType: debitCreditLabel(record.DebitCreditType),
       },
@@ -403,6 +407,22 @@ export class GlAccountDeterminationComponent implements OnInit {
       });
   }
 
+  private loadCostCenterTypeOptions(): void {
+    this.loadingCostCenterTypes.set(true);
+    this.glAccountService
+      .fetchCostCenterTypeOptions()
+      .pipe(finalize(() => this.loadingCostCenterTypes.set(false)))
+      .subscribe({
+        next: (options) => this.costCenterTypeOptions.set(options),
+        error: (error: unknown) => {
+          void this.alertService.error(
+            'Load Failed',
+            formatApiErrorMessage(error, 'Failed to load Cost Center Type options.'),
+          );
+        },
+      });
+  }
+
   private validateRow(row: GlAccountDeterminationRow, srNo: number): string | null {
     if (!row.formValue) {
       return `Row ${srNo}: select Form.`;
@@ -441,7 +461,8 @@ export class GlAccountDeterminationComponent implements OnInit {
       code: row.salaryGlAccountCode.trim(),
       name: row.salaryGlAccountName.trim(),
       business_partner: row.businessPartner.trim(),
-      cost_center_type: row.costCenterType.trim(),
+      costCenterType: row.costCenterType.trim(),
+      CctCode: row.costCenterType.trim(),
       branch: glAccountBranchCode(row.branch),
       debit_credit_type: row.debitCreditType.trim().toUpperCase(),
       vendor_for_expense_reimbursement: this.vendorForExpenseReimbursement.trim(),

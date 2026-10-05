@@ -1,0 +1,17 @@
+<div class="payroll-master-view payroll-master-view--scroll">
+  <app-page-toolbar [showSidebarToggle]="true" (sidebarToggle)="toggleSidebar()">
+    <button class="btn-default" pageToolbarActions type="button" (click)="addBonus()">Add Bonus</button>
+  </app-page-toolbar>
+
+  <div id="table-toolbar" class="sapMIBar sapMTB sapMTBStandard sapMTB-Solid-CTX sapMOTB sapMTBHeader-CTX sapMListHdr sapMListHdrTBar">
+    <div class="sapMTableTitle sapMBarChild sapMBarChildFirstChild">
+      <div class="sapMTitle sapMTitleStyleH5 sapMTitleNoWrap sapMTitleMaxWidth" role="heading" aria-level="5">
+        Bonus (0)
+      </div>
+    </div>
+  </div>
+
+  <main class="table-wrapper">
+    <div class="bonus-empty-state">No bonus records to display.</div>
+  </main>
+</div>

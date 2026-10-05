@@ -29,6 +29,11 @@ describe('GlAccountDeterminationComponent', () => {
           provide: GlAccountDeterminationService,
           useValue: {
             fetchGlAccountOptions: () => of([]),
+            fetchCostCenterTypeOptions: () =>
+              of([
+                { CctCode: 'COS', CctName: 'Cost of Sales' },
+                { CctCode: 'ADM', CctName: 'Administration' },
+              ]),
             fetchGlAccountDeterminations: () => of([]),
             addGlAccountDetermination: () => of({}),
             updateGlAccountDetermination: () => of({}),
@@ -88,5 +93,29 @@ describe('GlAccountDeterminationComponent', () => {
     expect(duplicate.businessPartner).toBe('BP-01');
     expect(duplicate.costCenterType).toBe('Department');
     expect(component.rows[0].salaryGlAccountCode).toBe('1000');
+  });
+
+  it('renders Cost Center Type options from the service', () => {
+    const select = fixture.nativeElement.querySelector(
+      'select[name^="costCenterType-"]',
+    ) as HTMLSelectElement;
+
+    expect(Array.from(select.options).map((option) => option.textContent?.trim())).toEqual([
+      'Select Cost Center Type',
+      'Cost of Sales',
+      'Administration',
+    ]);
+    expect(Array.from(select.options).slice(1).map((option) => option.value)).toEqual([
+      'COS',
+      'ADM',
+    ]);
+  });
+
+  it('sends the selected code as both required Cost Center Type payload fields', () => {
+    const row = { ...component.rows[0], costCenterType: 'COS' };
+    const payload = (component as any).toPayload(row);
+
+    expect(payload.CctCode).toBe('COS');
+    expect(payload.costCenterType).toBe('COS');
   });
 });

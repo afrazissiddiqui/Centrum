@@ -1615,7 +1615,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
         roleSalary: this.firstNonEmpty(this.roleSalary(), this.workGradeLevel()),
         workGradeLevel: this.workGradeLevel(),
         branchLocation: this.branchLocation(),
-        costCenter: '',
+        costCenter: this.costCenter(),
         reportingManager: this.reportingManagerValue(),
         remarks: this.remarks(),
       },
@@ -1652,7 +1652,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
         department: this.department(),
         division: this.division(),
         location: glAccountBranchLabel(this.branchLocation()) || this.location(),
-        costCenter: ''
+        costCenter: this.costCenter(),
       },
       assets: {
         assetAllocated: this.assetAllocated(),
@@ -1819,6 +1819,9 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
           detail.requisition.location,
         ),
       ),
+    );
+    this.costCenter.set(
+      detail.personalInfo.costCenter || detail.requisition.costCenter || '',
     );
     this.remarks.set(detail.personalInfo.remarks ?? '');
 
