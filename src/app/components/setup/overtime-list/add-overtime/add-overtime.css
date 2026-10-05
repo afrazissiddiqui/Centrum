@@ -1,0 +1,151 @@
+:host {
+  background: #f3f6fb;
+  display: block;
+  min-height: calc(100vh - 52px);
+}
+
+.add-overtime-page {
+  box-sizing: border-box;
+  margin: 0 auto;
+  max-width: 1400px;
+  padding: 20px;
+}
+
+.add-overtime-toolbar,
+.add-overtime-content {
+  background: #ffffff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+.add-overtime-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+}
+
+.add-overtime-toolbar h1,
+.add-overtime-content h2 {
+  color: #1d2d3e;
+  margin: 0;
+}
+
+.add-overtime-toolbar h1 {
+  font-size: 20px;
+}
+
+.add-overtime-toolbar p {
+  color: #64748b;
+  margin: 6px 0 0;
+}
+
+.add-overtime-back {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #1d2d3e;
+  cursor: pointer;
+  font: inherit;
+  min-height: 36px;
+  padding: 7px 12px;
+}
+
+.add-overtime-back:hover {
+  background: #f1f5f9;
+}
+
+.add-overtime-content {
+  overflow: hidden;
+}
+
+.add-overtime-content__toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.add-overtime-content h2 {
+  font-size: 16px;
+}
+
+.add-overtime-search {
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  min-width: 220px;
+}
+
+.add-overtime-search:focus-within {
+  border-color: #0070f2;
+  box-shadow: 0 0 0 2px rgba(0, 112, 242, 0.15);
+}
+
+.add-overtime-search input {
+  border: 0;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 36px;
+  outline: none;
+  padding: 7px 10px;
+  width: 100%;
+}
+
+.add-overtime-table-wrap {
+  overflow-x: auto;
+}
+
+.add-overtime-table {
+  border-collapse: collapse;
+  min-width: 760px;
+  width: 100%;
+}
+
+.add-overtime-table th,
+.add-overtime-table td {
+  border-top: 1px solid #e2e8f0;
+  padding: 11px 14px;
+  text-align: left;
+}
+
+.add-overtime-table th {
+  background: #f8fafc;
+  color: #1d2d3e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.add-overtime-table td {
+  color: #1f2d3d;
+  font-size: 14px;
+}
+
+.add-overtime-empty {
+  color: #64748b !important;
+  padding: 24px !important;
+  text-align: center !important;
+}
+
+.visually-hidden {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+@media (max-width: 640px) {
+  .add-overtime-page {
+    padding: 12px;
+  }
+
+  .add-overtime-search {
+    flex: 1 1 100%;
+  }
+}

@@ -78,6 +78,70 @@ describe('GlAccountDeterminationComponent', () => {
     expect(payload.costCenterType).toBe('COS');
   });
 
+  it('duplicates a row with its entered values and gives the copy a new id', () => {
+    const source = {
+      ...component.rows[0],
+      formName: 'Job Specification Form',
+      formValue: 1,
+      glItemType: 'Salary',
+      salaryGlAccountCode: '1000',
+      salaryGlAccountName: 'Cash',
+      businessPartner: 'BP-01',
+      costCenterType: 'COS',
+      branch: 'AHCP_HO',
+      debitCreditType: 'Credit',
+    };
+    component.rows = [source];
+
+    component.duplicateRow(source.id);
+
+    expect(component.rows).toHaveSize(2);
+    expect(component.rows[1]).toEqual({ ...source, id: jasmine.any(String) });
+    expect(component.rows[1].id).not.toBe(source.id);
+  });
+
+  it('duplicates the row when its Duplicate button is clicked', () => {
+    const source = {
+      ...component.rows[0],
+      glItemType: 'Salary',
+    };
+    component.rows = [source];
+    fixture.detectChanges();
+
+    const duplicateButton = fixture.nativeElement.querySelector('.btn-duplicate-row') as HTMLButtonElement;
+    duplicateButton.click();
+
+    expect(component.rows).toHaveSize(2);
+    expect(component.rows[1].glItemType).toBe('Salary');
+  });
+
+  it('submits the selected Debit/Credit as debit_credit_type', () => {
+    const service = TestBed.inject(GlAccountDeterminationService);
+    const addSpy = spyOn(service, 'addGlAccountDetermination').and.returnValue(of({}));
+    component.rows = [
+      {
+        ...component.rows[0],
+        formName: 'Job Specification Form',
+        formValue: 1,
+        glItemType: 'Salary',
+        salaryGlAccountCode: '1000',
+        salaryGlAccountName: 'Cash',
+        businessPartner: 'BP-01',
+        costCenterType: 'COS',
+        branch: 'AHCP_HO',
+        debitCreditType: 'Credit',
+      },
+    ];
+
+    component.submitForm();
+
+    expect(addSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        debit_credit_type: 'CREDIT',
+      }),
+    );
+  });
+
   it('does not show Debit in the editor when the saved record has no debit/credit value', () => {
     component.editRecord({
       Id: 101,

@@ -12,7 +12,6 @@ export interface GlAccountDeterminationAddPayload {
   name: string;
   branch: string;
   debit_credit_type: string;
-  debitCreditType: string;
   business_partner: string;
   costCenterType: string;
   CctCode: string;
@@ -78,7 +77,10 @@ export class GlAccountDeterminationService {
   }
 
   addGlAccountDetermination(payload: GlAccountDeterminationAddPayload): Observable<unknown> {
-    return this.http.post<unknown>(GL_ACCOUNT_DETERMINATION_ADD_URL, payload).pipe(
+    return this.http.post<unknown>(
+      GL_ACCOUNT_DETERMINATION_ADD_URL,
+      this.toMutationPayload(payload),
+    ).pipe(
       map((response) =>
         this.ensureSuccessfulMutationResponse(
           response,
@@ -93,7 +95,10 @@ export class GlAccountDeterminationService {
     payload: GlAccountDeterminationAddPayload,
   ): Observable<unknown> {
     const identifier = encodeURIComponent(String(id));
-    return this.http.post<unknown>(`${GL_ACCOUNT_DETERMINATION_UPDATE_URL}/${identifier}`, payload).pipe(
+    return this.http.post<unknown>(
+      `${GL_ACCOUNT_DETERMINATION_UPDATE_URL}/${identifier}`,
+      this.toMutationPayload(payload),
+    ).pipe(
       map((response) =>
         this.ensureSuccessfulMutationResponse(
           response,
@@ -101,6 +106,13 @@ export class GlAccountDeterminationService {
         ),
       ),
     );
+  }
+
+  private toMutationPayload(payload: GlAccountDeterminationAddPayload): GlAccountDeterminationAddPayload {
+    return {
+      ...payload,
+      debit_credit_type: payload.debit_credit_type.trim().toUpperCase(),
+    };
   }
 
   fetchGlAccountDeterminations(): Observable<GlAccountDeterminationRecord[]> {

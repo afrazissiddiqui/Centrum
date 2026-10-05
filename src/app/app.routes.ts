@@ -217,6 +217,11 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'setup/overtime-list/add',
+    loadComponent: () => import('./components/setup/overtime-list/add-overtime/add-overtime').then((m) => m.AddOvertimeComponent),
+    canActivate: [authGuard, requirePermission('overtime_list_form', 'list')],
+  },
+  {
     path: 'setup/overtime-list',
     loadComponent: () => import('./components/setup/overtime-list/overtime-list').then((m) => m.OvertimeListComponent),
     canActivate: [authGuard, requirePermission('overtime_list_form', 'list')],

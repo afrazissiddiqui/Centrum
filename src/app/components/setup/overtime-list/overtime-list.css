@@ -68,7 +68,7 @@
 }
 
 .overtime-tool-button,
-.overtime-refresh {
+.overtime-add {
   background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
@@ -83,14 +83,23 @@
   min-width: 36px;
 }
 
-.overtime-refresh:hover:not(:disabled),
+.overtime-add {
+  background: #0070f2;
+  border-color: #0070f2;
+  color: #ffffff;
+}
+
+.overtime-add:hover {
+  background: #0057d2;
+  border-color: #0057d2;
+}
+
 .overtime-tool-button:hover {
   background: #f1f5f9;
 }
 
-.overtime-refresh:disabled {
-  cursor: not-allowed;
-  opacity: 0.65;
+.overtime-add {
+  cursor: pointer;
 }
 
 .overtime-table-wrap {

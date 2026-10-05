@@ -176,8 +176,8 @@ export class AddLoanAdvanceComponent implements OnInit {
     });
   });
 
-  protected readonly isLoanRequest = computed(() => this.requestType() === 'Loan');
-  protected readonly isAdvanceRequest = computed(() => this.requestType() === 'Salary Advance');
+  protected readonly isLoanRequest = computed(() => /\bloans?\b/i.test(this.requestType()));
+  protected readonly isAdvanceRequest = computed(() => /\badvances?\b/i.test(this.requestType()));
   protected readonly hasExistingLoanDetails = signal(false);
   protected readonly hasExistingAdvanceDetails = signal(false);
   protected readonly isEditing = signal(false);

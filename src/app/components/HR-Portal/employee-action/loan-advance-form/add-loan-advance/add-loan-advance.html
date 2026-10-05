@@ -618,6 +618,8 @@
                 <th>Month</th>
                 <th>Installment</th>
                 <th>Remaining Balance</th>
+                <th>Deducted</th>
+                <th>Paid</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -627,10 +629,12 @@
                 <td>{{ row.monthLabel }}</td>
                 <td>{{ row.installment }}</td>
                 <td>{{ row.balance }}</td>
+                <td>—</td>
+                <td>—</td>
                 <td>{{ row.status }}</td>
               </tr>
               <tr *ngIf="repaymentScheduleRows().length === 0">
-                <td colspan="5">Select loan start and end month to generate the schedule.</td>
+                <td colspan="7">Select loan start and end month to generate the schedule.</td>
               </tr>
             </tbody>
           </table>

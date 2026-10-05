@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { AlertService } from '../../../services/alert.service';
 import { OvertimeListRecord, OvertimeListService } from '../../../services/overtime-list.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
@@ -26,6 +27,7 @@ interface OvertimeListColumn {
 export class OvertimeListComponent implements OnInit {
   private readonly overtimeListService = inject(OvertimeListService);
   private readonly alertService = inject(AlertService);
+  private readonly router = inject(Router);
 
   readonly loading = signal(false);
   readonly records = signal<OvertimeListRecord[]>([]);
@@ -67,6 +69,10 @@ export class OvertimeListComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadRecords();
+  }
+
+  goToAddPage(): void {
+    void this.router.navigate(['/setup/overtime-list/add']);
   }
 
   loadRecords(): void {

@@ -18,7 +18,6 @@ describe('GlAccountDeterminationService', () => {
     name: 'Cash',
     branch: '2',
     debit_credit_type: 'DEBIT',
-    debitCreditType: 'DEBIT',
     business_partner: 'BP-01',
     costCenterType: 'COS',
     CctCode: 'COS',
@@ -56,6 +55,26 @@ describe('GlAccountDeterminationService', () => {
 
     expect(error).toEqual(jasmine.any(Error));
     expect((error as Error).message).toBe('Duplicate mapping rejected.');
+  });
+
+  it('includes debit_credit_type in the add request payload', () => {
+    service.addGlAccountDetermination({ ...payload, debit_credit_type: 'DEBIT' }).subscribe();
+
+    const request = httpMock.expectOne(apiUrl('gl-account-determination-add'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual(payload);
+    expect(request.request.body.debit_credit_type).toBe('DEBIT');
+    request.flush({ status: true, message: 'Saved' });
+  });
+
+  it('posts debit_credit_type when updating an existing row', () => {
+    service.updateGlAccountDetermination(13, payload).subscribe();
+
+    const request = httpMock.expectOne(`${apiUrl('gl-account-determination-update')}/13`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual(payload);
+    expect(request.request.body.debit_credit_type).toBe('DEBIT');
+    request.flush({ status: true, message: 'Updated' });
   });
 
   it('accepts an explicit successful API response', () => {

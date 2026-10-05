@@ -18,8 +18,8 @@
       <button type="button" class="overtime-tool-button" (click)="showColumnSettings.set(true)" aria-label="View settings" title="View settings">
         ⚙
       </button>
-      <button type="button" class="overtime-refresh" [disabled]="loading()" (click)="loadRecords()">
-        {{ loading() ? 'Loading…' : 'Refresh' }}
+      <button type="button" class="overtime-add" (click)="goToAddPage()">
+        Add
       </button>
     </div>
   </div>

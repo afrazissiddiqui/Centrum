@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { of } from 'rxjs';
 import { AlertService } from '../../../services/alert.service';
 import { OvertimeListRecord, OvertimeListService } from '../../../services/overtime-list.service';
@@ -7,17 +8,20 @@ import { OvertimeListComponent } from './overtime-list';
 describe('OvertimeListComponent', () => {
   let fixture: ComponentFixture<OvertimeListComponent>;
   let service: jasmine.SpyObj<OvertimeListService>;
+  let router: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
     service = jasmine.createSpyObj<OvertimeListService>('OvertimeListService', ['fetchOvertimeList']);
     service.fetchOvertimeList.and.returnValue(of([
       { id: '1', values: { employee_code: 'EMP-001', employee_name: 'Ayesha Khan' } },
     ]));
+    router = jasmine.createSpyObj<Router>('Router', ['navigate']);
     await TestBed.configureTestingModule({
       imports: [OvertimeListComponent],
       providers: [
         { provide: OvertimeListService, useValue: service },
         { provide: AlertService, useValue: { error: jasmine.createSpy('error') } },
+        { provide: Router, useValue: router },
       ],
     }).compileComponents();
 
@@ -29,6 +33,14 @@ describe('OvertimeListComponent', () => {
     expect(service.fetchOvertimeList).toHaveBeenCalled();
     expect(fixture.nativeElement.textContent).toContain('Overtime (1)');
     expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
+  });
+
+  it('navigates to the add page from the Add button', () => {
+    const button = fixture.nativeElement.querySelector('.overtime-add') as HTMLButtonElement;
+
+    button.click();
+
+    expect(router.navigate).toHaveBeenCalledWith(['/setup/overtime-list/add']);
   });
 
   it('filters loaded rows by the search text', () => {

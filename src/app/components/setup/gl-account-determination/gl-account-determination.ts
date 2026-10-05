@@ -242,6 +242,27 @@ export class GlAccountDeterminationComponent implements OnInit {
     this.rows = [...this.rows, emptyRow()];
   }
 
+  duplicateRow(rowId: string): void {
+    if (this.saving() || this.editingId() !== null) {
+      return;
+    }
+
+    const rowIndex = this.rows.findIndex((row) => row.id === rowId);
+    if (rowIndex < 0) {
+      return;
+    }
+
+    const source = this.rows[rowIndex];
+    const duplicate = { ...source, id: newId() };
+    this.rows = [
+      ...this.rows.slice(0, rowIndex + 1),
+      duplicate,
+      ...this.rows.slice(rowIndex + 1),
+    ];
+    this.openFormSearch.set(null);
+    this.openAccountSearch.set(null);
+  }
+
   removeRow(rowId: string): void {
     if (this.rows.length <= 1) {
       this.alertService.validation('At least one row is required.');
@@ -563,7 +584,6 @@ export class GlAccountDeterminationComponent implements OnInit {
       CctCode: row.costCenterType.trim(),
       branch: glAccountBranchCode(row.branch),
       debit_credit_type: row.debitCreditType.trim().toUpperCase(),
-      debitCreditType: row.debitCreditType.trim().toUpperCase(),
       vendor_for_expense_reimbursement: this.vendorForExpenseReimbursement.trim(),
       vendor_for_loans: this.vendorForLoans.trim(),
       vendor_for_advances: this.vendorForAdvances.trim(),

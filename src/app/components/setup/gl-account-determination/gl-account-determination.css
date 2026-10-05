@@ -201,7 +201,24 @@
   background: #f5f3ff;
 }
 
+.btn-duplicate-row {
+  background: #ffffff;
+  border: 1px solid #4f46b8;
+  border-radius: 4px;
+  color: #4f46b8;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 6px;
+  padding: 5px 8px;
+}
+
+.btn-duplicate-row:hover:not(:disabled) {
+  background: #f5f3ff;
+}
+
 .btn-add-row:disabled,
+.btn-duplicate-row:disabled,
 .btn-submit-form:disabled,
 .btn-remove-row:disabled,
 .btn-edit-row:disabled {

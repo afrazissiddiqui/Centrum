@@ -191,6 +191,18 @@
                     </select>
                   </td>
                   <td class="col-action">
+                    @if (editingId() === null) {
+                      <button
+                        type="button"
+                        class="btn-duplicate-row"
+                        [disabled]="saving()"
+                        (click)="duplicateRow(row.id)"
+                        [attr.aria-label]="'Duplicate row ' + formRowSrNo(index)"
+                        title="Duplicate row"
+                      >
+                        Duplicate
+                      </button>
+                    }
                     <button
                       type="button"
                       class="btn-remove-row"
