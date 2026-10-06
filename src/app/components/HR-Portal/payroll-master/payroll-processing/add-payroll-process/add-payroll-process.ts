@@ -44,6 +44,7 @@ import {
   computeOvertimeRate,
   computeProvidentFund,
   computeYearsOfService,
+  resolveBasicSalaryBasis,
 } from '../../payroll-setup/payroll-setup.service';
 import {
   computeMonthlyWithholdingTax,
@@ -61,6 +62,10 @@ import {
   PaginationFooterItem,
 } from '../../../../../utils/pagination.util';
 import { ApplicationDetailDialogComponent } from '../../../Application-Form/application-detail-dialog/application-detail-dialog';
+import {
+  computeSocialSecurityKpk,
+  computeSocialSecurityPunjab,
+} from '../payroll-social-security.util';
 
 export interface PayrollProcessRow {
   apiId: string;
@@ -1305,12 +1310,11 @@ export class AddPayrollProcessComponent implements OnInit {
       cashPercentage,
       bankPercentage,
     );
-    const salaryBasis =
-      paymentMode.toLowerCase() === 'bank' || paymentMode.toLowerCase() === 'bank salary' || paymentMode.toLowerCase() === 'salary in bank'
-        ? grossSalaryBreakdown.grossSalaryInBank
-        : paymentMode.toLowerCase() === 'cash' || paymentMode.toLowerCase() === 'cash salary' || paymentMode.toLowerCase() === 'salary in cash'
-          ? grossSalaryBreakdown.grossSalaryInCash
-          : grossSalary;
+    const salaryBasis = resolveBasicSalaryBasis(
+      grossSalary,
+      paymentMode,
+      grossSalaryBreakdown,
+    );
     const medicalAllowance = computeMedicalAllowance(grossSalaryBreakdown.grossSalaryInBank);
     const basicSalary = computeBasicSalary(salaryBasis, medicalAllowance);
     const allowedLiters = this.parseFuelLiters(remuneration?.fuelLimit);
@@ -1385,12 +1389,11 @@ export class AddPayrollProcessComponent implements OnInit {
       grossSalaryInBank: row.grossSalaryInBank || 0,
     };
 
-    const salaryBasis =
-      row.paymentMode.toLowerCase() === 'bank' || row.paymentMode.toLowerCase() === 'bank salary' || row.paymentMode.toLowerCase() === 'salary in bank'
-        ? grossSalaryBreakdown.grossSalaryInBank
-        : row.paymentMode.toLowerCase() === 'cash' || row.paymentMode.toLowerCase() === 'cash salary' || row.paymentMode.toLowerCase() === 'salary in cash'
-          ? grossSalaryBreakdown.grossSalaryInCash
-          : grossSalary;
+    const salaryBasis = resolveBasicSalaryBasis(
+      grossSalary,
+      row.paymentMode,
+      grossSalaryBreakdown,
+    );
     const medicalAllowance = computeMedicalAllowance(grossSalaryBreakdown.grossSalaryInBank);
     const basicSalary = computeBasicSalary(salaryBasis, medicalAllowance);
     const providentFund = row.providentApplicable ? computeProvidentFund(basicSalary) : 0;
@@ -1504,12 +1507,9 @@ export class AddPayrollProcessComponent implements OnInit {
     grossSalaryInBank: number,
     location: string,
   ): number {
-    const branchCode = resolveBranchCode(location || '');
-    // AHCP_HO and AHCP_Faisalabad are Punjab branches.
-    if (['01', '03'].includes(branchCode) && grossSalaryInBank <= minimumWage * 1.4) {
-      return this.parseAmount(minimumWage * 0.06);
-    }
-    return 0;
+    return this.parseAmount(
+      computeSocialSecurityPunjab(minimumWage, grossSalaryInBank, location || ''),
+    );
   }
 
   private calculateSocialSecurityKpk(
@@ -1517,12 +1517,9 @@ export class AddPayrollProcessComponent implements OnInit {
     grossSalaryInBank: number,
     location: string,
   ): number {
-    const branchCode = resolveBranchCode(location || '');
-    // AHCP_Peshawar is the KPK branch.
-    if (branchCode === '02' && grossSalaryInBank <= minimumWage * 1.6) {
-      return this.parseAmount(minimumWage * 0.06);
-    }
-    return 0;
+    return this.parseAmount(
+      computeSocialSecurityKpk(minimumWage, grossSalaryInBank, location || ''),
+    );
   }
 
   /** Reads application-form Fuel Limit (liters), tolerating formatted API values. */

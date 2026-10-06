@@ -23,6 +23,9 @@ describe('GlAccountDeterminationComponent', () => {
             warning: jasmine.createSpy('warning'),
             error: jasmine.createSpy('error'),
             confirm: jasmine.createSpy('confirm').and.resolveTo({ isConfirmed: true }),
+            chooseDuplicateAction: jasmine
+              .createSpy('chooseDuplicateAction')
+              .and.resolveTo('update'),
           },
         },
         {
@@ -162,6 +165,80 @@ describe('GlAccountDeterminationComponent', () => {
     expect(component.rows[0].debitCreditType).toBe('');
   });
 
+  it('asks before saving an edited line and updates only after confirmation', async () => {
+    const service = TestBed.inject(GlAccountDeterminationService);
+    const updateSpy = spyOn(service, 'updateGlAccountDetermination').and.returnValue(of({}));
+    const addSpy = spyOn(service, 'addGlAccountDetermination').and.returnValue(of({}));
+    const record = {
+      Id: 101,
+      Form: 9,
+      Type: 'Salary',
+      Code: '1000',
+      Name: 'Cash',
+      Branch: 'AHCP_HO',
+      DebitCreditType: 'DEBIT',
+      BusinessPartner: 'BP-01',
+      CctCode: 'COS',
+      CctName: 'Cost of Sales',
+      VendorForExpenseReimbursement: '',
+      VendorForLoans: '',
+      VendorForAdvances: '',
+    };
+    component.savedRecords.set([record]);
+    component.editRecord(record);
+    component.rows[0].salaryGlAccountName = 'Updated Cash';
+
+    await component.submitForm();
+
+    expect(TestBed.inject(AlertService).chooseDuplicateAction).toHaveBeenCalledWith(
+      'Update or Add GL Account Determination',
+      jasmine.stringContaining('saved line 1 (Record ID: 101)'),
+    );
+    expect(updateSpy).toHaveBeenCalledWith(
+      101,
+      jasmine.objectContaining({ name: 'Updated Cash' }),
+    );
+    expect(addSpy).not.toHaveBeenCalled();
+  });
+
+  it('adds edited values as a new line when chosen instead of updating the saved line', async () => {
+    const service = TestBed.inject(GlAccountDeterminationService);
+    const updateSpy = spyOn(service, 'updateGlAccountDetermination').and.returnValue(of({}));
+    let editingIdAtAdd: number | null = -1;
+    const addSpy = spyOn(service, 'addGlAccountDetermination').and.callFake(() => {
+      editingIdAtAdd = component.editingId();
+      return of({});
+    });
+    const alertService = TestBed.inject(AlertService);
+    (alertService.chooseDuplicateAction as jasmine.Spy).and.resolveTo('add');
+    const record = {
+      Id: 101,
+      Form: 9,
+      Type: 'Salary',
+      Code: '1000',
+      Name: 'Cash',
+      Branch: 'AHCP_HO',
+      DebitCreditType: 'DEBIT',
+      BusinessPartner: 'BP-01',
+      CctCode: 'COS',
+      CctName: 'Cost of Sales',
+      VendorForExpenseReimbursement: '',
+      VendorForLoans: '',
+      VendorForAdvances: '',
+    };
+    component.savedRecords.set([record]);
+    component.editRecord(record);
+    component.rows[0].salaryGlAccountName = 'Updated Cash';
+
+    await component.submitForm();
+
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(addSpy).toHaveBeenCalledWith(
+      jasmine.objectContaining({ name: 'Updated Cash' }),
+    );
+    expect(editingIdAtAdd).toBeNull();
+  });
+
   it('shows the saved debit/credit value in title case in the listing', () => {
     component.savedRecords.set([
       {
@@ -176,7 +253,7 @@ describe('GlAccountDeterminationComponent', () => {
         CctCode: 'COS',
         CctName: 'Cost of Sales',
         VendorForExpenseReimbursement: '',
-        VendorForLoans: '',
+        VendorForLoans: 'HIDDEN-VENDOR-METADATA',
         VendorForAdvances: '',
       },
     ]);
@@ -189,9 +266,10 @@ describe('GlAccountDeterminationComponent', () => {
     expect(savedLine.cells[9].textContent?.trim()).toBe('Debit');
   });
 
-  it('does not submit a row when every mapping field matches a saved line', () => {
+  it('asks before updating a fully matching saved line and updates the matching record', async () => {
     const service = TestBed.inject(GlAccountDeterminationService);
     const addSpy = spyOn(service, 'addGlAccountDetermination').and.callThrough();
+    const updateSpy = spyOn(service, 'updateGlAccountDetermination').and.callThrough();
     const row = {
       ...component.rows[0],
       formName: 'Job Specification Form',
@@ -223,12 +301,65 @@ describe('GlAccountDeterminationComponent', () => {
       },
     ]);
 
-    component.submitForm();
+    await component.submitForm();
 
     expect(addSpy).not.toHaveBeenCalled();
-    expect(TestBed.inject(AlertService).validation).toHaveBeenCalledWith(
-      'Row 2: This GL Account Determination already exists.',
+    expect(updateSpy).toHaveBeenCalledWith(
+      101,
+      jasmine.objectContaining({
+        form: 'Job Specification Form',
+        code: '1000',
+      }),
     );
+    expect(TestBed.inject(AlertService).chooseDuplicateAction).toHaveBeenCalledWith(
+      'Duplicate GL Account Determination',
+      jasmine.stringContaining('saved line 1 (Record ID: 101)'),
+    );
+  });
+
+  it('adds a distinct row when the user chooses Add another row for a duplicate', async () => {
+    const service = TestBed.inject(GlAccountDeterminationService);
+    const addSpy = spyOn(service, 'addGlAccountDetermination').and.callThrough();
+    const updateSpy = spyOn(service, 'updateGlAccountDetermination').and.callThrough();
+    const alertService = TestBed.inject(AlertService);
+    (alertService.chooseDuplicateAction as jasmine.Spy).and.resolveTo('add');
+
+    component.rows = [
+      {
+        ...component.rows[0],
+        formName: 'Job Specification Form',
+        formValue: 1,
+        glItemType: 'Salary',
+        salaryGlAccountCode: '1000',
+        salaryGlAccountName: 'Cash',
+        businessPartner: 'BP-01',
+        costCenterType: 'COS',
+        branch: 'AHCP_HO',
+        debitCreditType: 'Debit',
+      },
+    ];
+    component.savedRecords.set([
+      {
+        Id: 101,
+        Form: 1,
+        Type: 'Salary',
+        Code: '1000',
+        Name: 'Cash',
+        Branch: '2',
+        DebitCreditType: 'DEBIT',
+        BusinessPartner: 'BP-01',
+        CctCode: 'COS',
+        CctName: 'Cost of Sales',
+        VendorForExpenseReimbursement: '',
+        VendorForLoans: '',
+        VendorForAdvances: '',
+      },
+    ]);
+
+    await component.submitForm();
+
+    expect(addSpy).toHaveBeenCalledTimes(1);
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 
   it('allows a row that differs from a saved line by one mapping field', () => {

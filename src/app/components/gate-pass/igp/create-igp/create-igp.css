@@ -494,7 +494,7 @@
 
 .igp-lines-table {
   width: 100%;
-  min-width: 1180px;
+  min-width: 1600px;
   border-collapse: collapse;
   font-size: 13px;
   background: #fff;
@@ -532,6 +532,16 @@
 .igp-col-qty {
   width: 88px;
   text-align: center;
+}
+
+.igp-add-page .igp-lines-table .igp-col-qty {
+  width: 135px;
+  min-width: 135px;
+}
+
+.igp-add-page .igp-lines-table .igp-col-quantity-wide {
+  width: 170px;
+  min-width: 170px;
 }
 
 .igp-col-qty input {

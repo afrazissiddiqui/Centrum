@@ -464,7 +464,10 @@
                   <th>Packing condition</th>
                   <th>Product quality</th>
                   <th>UOM</th>
-                  <th class="igp-col-qty">Qty</th>
+                  <th class="igp-col-qty">Doc Quantity</th>
+                  <th class="igp-col-qty igp-col-quantity-wide">Maximum Quantity</th>
+                  <th class="igp-col-qty igp-col-quantity-wide">Remaining Quantity</th>
+                  <th class="igp-col-qty">Quantity</th>
                   <th>Info</th>
                   <th>Remarks</th>
                   <th class="igp-col-actions" aria-label="Actions"></th>
@@ -472,7 +475,7 @@
               </thead>
               <tbody>
                 <tr *ngIf="lines.length === 0" class="igp-lines-empty">
-                  <td colspan="12">No line items yet. Click “Add line” to add rows.</td>
+                  <td colspan="15">No line items yet. Click “Add line” to add rows.</td>
                 </tr>
                 <tr
                   *ngFor="let line of lines; let i = index; trackBy: trackByIndex"
@@ -514,6 +517,9 @@
                   <td><input type="text" [(ngModel)]="line.productQuality" [readonly]="line.deleted" /></td>
                   <td><input type="text" [(ngModel)]="line.uom" [readonly]="line.deleted" /></td>
                   <td class="igp-col-qty"><input type="number" min="0" step="1" [(ngModel)]="line.qty" [readonly]="line.deleted" /></td>
+                  <td class="igp-col-qty igp-col-quantity-wide"><input type="number" min="0" step="1" [(ngModel)]="line.maximumQuantity" [readonly]="line.deleted" /></td>
+                  <td class="igp-col-qty igp-col-quantity-wide"><input type="number" min="0" step="1" [(ngModel)]="line.remainingQuantity" [readonly]="line.deleted" /></td>
+                  <td class="igp-col-qty"><input type="number" min="0" step="1" [(ngModel)]="line.quantity" [readonly]="line.deleted" /></td>
                   <td><input type="text" [(ngModel)]="line.info" [readonly]="line.deleted" /></td>
                   <td><input type="text" [(ngModel)]="line.remarks" [readonly]="line.deleted" /></td>
                   <td class="igp-col-actions">
@@ -533,6 +539,9 @@
                 <tr class="igp-total-row">
                   <td colspan="8" class="igp-total-label">Total</td>
                   <td class="igp-col-qty"><strong>{{ totalQty }}</strong></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
                   <td colspan="3"></td>
                 </tr>
               </tfoot>

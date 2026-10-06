@@ -35,6 +35,10 @@ export type GlAccountDeterminationRow = {
   debitCreditType: string;
 };
 
+type GlAccountDeterminationMutation =
+  | { type: 'add'; row: GlAccountDeterminationRow }
+  | { type: 'update'; id: number; row: GlAccountDeterminationRow };
+
 export const GL_ACCOUNT_DEBIT_CREDIT_OPTIONS = ['Debit', 'Credit'] as const;
 
 export const GL_ACCOUNT_FORM_OPTIONS = [
@@ -271,7 +275,7 @@ export class GlAccountDeterminationComponent implements OnInit {
     this.rows = this.rows.filter((row) => row.id !== rowId);
   }
 
-  submitForm(): void {
+  async submitForm(): Promise<void> {
     if (this.saving()) {
       return;
     }
@@ -285,7 +289,7 @@ export class GlAccountDeterminationComponent implements OnInit {
     }
 
     const editingId = this.editingId();
-    const duplicateRowIndex = this.findDuplicateRowIndex(this.rows, editingId);
+    const duplicateRowIndex = this.findDuplicateRowIndex(this.rows);
     if (duplicateRowIndex !== null) {
       this.alertService.validation(
         `Row ${this.savedRecords().length + duplicateRowIndex + 1}: This GL Account Determination already exists.`,
@@ -293,16 +297,66 @@ export class GlAccountDeterminationComponent implements OnInit {
       return;
     }
 
-    if (editingId !== null) {
-      this.updateRecord(editingId, this.rows[0]);
-      return;
+    this.saving.set(true);
+    const mutations: GlAccountDeterminationMutation[] = [];
+
+    for (const row of this.rows) {
+      const editedRecord =
+        editingId === null
+          ? null
+          : this.savedRecords().find((record) => record.Id === editingId) ?? null;
+      const matchingRecord =
+        editingId === null ? this.findMatchingSavedRecord(row, null) : null;
+      const confirmationRecord = editedRecord ?? matchingRecord;
+
+      if (editingId !== null && !editedRecord) {
+        this.saving.set(false);
+        this.alertService.warning('Update', 'Unable to update this row: saved record was not found.');
+        return;
+      }
+
+      if (confirmationRecord) {
+        const action = await this.alertService.chooseDuplicateAction(
+          editedRecord ? 'Update or Add GL Account Determination' : 'Duplicate GL Account Determination',
+          editedRecord
+            ? this.editRecordConfirmationMessage(editedRecord)
+            : this.duplicateRecordMessage(confirmationRecord),
+        );
+        if (action === null) {
+          this.saving.set(false);
+          return;
+        }
+
+        if (action === 'add') {
+          if (editingId !== null) {
+            this.editingId.set(null);
+          }
+          mutations.push({ type: 'add', row });
+        } else {
+          mutations.push({ type: 'update', id: confirmationRecord.Id, row });
+        }
+        continue;
+      }
+
+      mutations.push({ type: 'add', row });
     }
 
-    this.persistRowsSequentially([...this.rows], 0, () => {
-      this.alertService.success(
-        'Submitted',
-        `GL Account Determination saved with ${this.rows.length} row(s).`,
-      );
+    this.persistMutationsSequentially(mutations, 0, () => {
+      const addedCount = mutations.filter((mutation) => mutation.type === 'add').length;
+      const updatedCount = mutations.length - addedCount;
+      if (addedCount === 0) {
+        this.alertService.success('Updated', 'GL Account Determination updated successfully.');
+      } else if (updatedCount === 0) {
+        this.alertService.success(
+          'Submitted',
+          `GL Account Determination saved with ${addedCount} row(s).`,
+        );
+      } else {
+        this.alertService.success(
+          'Submitted',
+          `GL Account Determination saved with ${addedCount} new row(s) and updated ${updatedCount} existing line(s).`,
+        );
+      }
       this.resetForm();
       this.loadSavedRecords();
     });
@@ -592,23 +646,63 @@ export class GlAccountDeterminationComponent implements OnInit {
 
   private findDuplicateRowIndex(
     rows: GlAccountDeterminationRow[],
-    excludedRecordId: number | null,
   ): number | null {
-    const existingKeys = new Set(
-      this.savedRecords()
-        .filter((record) => record.Id !== excludedRecordId)
-        .map((record) => this.recordDuplicateKey(record)),
-    );
+    const seenKeys = new Set<string>();
 
     for (let index = 0; index < rows.length; index++) {
       const key = this.payloadDuplicateKey(this.toPayload(rows[index]));
-      if (existingKeys.has(key)) {
+      if (seenKeys.has(key)) {
         return index;
       }
-      existingKeys.add(key);
+      seenKeys.add(key);
     }
 
     return null;
+  }
+
+  private findMatchingSavedRecord(
+    row: GlAccountDeterminationRow,
+    excludedRecordId: number | null,
+  ): GlAccountDeterminationRecord | null {
+    const key = this.payloadDuplicateKey(this.toPayload(row));
+    return (
+      this.savedRecords().find(
+        (record) =>
+          record.Id !== excludedRecordId && this.recordDuplicateKey(record) === key,
+      ) ?? null
+    );
+  }
+
+  private duplicateRecordMessage(record: GlAccountDeterminationRecord): string {
+    const lineNumber = this.savedRecords().findIndex((savedRecord) => savedRecord.Id === record.Id) + 1;
+    return [
+      `This line matches saved line ${lineNumber} (Record ID: ${record.Id}).`,
+      `Form: ${this.formNameForValue(record.Form)}`,
+      `G/L Item Type: ${record.Type}`,
+      `G/L Account: ${record.Code} - ${record.Name}`,
+      `Business Partner: ${record.BusinessPartner}`,
+      `Cost Center Type: ${record.CctCode}`,
+      `Branch: ${record.Branch}`,
+      `Debit / Credit: ${debitCreditLabel(record.DebitCreditType) || record.DebitCreditType}`,
+      '',
+      'Update the existing line or add another row?',
+    ].join('\n');
+  }
+
+  private editRecordConfirmationMessage(record: GlAccountDeterminationRecord): string {
+    const lineNumber = this.savedRecords().findIndex((savedRecord) => savedRecord.Id === record.Id) + 1;
+    return [
+      `You are editing saved line ${lineNumber} (Record ID: ${record.Id}).`,
+      `Form: ${this.formNameForValue(record.Form)}`,
+      `G/L Item Type: ${record.Type}`,
+      `G/L Account: ${record.Code} - ${record.Name}`,
+      `Business Partner: ${record.BusinessPartner}`,
+      `Cost Center Type: ${record.CctCode}`,
+      `Branch: ${record.Branch}`,
+      `Debit / Credit: ${debitCreditLabel(record.DebitCreditType) || record.DebitCreditType}`,
+      '',
+      'Update this line or add the edited values as a new line?',
+    ].join('\n');
   }
 
   private payloadDuplicateKey(payload: GlAccountDeterminationAddPayload): string {
@@ -621,9 +715,6 @@ export class GlAccountDeterminationComponent implements OnInit {
       this.normalizeDuplicateValue(payload.debit_credit_type),
       this.normalizeDuplicateValue(payload.business_partner),
       this.normalizeDuplicateValue(payload.costCenterType),
-      this.normalizeDuplicateValue(payload.vendor_for_expense_reimbursement ?? ''),
-      this.normalizeDuplicateValue(payload.vendor_for_loans ?? ''),
-      this.normalizeDuplicateValue(payload.vendor_for_advances ?? ''),
     ]);
   }
 
@@ -637,9 +728,6 @@ export class GlAccountDeterminationComponent implements OnInit {
       this.normalizeDuplicateValue(record.DebitCreditType),
       this.normalizeDuplicateValue(record.BusinessPartner),
       this.normalizeDuplicateValue(record.CctCode),
-      this.normalizeDuplicateValue(record.VendorForExpenseReimbursement),
-      this.normalizeDuplicateValue(record.VendorForLoans),
-      this.normalizeDuplicateValue(record.VendorForAdvances),
     ]);
   }
 
@@ -663,51 +751,41 @@ export class GlAccountDeterminationComponent implements OnInit {
     return this.formOptions.find((option) => option.value === Number(value))?.name ?? '';
   }
 
-  private updateRecord(id: number, row: GlAccountDeterminationRow): void {
-    this.saving.set(true);
-    this.glAccountService
-      .updateGlAccountDetermination(id, this.toPayload(row))
-      .pipe(finalize(() => this.saving.set(false)))
-      .subscribe({
-        next: () => {
-          this.alertService.success('Updated', 'GL Account Determination updated successfully.');
-          this.resetForm();
-          this.loadSavedRecords();
-        },
-        error: (error: unknown) => {
-          void this.alertService.error(
-            'Update Failed',
-            formatApiErrorMessage(error, 'Failed to update GL Account Determination.'),
-          );
-        },
-      });
-  }
-
-  private persistRowsSequentially(
-    rows: GlAccountDeterminationRow[],
+  private persistMutationsSequentially(
+    mutations: GlAccountDeterminationMutation[],
     index: number,
     onComplete: () => void,
   ): void {
-    if (index >= rows.length) {
+    if (index >= mutations.length) {
       this.saving.set(false);
       onComplete();
       return;
     }
 
-    if (index === 0) {
-      this.saving.set(true);
-    }
+    const mutation = mutations[index];
+    const request =
+      mutation.type === 'update'
+        ? this.glAccountService.updateGlAccountDetermination(
+            mutation.id,
+            this.toPayload(mutation.row),
+          )
+        : this.glAccountService.addGlAccountDetermination(this.toPayload(mutation.row));
 
-    this.glAccountService.addGlAccountDetermination(this.toPayload(rows[index])).subscribe({
+    request.subscribe({
       next: () => {
-        this.persistRowsSequentially(rows, index + 1, onComplete);
+        this.persistMutationsSequentially(mutations, index + 1, onComplete);
       },
       error: (error: unknown) => {
         this.saving.set(false);
         this.loadSavedRecords();
         void this.alertService.error(
-          'Save Failed',
-          formatApiErrorMessage(error, 'Failed to save GL Account Determination row.'),
+          mutation.type === 'update' ? 'Update Failed' : 'Save Failed',
+          formatApiErrorMessage(
+            error,
+            mutation.type === 'update'
+              ? 'Failed to update GL Account Determination.'
+              : 'Failed to save GL Account Determination row.',
+          ),
         );
       },
     });

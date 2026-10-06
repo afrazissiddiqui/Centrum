@@ -241,6 +241,9 @@ export class IgpComponent implements OnInit {
           <td>${this.escapeHtml(line.packingCondition ?? '—')}</td>
           <td>${this.escapeHtml(line.productQuality ?? '—')}</td>
           <td>${this.escapeHtml(line.qty ?? '—')}</td>
+          <td>${this.escapeHtml(line.maximumQuantity ?? '—')}</td>
+          <td>${this.escapeHtml(line.remainingQuantity ?? '—')}</td>
+          <td>${this.escapeHtml(line.quantity ?? '—')}</td>
           <td>${this.escapeHtml(line.uom ?? '—')}</td>
         </tr>`)
       .join('');
@@ -304,11 +307,14 @@ export class IgpComponent implements OnInit {
                     <th>Category</th>
                     <th>Packing</th>
                     <th>Quality</th>
-                    <th>Qty</th>
+                    <th>Doc Quantity</th>
+                    <th>Maximum Quantity</th>
+                    <th>Remaining Quantity</th>
+                    <th>Quantity</th>
                     <th>UOM</th>
                   </tr>
                 </thead>
-                <tbody>${lineItems || '<tr><td colspan="9">No line items available.</td></tr>'}</tbody>
+                <tbody>${lineItems || '<tr><td colspan="12">No line items available.</td></tr>'}</tbody>
               </table>
             </div>
           </div>

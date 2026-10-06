@@ -1,0 +1,29 @@
+import { resolveBranchCode } from '../../../setup/gl-account-determination/gl-account-branch.options';
+
+function normalizeBranchCode(location: string): string {
+  return resolveBranchCode(location).replace(/^0+(?=\d)/, '');
+}
+
+export function computeSocialSecurityPunjab(
+  minimumWage: number,
+  grossSalaryInBank: number,
+  location: string,
+): number {
+  const branchCode = normalizeBranchCode(location);
+  if (['2', '3'].includes(branchCode) && grossSalaryInBank <= minimumWage * 1.4) {
+    return minimumWage * 0.06;
+  }
+  return 0;
+}
+
+export function computeSocialSecurityKpk(
+  minimumWage: number,
+  grossSalaryInBank: number,
+  location: string,
+): number {
+  const branchCode = normalizeBranchCode(location);
+  if (branchCode === '1' && grossSalaryInBank <= minimumWage * 1.6) {
+    return minimumWage * 0.06;
+  }
+  return 0;
+}

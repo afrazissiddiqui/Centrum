@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeBasicSalary,
   computeGratuity,
   computeGrossSalaryBreakdown,
   computeMedicalAllowance,
   computeNetPayable,
+  resolveBasicSalaryBasis,
 } from '../../payroll-setup/payroll-setup.service';
 
 describe('computeGrossSalaryBreakdown', () => {
@@ -56,6 +58,26 @@ describe('computeGrossSalaryBreakdown', () => {
     expect(breakdown.grossSalaryInBank).toBe(546000);
     expect(computeMedicalAllowance(breakdown.grossSalaryInBank)).toBeCloseTo(49636.36, 2);
     expect(computeMedicalAllowance(1092000)).toBeCloseTo(99272.73, 2);
+  });
+
+  it('uses gross salary in bank as the basic salary basis for hybrid payment', () => {
+    const breakdown = computeGrossSalaryBreakdown(100000, 'Hybrid', 40, 60);
+
+    expect(resolveBasicSalaryBasis(100000, 'Hybrid', breakdown)).toBe(60000);
+    expect(
+      computeBasicSalary(
+        resolveBasicSalaryBasis(100000, 'Hybrid', breakdown),
+        computeMedicalAllowance(breakdown.grossSalaryInBank),
+      ),
+    ).toBeCloseTo(54545.45, 2);
+  });
+
+  it('preserves cash, bank, and unrecognized payment-mode salary bases', () => {
+    const breakdown = computeGrossSalaryBreakdown(100000, 'Hybrid', 40, 60);
+
+    expect(resolveBasicSalaryBasis(100000, 'Cash', breakdown)).toBe(40000);
+    expect(resolveBasicSalaryBasis(100000, 'Bank', breakdown)).toBe(60000);
+    expect(resolveBasicSalaryBasis(100000, '', breakdown)).toBe(100000);
   });
 
   it('uses bank gross as the gratuity calculation base', () => {

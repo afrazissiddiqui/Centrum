@@ -29,8 +29,6 @@ import { GatePassDepartmentService } from '../../gate-pass-department.service';
 import { ApplicationFormService } from '../../../../services/application-form.service';
 import { AuthService } from '../../../../services/auth.service';
 import { WarehouseService } from '../../../../services/warehouse.service';
-import { parseIgpBulkUploadCsv, type ParsedIgpCsvLine } from './csv-import.util';
-import { IgpBulkImportService } from '../igp-bulk-import.service';
 
 function emptyIfDash(value: string): string {
   return value === '—' ? '' : value;
@@ -129,7 +127,6 @@ export class CreateIgpComponent implements OnInit {
     private readonly departmentService: GatePassDepartmentService,
     private readonly applicationFormService: ApplicationFormService,
     private readonly authService: AuthService,
-    private readonly bulkImportService: IgpBulkImportService,
     private readonly cdr: ChangeDetectorRef,
     private readonly warehouseService: WarehouseService,
   ) {
@@ -153,7 +150,6 @@ export class CreateIgpComponent implements OnInit {
     if (!editId) {
       this.assignNextReferenceNo();
       this.loadSignedInUserDetails();
-      this.applyPendingBulkImportLines();
       return;
     }
 
@@ -210,70 +206,6 @@ export class CreateIgpComponent implements OnInit {
     } catch {
       return reserveNextGatePassReferenceNo('IGP', []);
     }
-  }
-
-  private applyPendingBulkImportLines(): void {
-    const pendingData = this.bulkImportService.consumePendingData();
-    if (!pendingData) {
-      return;
-    }
-
-    // Apply header fields
-    if (pendingData.type?.trim()) {
-      this.type = pendingData.type.trim();
-    }
-    if (pendingData.baseDocNo?.trim()) {
-      this.baseDocNo = pendingData.baseDocNo.trim();
-    }
-    if (pendingData.poNumber?.trim()) {
-      this.poNumber = pendingData.poNumber.trim();
-    }
-    if (pendingData.businessPartnerName?.trim()) {
-      this.businessPartnerName = pendingData.businessPartnerName.trim();
-    }
-    if (pendingData.businessPartnerCode?.trim()) {
-      this.businessPartnerCode = pendingData.businessPartnerCode.trim();
-    }
-    if (pendingData.department?.trim()) {
-      this.department = pendingData.department.trim();
-    }
-    if (pendingData.vehicleNo?.trim()) {
-      this.vehicleNo = pendingData.vehicleNo.trim();
-    }
-    if (pendingData.location?.trim()) {
-      this.location = pendingData.location.trim();
-    }
-    if (pendingData.fromUnit?.trim()) {
-      this.fromUnit = pendingData.fromUnit.trim();
-    }
-    if (pendingData.kantaSlip?.trim()) {
-      this.kantaSlip = pendingData.kantaSlip.trim();
-    }
-    if (pendingData.biltyNo?.trim()) {
-      this.biltyNo = pendingData.biltyNo.trim();
-    }
-    if (pendingData.store?.trim()) {
-      this.store = pendingData.store.trim();
-    }
-    if (pendingData.driverName?.trim()) {
-      this.driverName = pendingData.driverName.trim();
-    }
-    if (pendingData.driverCnic?.trim()) {
-      this.driverCnic = formatGatePassCnic(pendingData.driverCnic.trim());
-    }
-    if (pendingData.driverPhone?.trim()) {
-      this.driverPhone = formatGatePassPhoneDigits(pendingData.driverPhone.trim());
-    }
-    if (pendingData.weight?.trim()) {
-      this.weight = numericFieldFromDoc(pendingData.weight.trim());
-    }
-
-    // Apply line items
-    this.lines = pendingData.lines;
-    this.activeSection = 'igp-lines-section';
-    setTimeout(() => {
-      document.getElementById('igp-lines-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 0);
   }
 
   private delay(ms: number): Promise<void> {
@@ -598,7 +530,10 @@ export class CreateIgpComponent implements OnInit {
         packingCondition: l.packingCondition,
         productQuality: l.productQuality,
         uom: l.uom,
+        maximumQuantity: null,
+        remainingQuantity: null,
         qty: Number(l.qty) || 0,
+        quantity: null,
         info: l.info ?? '',
         remarks: l.remarks ?? '',
         deleted: false,
@@ -713,7 +648,10 @@ export class CreateIgpComponent implements OnInit {
           packingCondition: normalizeGatePassString(hydrated.packingCondition),
           productQuality: normalizeGatePassString(hydrated.productQuality),
           uom: normalizeGatePassString(hydrated.uom),
+          maximumQuantity: hydrated.maximumQuantity,
+          remainingQuantity: hydrated.remainingQuantity,
           qty: Number(hydrated.qty) || 0,
+          quantity: hydrated.quantity,
           info: normalizeGatePassString(hydrated.info),
           remarks: normalizeGatePassString(hydrated.remarks),
         };

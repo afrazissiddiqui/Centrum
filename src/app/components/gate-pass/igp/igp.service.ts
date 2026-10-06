@@ -13,7 +13,10 @@ export interface IgpLineItem {
   packingCondition: string;
   productQuality: string;
   uom: string;
+  maximumQuantity: number | null;
+  remainingQuantity: number | null;
   qty: number;
+  quantity: number | null;
   info: string;
   remarks: string;
   deleted: boolean;
@@ -26,7 +29,10 @@ export interface IgpPayloadLineItem {
   packingCondition: string;
   productQuality: string;
   uom: string;
+  maximumQuantity: number | null;
+  remainingQuantity: number | null;
   qty: number;
+  quantity: number | null;
   info: string;
   remarks: string;
 }
@@ -110,7 +116,10 @@ function emptyLine(): IgpLineItem {
     packingCondition: '',
     productQuality: '',
     uom: '',
+    maximumQuantity: null,
+    remainingQuantity: null,
     qty: 0,
+    quantity: null,
     info: '',
     remarks: '',
     deleted: false,
@@ -374,6 +383,16 @@ export class IgpService {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
+  private pickOptionalNumber(sources: Array<Record<string, unknown>>, keys: string[]): number | null {
+    const text = this.pickString(sources, keys);
+    if (!text) {
+      return null;
+    }
+
+    const parsed = Number.parseFloat(text);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
   private mapLineItem(raw: Record<string, unknown>): IgpLineItem {
     return {
       itemCode: this.pickString([raw], ['itemCode', 'item_code', 'ItemCode', 'ItemCodeNo']),
@@ -383,7 +402,14 @@ export class IgpService {
       packingCondition: this.pickString([raw], ['packingCondition', 'packing_condition', 'PackingCondition', 'Packing']),
       productQuality: this.pickString([raw], ['productQuality', 'product_quality', 'ProductQuality', 'Quality']),
       uom: this.pickString([raw], ['uom', 'UOM', 'Uom', 'unitOfMeasure', 'UnitOfMeasure']),
-      qty: this.pickNumber([raw], ['qty', 'quantity', 'Qty', 'quantityValue']),
+      maximumQuantity: this.pickOptionalNumber([raw], [
+        'maximumQuantity', 'maximum_quantity', 'MaximumQuantity', 'maxQuantity', 'max_quantity', 'MaxQuantity',
+      ]),
+      remainingQuantity: this.pickOptionalNumber([raw], [
+        'remainingQuantity', 'remaining_quantity', 'RemainingQuantity', 'remainingQty', 'remaining_qty', 'RemainingQty',
+      ]),
+      qty: this.pickNumber([raw], ['qty', 'Qty', 'quantityValue']),
+      quantity: this.pickOptionalNumber([raw], ['quantity', 'Quantity']),
       info: this.pickString([raw], ['info', 'Info', 'lineInfo', 'LineInfo', 'description', 'Description']),
       remarks: this.pickString([raw], ['remarks', 'Remarks', 'remark', 'Remark', 'notes', 'Notes', 'comment', 'Comment']),
       deleted: Boolean(raw['deleted'] ?? raw['Deleted'] ?? raw['isDeleted']),
