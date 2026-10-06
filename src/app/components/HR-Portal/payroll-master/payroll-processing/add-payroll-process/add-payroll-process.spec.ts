@@ -5,7 +5,6 @@ import {
   computeGrossSalaryBreakdown,
   computeMedicalAllowance,
   computeNetPayable,
-  resolveBasicSalaryBasis,
 } from '../../payroll-setup/payroll-setup.service';
 
 describe('computeGrossSalaryBreakdown', () => {
@@ -38,11 +37,9 @@ describe('computeGrossSalaryBreakdown', () => {
     });
   });
 
-  it('derives basic salary from the selected bank/cash gross amount', () => {
+  it('derives basic salary as gross salary in bank divided by 110 times 100', () => {
     const bankGross = computeGrossSalaryBreakdown(15000, 'Bank', '', '').grossSalaryInBank;
-    const bankBasic = (bankGross / 110) * 100;
-
-    expect(bankBasic).toBeCloseTo(13636.36, 2);
+    expect(computeBasicSalary(bankGross)).toBeCloseTo((bankGross / 110) * 100, 2);
   });
 
   it('derives medical allowance as gross salary in bank divided by 110 times 10', () => {
@@ -60,24 +57,24 @@ describe('computeGrossSalaryBreakdown', () => {
     expect(computeMedicalAllowance(1092000)).toBeCloseTo(99272.73, 2);
   });
 
-  it('uses gross salary in bank as the basic salary basis for hybrid payment', () => {
-    const breakdown = computeGrossSalaryBreakdown(100000, 'Hybrid', 40, 60);
+  it('uses the bank gross for basic salary regardless of the payment mode', () => {
+    for (const [mode, cashPercentage, bankPercentage] of [
+      ['Bank', '', ''],
+      ['Cash', '', ''],
+      ['Hybrid', 40, 60],
+    ] as const) {
+      const breakdown = computeGrossSalaryBreakdown(
+        100000,
+        mode,
+        cashPercentage,
+        bankPercentage,
+      );
 
-    expect(resolveBasicSalaryBasis(100000, 'Hybrid', breakdown)).toBe(60000);
-    expect(
-      computeBasicSalary(
-        resolveBasicSalaryBasis(100000, 'Hybrid', breakdown),
-        computeMedicalAllowance(breakdown.grossSalaryInBank),
-      ),
-    ).toBeCloseTo(54545.45, 2);
-  });
-
-  it('preserves cash, bank, and unrecognized payment-mode salary bases', () => {
-    const breakdown = computeGrossSalaryBreakdown(100000, 'Hybrid', 40, 60);
-
-    expect(resolveBasicSalaryBasis(100000, 'Cash', breakdown)).toBe(40000);
-    expect(resolveBasicSalaryBasis(100000, 'Bank', breakdown)).toBe(60000);
-    expect(resolveBasicSalaryBasis(100000, '', breakdown)).toBe(100000);
+      expect(computeBasicSalary(breakdown.grossSalaryInBank)).toBeCloseTo(
+        (breakdown.grossSalaryInBank / 110) * 100,
+        2,
+      );
+    }
   });
 
   it('uses bank gross as the gratuity calculation base', () => {

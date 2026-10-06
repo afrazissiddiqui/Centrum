@@ -147,25 +147,7 @@ export function computeGrossSalaryBreakdown(
   };
 }
 
-export function resolveBasicSalaryBasis(
-  grossSalary: number,
-  paymentMode: string,
-  grossSalaryBreakdown: { grossSalaryInCash: number; grossSalaryInBank: number },
-): number {
-  const normalizedMode = (paymentMode ?? '').trim().toLowerCase();
-  if (['bank', 'bank salary', 'salary in bank'].includes(normalizedMode)) {
-    return grossSalaryBreakdown.grossSalaryInBank;
-  }
-  if (['cash', 'cash salary', 'salary in cash'].includes(normalizedMode)) {
-    return grossSalaryBreakdown.grossSalaryInCash;
-  }
-  if (normalizedMode === 'hybrid') {
-    return grossSalaryBreakdown.grossSalaryInBank;
-  }
-  return grossSalary;
-}
-
-/** Basic Salary = Gross Salary − Medical Allowance */
+/** Basic Salary = Gross Salary in Bank / 110 × 100 */
 export function computeBasicSalary(grossSalary: number, medicalAllowance?: number): number {
   if (grossSalary <= 0) {
     return 0;

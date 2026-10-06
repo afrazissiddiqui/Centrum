@@ -17,6 +17,12 @@ describe('payroll social security contributions', () => {
     expect(computeSocialSecurityPunjab(37000, 51800.01, 'AHCP_HO')).toBe(0);
   });
 
+  it('does not calculate Social Security when bank gross is zero', () => {
+    expect(computeSocialSecurityPunjab(37000, 0, 'AHCP_HO')).toBe(0);
+    expect(computeSocialSecurityPunjab(37000, 0, 'FSD')).toBe(0);
+    expect(computeSocialSecurityKpk(37000, 0, 'AHCP_Peshawar')).toBe(0);
+  });
+
   it('calculates KPK contribution only for Peshawar branch codes', () => {
     expect(computeSocialSecurityKpk(37000, 59200, '01')).toBe(2220);
     expect(computeSocialSecurityKpk(37000, 59200, '1')).toBe(2220);

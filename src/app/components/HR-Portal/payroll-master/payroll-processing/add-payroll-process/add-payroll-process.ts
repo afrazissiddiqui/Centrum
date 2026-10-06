@@ -44,7 +44,6 @@ import {
   computeOvertimeRate,
   computeProvidentFund,
   computeYearsOfService,
-  resolveBasicSalaryBasis,
 } from '../../payroll-setup/payroll-setup.service';
 import {
   computeMonthlyWithholdingTax,
@@ -222,7 +221,7 @@ export class AddPayrollProcessComponent implements OnInit {
   readonly currencyCode = 'PKR';
 
   readonly columnGroups: PayrollColumnGroup[] = [
-    { id: 'salary', label: 'Basic Salary', tone: 'salary' },
+    { id: 'salary', label: 'Salary', tone: 'salary' },
     { id: 'allowances', label: 'Allowances', tone: 'allowances' },
     { id: 'bonuses', label: 'Bonuses', tone: 'bonuses' },
     { id: 'providentFund', label: 'Provident Fund', tone: 'providentFund' },
@@ -1310,13 +1309,8 @@ export class AddPayrollProcessComponent implements OnInit {
       cashPercentage,
       bankPercentage,
     );
-    const salaryBasis = resolveBasicSalaryBasis(
-      grossSalary,
-      paymentMode,
-      grossSalaryBreakdown,
-    );
     const medicalAllowance = computeMedicalAllowance(grossSalaryBreakdown.grossSalaryInBank);
-    const basicSalary = computeBasicSalary(salaryBasis, medicalAllowance);
+    const basicSalary = computeBasicSalary(grossSalaryBreakdown.grossSalaryInBank);
     const allowedLiters = this.parseFuelLiters(remuneration?.fuelLimit);
     const profileFuelAmount = this.parseAmount(remuneration?.fuelAllowances ?? 0);
     // Prefer a derived per-liter rate from profile fuel amount; otherwise Fuel Price Adjust is the rate.
@@ -1389,13 +1383,8 @@ export class AddPayrollProcessComponent implements OnInit {
       grossSalaryInBank: row.grossSalaryInBank || 0,
     };
 
-    const salaryBasis = resolveBasicSalaryBasis(
-      grossSalary,
-      row.paymentMode,
-      grossSalaryBreakdown,
-    );
     const medicalAllowance = computeMedicalAllowance(grossSalaryBreakdown.grossSalaryInBank);
-    const basicSalary = computeBasicSalary(salaryBasis, medicalAllowance);
+    const basicSalary = computeBasicSalary(grossSalaryBreakdown.grossSalaryInBank);
     const providentFund = row.providentApplicable ? computeProvidentFund(basicSalary) : 0;
 
     const effectiveFuelRate = row.monthlyFuelRate + this.fuelPriceAdjust();
