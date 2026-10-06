@@ -122,12 +122,12 @@
       </div>
 
       <div class="comp-plan-field">
-        <label class="comp-plan-field__label" for="pp-prepared-by-id">Employee ID</label>
+        <label class="comp-plan-field__label" for="pp-prepared-by-id">Employee Name</label>
         <input
           id="pp-prepared-by-id"
           type="text"
           class="comp-plan-field__input comp-plan-field__input--readonly"
-          [value]="loggedInUserId()"
+          [value]="loggedInUserName()"
           readonly
         />
       </div>

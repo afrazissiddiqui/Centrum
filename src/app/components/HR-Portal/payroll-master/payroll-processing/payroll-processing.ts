@@ -349,7 +349,7 @@ export class PayrollProcessingComponent implements OnInit {
             { key: 'gratuity', label: 'Gratuity' },
             { key: 'loanAdjustment', label: 'Loan Deduction' },
             { key: 'loanAdvForm', label: 'Advance Deduction' },
-            { key: 'lateAttendDeduction', label: 'Late Attend Deduction' },
+            { key: 'lateAttendDeduction', label: 'Late Attendence Deduction' },
             { key: 'costToCompany', label: 'Cost to Company' },
             { key: 'netPayable', label: 'Gross Payable' },
             { key: 'taxDeduction', label: 'Tax Deduction' },
