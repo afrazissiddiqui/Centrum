@@ -46,7 +46,9 @@ export class OvertimeListComponent implements OnInit {
     }
 
     return records.filter((record) =>
-      Object.values(record.values).some((value) => this.formatValue(value).toLocaleLowerCase().includes(query)),
+      Object.entries(record.values).some(([key, value]) =>
+        !this.isFlagField(key) && this.formatValue(value).toLocaleLowerCase().includes(query),
+      ),
     );
   });
 
@@ -142,6 +144,13 @@ export class OvertimeListComponent implements OnInit {
 
   formatCellValue(key: string, value: unknown): string {
     const normalizedKey = key.toLowerCase().replace(/[^a-z]/g, '');
+    if (normalizedKey === 'status' && typeof value === 'string') {
+      const status = value.trim().toLowerCase();
+      if (status === 'posted' || status === 'pending') {
+        return 'Approved';
+      }
+    }
+
     if (!['createdat', 'updatedat'].includes(normalizedKey)) {
       return this.formatValue(value);
     }
@@ -166,7 +175,9 @@ export class OvertimeListComponent implements OnInit {
     const keys = new Set<string>();
     for (const record of records) {
       for (const key of Object.keys(record.values)) {
-        keys.add(key);
+        if (!this.isFlagField(key)) {
+          keys.add(key);
+        }
       }
     }
 
@@ -175,6 +186,10 @@ export class OvertimeListComponent implements OnInit {
       label: this.formatColumnLabel(key),
       visible: true,
     }));
+  }
+
+  private isFlagField(key: string): boolean {
+    return key.toLowerCase().replace(/[^a-z]/g, '') === 'flag';
   }
 
   private formatColumnLabel(key: string): string {

@@ -35,6 +35,19 @@ describe('OvertimeListComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
   });
 
+  it('does not display or search overtime flag fields', () => {
+    service.fetchOvertimeList.and.returnValue(of([
+      { id: '1', values: { employee_code: 'EMP-001', employee_name: 'Ayesha Khan', flag: '1' } },
+    ]));
+    fixture.componentInstance.loadRecords();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Flag');
+    expect(fixture.componentInstance.columns().some((column) => column.key === 'flag')).toBe(false);
+
+    fixture.componentInstance.onSearchChange('1');
+    expect(fixture.componentInstance.filteredRecords().length).toBe(0);
+  });
+
   it('navigates to the add page from the Add button', () => {
     const button = fixture.nativeElement.querySelector('.overtime-add') as HTMLButtonElement;
 
@@ -73,5 +86,13 @@ describe('OvertimeListComponent', () => {
     expect(component.formatCellValue('created_at', '2026-10-01T09:51:36.000000Z')).toBe('01/10/2026');
     expect(component.formatCellValue('updated_at', '2026-10-02 09:54:07')).toBe('02/10/2026');
     expect(component.formatCellValue('overtime_date', '2026-10-01')).toBe('2026-10-01');
+  });
+
+  it('displays posted and pending overtime statuses as Approved', () => {
+    expect(fixture.componentInstance.formatCellValue('status', 'Posted')).toBe('Approved');
+    expect(fixture.componentInstance.formatCellValue('Status', 'posted')).toBe('Approved');
+    expect(fixture.componentInstance.formatCellValue('status', 'Pending')).toBe('Approved');
+    expect(fixture.componentInstance.formatCellValue('status', 'pending')).toBe('Approved');
+    expect(fixture.componentInstance.formatCellValue('status', 'Rejected')).toBe('Rejected');
   });
 });

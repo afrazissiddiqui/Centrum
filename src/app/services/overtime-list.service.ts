@@ -8,7 +8,21 @@ export interface OvertimeListRecord {
   values: Record<string, unknown>;
 }
 
+export interface OvertimeEmployeePostPayload {
+  employee_code: string;
+  employee_name: string;
+  overtime_date: string;
+  shift_id: string;
+  working_hours: number;
+  shift_hours: number;
+  overtime_hours: number;
+  overtime_rate: number;
+  exceptional_ot: number;
+  flag: '1';
+}
+
 const OVERTIME_RECORD_LIST_URL = apiUrl('overtime-record-list');
+const OVERTIME_EMPLOYEE_POST_URL = apiUrl('overtime-record-add');
 
 @Injectable({
   providedIn: 'root',
@@ -20,6 +34,10 @@ export class OvertimeListService {
     return this.http.get<unknown>(OVERTIME_RECORD_LIST_URL).pipe(
       map((response) => this.mapResponse(response)),
     );
+  }
+
+  postOvertimeEmployee(payload: OvertimeEmployeePostPayload[]): Observable<unknown> {
+    return this.http.post<unknown>(OVERTIME_EMPLOYEE_POST_URL, payload);
   }
 
   private mapResponse(response: unknown): OvertimeListRecord[] {

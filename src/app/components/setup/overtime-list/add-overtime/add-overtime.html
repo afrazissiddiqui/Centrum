@@ -4,12 +4,22 @@
       <h1>Add Overtime</h1>
       <p>Employees with shift and overtime applicability set to Yes.</p>
     </div>
-    <button type="button" class="add-overtime-back" (click)="goToList()">Back to Overtime</button>
+    <button
+      type="button"
+      class="add-overtime-post"
+      [disabled]="posting() || !selectedEmployeeKeys().size"
+      (click)="postSelectedEmployees()"
+    >
+      {{ posting() ? 'Submitting...' : 'Submit' }}
+    </button>
   </header>
 
   <section class="add-overtime-content" aria-labelledby="eligible-employees-title">
     <div class="add-overtime-content__toolbar">
       <h2 id="eligible-employees-title">Eligible Employees ({{ filteredEmployees().length }})</h2>
+      <button type="button" class="add-overtime-back" (click)="goToList()" aria-label="Back" title="Back">
+        <span aria-hidden="true">❮</span>
+      </button>
       <label class="add-overtime-search">
         <span class="visually-hidden">Search eligible employees</span>
         <input
@@ -26,34 +36,46 @@
       <table class="add-overtime-table">
         <thead>
           <tr>
+            <th scope="col" class="add-overtime-table__selection-heading">Select</th>
             <th scope="col">Employee Code</th>
             <th scope="col">Employee Name</th>
             <th scope="col">Department</th>
             <th scope="col">Designation</th>
             <th scope="col">Shift Applicable</th>
             <th scope="col">Overtime Applicable</th>
+            <th scope="col">Status</th>
           </tr>
         </thead>
         <tbody>
           @if (loading()) {
             <tr>
-              <td colspan="6" class="add-overtime-empty">Loading eligible employees...</td>
+              <td colspan="8" class="add-overtime-empty">Loading eligible employees...</td>
             </tr>
           } @else if (!filteredEmployees().length) {
             <tr>
-              <td colspan="6" class="add-overtime-empty">
+              <td colspan="8" class="add-overtime-empty">
                 {{ searchText().trim() ? 'No employees match your search.' : 'No eligible employees to display.' }}
               </td>
             </tr>
           } @else {
-            @for (employee of filteredEmployees(); track employee.apiId || employee.EmployeeCode) {
+            @for (employee of filteredEmployees(); track employeeKey(employee)) {
               <tr>
+                <td class="add-overtime-table__selection-cell">
+                  <input
+                    type="checkbox"
+                    [checked]="selectedEmployeeKeys().has(employeeKey(employee))"
+                    [attr.aria-label]="'Select ' + employee.EmployeeName"
+                    [disabled]="employee.flag === '1' || posting()"
+                    (change)="toggleEmployeeSelection(employee, $event)"
+                  />
+                </td>
                 <td>{{ employee.EmployeeCode }}</td>
                 <td>{{ employee.EmployeeName }}</td>
                 <td>{{ employee.Department }}</td>
                 <td>{{ employee.Designation }}</td>
                 <td>Yes</td>
                 <td>Yes</td>
+                <td>{{ employee.overtimeStatus }}</td>
               </tr>
             }
           }
