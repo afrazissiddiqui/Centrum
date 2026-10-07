@@ -13,7 +13,14 @@ describe('OvertimeListComponent', () => {
   beforeEach(async () => {
     service = jasmine.createSpyObj<OvertimeListService>('OvertimeListService', ['fetchOvertimeList']);
     service.fetchOvertimeList.and.returnValue(of([
-      { id: '1', values: { employee_code: 'EMP-001', employee_name: 'Ayesha Khan' } },
+      {
+        id: '1',
+        values: {
+          employee_code: 'EMP-001',
+          employee_name: 'Ayesha Khan',
+          overtime_date: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`,
+        },
+      },
     ]));
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
     await TestBed.configureTestingModule({
@@ -31,13 +38,22 @@ describe('OvertimeListComponent', () => {
 
   it('loads and displays rows returned by the overtime list API', () => {
     expect(service.fetchOvertimeList).toHaveBeenCalled();
+    expect(fixture.componentInstance.dateFilterMode()).toBe('today');
     expect(fixture.nativeElement.textContent).toContain('Overtime (1)');
     expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
   });
 
   it('does not display or search overtime flag fields', () => {
     service.fetchOvertimeList.and.returnValue(of([
-      { id: '1', values: { employee_code: 'EMP-001', employee_name: 'Ayesha Khan', flag: '1' } },
+      {
+        id: '1',
+        values: {
+          employee_code: 'EMP-001',
+          employee_name: 'Ayesha Khan',
+          overtime_date: fixture.componentInstance.todayDate,
+          flag: '1',
+        },
+      },
     ]));
     fixture.componentInstance.loadRecords();
     fixture.detectChanges();
@@ -66,6 +82,53 @@ describe('OvertimeListComponent', () => {
     expect(component.filteredRecords().length).toBe(0);
   });
 
+  it('filters records by a specific overtime date', () => {
+    const component = fixture.componentInstance;
+    component.records.set([
+      { id: '1', values: { employee_code: 'EMP-001', overtime_date: '2026-10-01' } },
+      { id: '2', values: { employee_code: 'EMP-002', overtime_date: '2026-10-02' } },
+    ]);
+
+    component.onDateFilterModeChange('specific');
+    component.onSpecificDateChange('2026-10-01');
+
+    expect(component.filteredRecords().map((record) => record.id)).toEqual(['1']);
+  });
+
+  it('filters records inclusively within a date range', () => {
+    const component = fixture.componentInstance;
+    component.records.set([
+      { id: '1', values: { employee_code: 'EMP-001', overtime_date: '2026-10-01' } },
+      { id: '2', values: { employee_code: 'EMP-002', overtime_date: '2026-10-02' } },
+      { id: '3', values: { employee_code: 'EMP-003', overtime_date: '2026-10-03' } },
+    ]);
+
+    component.onDateFilterModeChange('range');
+    component.onDateFromChange('2026-10-01');
+    component.onDateToChange('2026-10-02');
+
+    expect(component.filteredRecords().map((record) => record.id)).toEqual(['1', '2']);
+  });
+
+  it('filters records by employee name or code and shows all when the filter is blank', () => {
+    const component = fixture.componentInstance;
+    component.onDateFilterModeChange('all');
+    component.records.set([
+      { id: '1', values: { employee_code: 'EMP-001', employee_name: 'Ayesha Khan' } },
+      { id: '2', values: { employee_code: 'EMP-002', employee_name: 'Bilal Ahmed' } },
+    ]);
+
+    component.onEmployeeSearchChange('bilal');
+
+    expect(component.filteredRecords().map((record) => record.id)).toEqual(['2']);
+
+    component.onEmployeeSearchChange('EMP-001');
+    expect(component.filteredRecords().map((record) => record.id)).toEqual(['1']);
+
+    component.onEmployeeSearchChange('');
+    expect(component.filteredRecords().map((record) => record.id)).toEqual(['1', '2']);
+  });
+
   it('updates visible columns immutably', () => {
     const component = fixture.componentInstance;
     const column = component.columns()[0];
@@ -80,12 +143,12 @@ describe('OvertimeListComponent', () => {
     expect(component.visibleColumns().some((item) => item.key === column.key)).toBeFalse();
   });
 
-  it('formats created and updated timestamps as day/month/year', () => {
+  it('formats overtime date from its own field, independently of created and updated timestamps', () => {
     const component = fixture.componentInstance;
 
     expect(component.formatCellValue('created_at', '2026-10-01T09:51:36.000000Z')).toBe('01/10/2026');
     expect(component.formatCellValue('updated_at', '2026-10-02 09:54:07')).toBe('02/10/2026');
-    expect(component.formatCellValue('overtime_date', '2026-10-01')).toBe('2026-10-01');
+    expect(component.formatCellValue('overtime_date', '2026-10-03')).toBe('03/10/2026');
   });
 
   it('displays posted and pending overtime statuses as Approved', () => {

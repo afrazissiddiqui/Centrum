@@ -5,6 +5,60 @@
     </div>
 
     <div class="overtime-list-actions">
+      <label class="overtime-date-filter">
+        <span>Employee</span>
+        <input
+          type="search"
+          [ngModel]="employeeSearchText()"
+          (ngModelChange)="onEmployeeSearchChange($event)"
+          name="overtime-employee-filter"
+          placeholder="Name or code"
+          aria-label="Search employees by name or code"
+        >
+      </label>
+      <label class="overtime-date-filter">
+        <span>Date filter</span>
+        <select
+          [ngModel]="dateFilterMode()"
+          (ngModelChange)="onDateFilterModeChange($event)"
+          name="overtime-date-filter-mode"
+        >
+          <option value="today">Current date</option>
+          <option value="all">All dates</option>
+          <option value="specific">Specific date</option>
+          <option value="range">Date range</option>
+        </select>
+      </label>
+      @if (dateFilterMode() === 'specific') {
+        <label class="overtime-date-filter">
+          <span>Overtime date</span>
+          <input
+            type="date"
+            [ngModel]="specificDate()"
+            (ngModelChange)="onSpecificDateChange($event)"
+            name="overtime-specific-date"
+          />
+        </label>
+      } @else if (dateFilterMode() === 'range') {
+        <label class="overtime-date-filter">
+          <span>From</span>
+          <input
+            type="date"
+            [ngModel]="dateFrom()"
+            (ngModelChange)="onDateFromChange($event)"
+            name="overtime-date-from"
+          />
+        </label>
+        <label class="overtime-date-filter">
+          <span>To</span>
+          <input
+            type="date"
+            [ngModel]="dateTo()"
+            (ngModelChange)="onDateToChange($event)"
+            name="overtime-date-to"
+          />
+        </label>
+      }
       <label class="overtime-search">
         <span class="visually-hidden">Search overtime records</span>
         <input
@@ -50,7 +104,6 @@
     <table class="overtime-table">
       <thead>
         <tr>
-          <th class="overtime-row-number">#</th>
           @for (column of visibleColumns(); track column.key) {
             <th>{{ column.label }}</th>
           }
@@ -59,20 +112,19 @@
       <tbody>
         @if (loading()) {
           <tr>
-            <td [attr.colspan]="visibleColumns().length + 1" class="overtime-empty">Loading overtime records…</td>
+            <td [attr.colspan]="visibleColumns().length" class="overtime-empty">Loading overtime records…</td>
           </tr>
         } @else if (!records().length) {
           <tr>
-            <td [attr.colspan]="visibleColumns().length + 1" class="overtime-empty">No overtime records to display.</td>
+            <td [attr.colspan]="visibleColumns().length" class="overtime-empty">No overtime records to display.</td>
           </tr>
         } @else if (!filteredRecords().length) {
           <tr>
-            <td [attr.colspan]="visibleColumns().length + 1" class="overtime-empty">No records match your search.</td>
+            <td [attr.colspan]="visibleColumns().length" class="overtime-empty">No records match your search.</td>
           </tr>
         } @else {
-          @for (record of paginatedRecords(); track record.id; let index = $index) {
+          @for (record of paginatedRecords(); track record.id) {
             <tr>
-              <td class="overtime-row-number">{{ paginationStart() + index }}</td>
               @for (column of visibleColumns(); track column.key) {
                 <td>{{ formatCellValue(column.key, record.values[column.key]) }}</td>
               }

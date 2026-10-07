@@ -17,6 +17,12 @@ interface OvertimeListColumn {
   visible: boolean;
 }
 
+type OvertimeDateFilterMode = 'today' | 'all' | 'specific' | 'range';
+
+function toLocalDateInputValue(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 @Component({
   selector: 'app-overtime-list',
   imports: [CommonModule, FormsModule],
@@ -32,6 +38,12 @@ export class OvertimeListComponent implements OnInit {
   readonly loading = signal(false);
   readonly records = signal<OvertimeListRecord[]>([]);
   readonly searchText = signal('');
+  readonly dateFilterMode = signal<OvertimeDateFilterMode>('today');
+  readonly todayDate = toLocalDateInputValue(new Date());
+  readonly specificDate = signal('');
+  readonly dateFrom = signal('');
+  readonly dateTo = signal('');
+  readonly employeeSearchText = signal('');
   readonly currentPage = signal(1);
   readonly pageSize = signal(25);
   readonly pageSizeOptions = [10, 25, 50, 100];
@@ -40,16 +52,20 @@ export class OvertimeListComponent implements OnInit {
 
   readonly filteredRecords = computed(() => {
     const query = this.searchText().trim().toLocaleLowerCase();
-    const records = this.records();
-    if (!query) {
-      return records;
-    }
-
-    return records.filter((record) =>
-      Object.entries(record.values).some(([key, value]) =>
+    return this.records().filter((record) => {
+      const overtimeDate = this.overtimeDateValue(record);
+      const dateMatches = this.dateMatches(overtimeDate);
+      const employeeQuery = this.employeeSearchText().trim().toLocaleLowerCase();
+      const employeeCode = this.employeeValue(record, ['employeecode', 'employeeid']).toLocaleLowerCase();
+      const employeeName = this.employeeValue(record, ['employeename']).toLocaleLowerCase();
+      const employeeMatches = !employeeQuery ||
+        employeeCode.includes(employeeQuery) ||
+        employeeName.includes(employeeQuery);
+      const searchMatches = !query || Object.entries(record.values).some(([key, value]) =>
         !this.isFlagField(key) && this.formatValue(value).toLocaleLowerCase().includes(query),
-      ),
-    );
+      );
+      return dateMatches && employeeMatches && searchMatches;
+    });
   });
 
   readonly totalPages = computed(() => Math.max(1, Math.ceil(this.filteredRecords().length / this.pageSize())));
@@ -103,6 +119,33 @@ export class OvertimeListComponent implements OnInit {
     this.currentPage.set(1);
   }
 
+  onDateFilterModeChange(value: string): void {
+    if (value === 'today' || value === 'all' || value === 'specific' || value === 'range') {
+      this.dateFilterMode.set(value);
+      this.currentPage.set(1);
+    }
+  }
+
+  onSpecificDateChange(value: string): void {
+    this.specificDate.set(value);
+    this.currentPage.set(1);
+  }
+
+  onDateFromChange(value: string): void {
+    this.dateFrom.set(value);
+    this.currentPage.set(1);
+  }
+
+  onDateToChange(value: string): void {
+    this.dateTo.set(value);
+    this.currentPage.set(1);
+  }
+
+  onEmployeeSearchChange(value: string): void {
+    this.employeeSearchText.set(value);
+    this.currentPage.set(1);
+  }
+
   onPageSizeChange(value: number | string): void {
     const size = Number(value);
     if (Number.isInteger(size) && size > 0) {
@@ -151,7 +194,7 @@ export class OvertimeListComponent implements OnInit {
       }
     }
 
-    if (!['createdat', 'updatedat'].includes(normalizedKey)) {
+    if (!['overtimedate', 'createdat', 'updatedat'].includes(normalizedKey)) {
       return this.formatValue(value);
     }
 
@@ -190,6 +233,46 @@ export class OvertimeListComponent implements OnInit {
 
   private isFlagField(key: string): boolean {
     return key.toLowerCase().replace(/[^a-z]/g, '') === 'flag';
+  }
+
+  private overtimeDateValue(record: OvertimeListRecord): string {
+    const dateEntry = Object.entries(record.values).find(([key]) =>
+      key.toLowerCase().replace(/[^a-z]/g, '') === 'overtimedate',
+    );
+    const value = dateEntry?.[1];
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+    }
+    if (typeof value !== 'string') {
+      return '';
+    }
+    return value.trim().match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? '';
+  }
+
+  private employeeValue(record: OvertimeListRecord, fieldNames: string[]): string {
+    const value = Object.entries(record.values).find(([key]) =>
+      fieldNames.includes(key.toLowerCase().replace(/[^a-z]/g, '')),
+    )?.[1];
+    return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+  }
+
+  private dateMatches(overtimeDate: string): boolean {
+    switch (this.dateFilterMode()) {
+      case 'today':
+        return overtimeDate === this.todayDate;
+      case 'specific':
+        return !!this.specificDate() && overtimeDate === this.specificDate();
+      case 'range': {
+        const from = this.dateFrom();
+        const to = this.dateTo();
+        if (from && to && from > to) {
+          return false;
+        }
+        return !!overtimeDate && (!from || overtimeDate >= from) && (!to || overtimeDate <= to);
+      }
+      case 'all':
+        return true;
+    }
   }
 
   private formatColumnLabel(key: string): string {

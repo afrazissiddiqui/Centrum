@@ -50,6 +50,33 @@
   min-width: 180px;
 }
 
+.overtime-date-filter {
+  align-items: center;
+  color: #1d2d3e;
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.overtime-date-filter select,
+.overtime-date-filter input {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #1d2d3e;
+  font: inherit;
+  min-height: 34px;
+  padding: 5px 8px;
+}
+
+.overtime-date-filter select:focus-visible,
+.overtime-date-filter input:focus-visible {
+  border-color: #0070f2;
+  outline: 2px solid rgba(0, 112, 242, 0.25);
+  outline-offset: 1px;
+}
+
 .overtime-search input {
   background: transparent;
   border: 0;
@@ -303,6 +330,10 @@
 
   .overtime-search {
     flex: 1;
+  }
+
+  .overtime-date-filter {
+    flex-wrap: wrap;
   }
 
   .overtime-pagination-bottom {
