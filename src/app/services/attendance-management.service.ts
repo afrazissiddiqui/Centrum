@@ -66,6 +66,14 @@ interface BiometricsPunchApiRecord {
   id?: string | number;
   card_no?: string;
   hours_worked?: unknown;
+  date?: unknown;
+  Date?: unknown;
+  attendance_date?: unknown;
+  AttendanceDate?: unknown;
+  attendanceDate?: unknown;
+  punch_date?: unknown;
+  PunchDate?: unknown;
+  punchDate?: unknown;
   punch_in?: string | null;
   punch_out?: string | null;
   machine_id?: string | number;
@@ -422,6 +430,46 @@ export class AttendanceManagementService {
           return hours?.trim() ?? null;
         }),
         catchError(() => of(null)),
+      );
+  }
+
+  fetchCalculatedWorkingHoursByDate(
+    query: AttendanceQuery,
+    extEmpNo: string,
+  ): Observable<Array<{ date: string; hoursWorked: string }>> {
+    if (!extEmpNo.trim()) {
+      return of([]);
+    }
+
+    return this.http
+      .get(this.buildQueryUrl(query, extEmpNo), {
+        headers: new HttpHeaders({ 'X-API-Key': BIOMETRICS_API_KEY }),
+        responseType: 'text',
+      })
+      .pipe(
+        map((response) => {
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(response) as unknown;
+          } catch {
+            return [];
+          }
+
+          return this.extractApiItems(parsed).flatMap((item) => {
+            const dateValue = item.date ?? item.Date ?? item.attendance_date ?? item.AttendanceDate ??
+              item.attendanceDate ?? item.punch_date ?? item.PunchDate ?? item.punchDate ??
+              item.PunchDatetime ?? item.punch_in;
+            const date = typeof dateValue === 'string'
+              ? dateValue.trim().match(/^\d{4}-\d{2}-\d{2}/)?.[0]
+              : undefined;
+            const hoursValue = item.hours_worked;
+            const hoursWorked = typeof hoursValue === 'string' || typeof hoursValue === 'number'
+              ? String(hoursValue).trim()
+              : '';
+            return date && hoursWorked ? [{ date, hoursWorked }] : [];
+          });
+        }),
+        catchError(() => of([])),
       );
   }
 

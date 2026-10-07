@@ -126,7 +126,7 @@
           @for (record of paginatedRecords(); track record.id) {
             <tr>
               @for (column of visibleColumns(); track column.key) {
-                <td>{{ formatCellValue(column.key, record.values[column.key]) }}</td>
+                <td>{{ formatRecordCell(column.key, record) }}</td>
               }
             </tr>
           }

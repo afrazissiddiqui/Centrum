@@ -97,6 +97,73 @@
   padding: 16px 20px;
 }
 
+.add-overtime-content__filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.add-overtime-date {
+  align-items: center;
+  color: #475569;
+  display: inline-flex;
+  font-size: 13px;
+  gap: 8px;
+}
+
+.add-overtime-date input {
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 36px;
+  padding: 6px 8px;
+}
+
+.add-overtime-date input:focus-visible {
+  border-color: #0070f2;
+  outline: 2px solid rgba(0, 112, 242, 0.15);
+}
+
+.add-overtime-today {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #1d2d3e;
+  cursor: pointer;
+  font: inherit;
+  min-height: 36px;
+  padding: 6px 10px;
+}
+
+.add-overtime-today:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.add-overtime-today:disabled {
+  color: #64748b;
+  cursor: default;
+  opacity: 0.7;
+}
+
+.add-overtime-hours-loader {
+  animation: add-overtime-spin 0.8s linear infinite;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  border-top-color: #0070f2;
+  display: inline-block;
+  height: 14px;
+  vertical-align: middle;
+  width: 14px;
+}
+
+@keyframes add-overtime-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .add-overtime-content h2 {
   font-size: 16px;
 }

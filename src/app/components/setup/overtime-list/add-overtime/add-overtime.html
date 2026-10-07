@@ -22,16 +22,35 @@
   <section class="add-overtime-content" aria-labelledby="eligible-employees-title">
     <div class="add-overtime-content__toolbar">
       <h2 id="eligible-employees-title">Eligible Employees ({{ filteredEmployees().length }})</h2>
-      <label class="add-overtime-search">
-        <span class="visually-hidden">Search eligible employees</span>
-        <input
-          type="search"
-          [ngModel]="searchText()"
-          (ngModelChange)="onSearchChange($event)"
-          name="employee-search"
-          placeholder="Search employees..."
-        />
-      </label>
+      <div class="add-overtime-content__filters">
+        <label class="add-overtime-date">
+          <span>Hours for date</span>
+          <input
+            type="date"
+            [ngModel]="selectedDate()"
+            (ngModelChange)="onDateChange($event)"
+            name="hours-date"
+          />
+          <button
+            type="button"
+            class="add-overtime-today"
+            [disabled]="selectedDate() === todayDate()"
+            (click)="setTodayDate()"
+          >
+            Today
+          </button>
+        </label>
+        <label class="add-overtime-search">
+          <span class="visually-hidden">Search eligible employees</span>
+          <input
+            type="search"
+            [ngModel]="searchText()"
+            (ngModelChange)="onSearchChange($event)"
+            name="employee-search"
+            placeholder="Search employees..."
+          />
+        </label>
+      </div>
     </div>
 
     <div class="add-overtime-table-wrap">
@@ -43,6 +62,10 @@
             <th scope="col">Employee Name</th>
             <th scope="col">Department</th>
             <th scope="col">Designation</th>
+            <th scope="col">Working Hours</th>
+            <th scope="col">Shift Hours</th>
+            <th scope="col">Overtime Hours</th>
+            <th scope="col">Monthly Overtime</th>
             <th scope="col">Shift Applicable</th>
             <th scope="col">Overtime Applicable</th>
             <th scope="col">Status</th>
@@ -51,11 +74,11 @@
         <tbody>
           @if (loading()) {
             <tr>
-              <td colspan="8" class="add-overtime-empty">Loading eligible employees...</td>
+              <td colspan="12" class="add-overtime-empty">Loading eligible employees...</td>
             </tr>
           } @else if (!filteredEmployees().length) {
             <tr>
-              <td colspan="8" class="add-overtime-empty">
+              <td colspan="12" class="add-overtime-empty">
                 {{ searchText().trim() ? 'No employees match your search.' : 'No eligible employees to display.' }}
               </td>
             </tr>
@@ -75,6 +98,26 @@
                 <td>{{ employee.EmployeeName }}</td>
                 <td>{{ employee.Department }}</td>
                 <td>{{ employee.Designation }}</td>
+                <td>
+                  @if (employee.workingHours) {
+                    {{ employee.workingHours }}
+                  } @else if (hoursLoading()) {
+                    <span class="add-overtime-hours-loader" role="status" aria-label="Loading working hours"></span>
+                  } @else {
+                    —
+                  }
+                </td>
+                <td>{{ employee.shiftHours || '—' }}</td>
+                <td>{{ overtimeHours(employee) }}</td>
+                <td>
+                  @if (employee.monthlyOvertimeHours !== null) {
+                    {{ employee.monthlyOvertimeHours }}
+                  } @else if (hoursLoading()) {
+                    <span class="add-overtime-hours-loader" role="status" aria-label="Loading monthly overtime"></span>
+                  } @else {
+                    —
+                  }
+                </td>
                 <td>Yes</td>
                 <td>Yes</td>
                 <td>{{ employee.overtimeStatus }}</td>

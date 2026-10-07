@@ -41,6 +41,55 @@ describe('OvertimeListComponent', () => {
     expect(fixture.componentInstance.dateFilterMode()).toBe('today');
     expect(fixture.nativeElement.textContent).toContain('Overtime (1)');
     expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
+    expect(fixture.nativeElement.textContent).toContain('Monthly Overtime');
+    expect(fixture.componentInstance.columns().some((column) => column.key === 'monthlyOvertime')).toBe(true);
+  });
+
+  it('shows an employee and month total from the daily overtime records', () => {
+    const component = fixture.componentInstance;
+    component.records.set([
+      {
+        id: '1',
+        values: {
+          employee_code: 'EMP-001',
+          employee_name: 'Ayesha Khan',
+          overtime_date: '2026-10-01',
+          overtime_hours: 1.5,
+        },
+      },
+      {
+        id: '2',
+        values: {
+          employee_code: 'EMP-001',
+          employee_name: 'Ayesha Khan',
+          overtime_date: '2026-10-02',
+          overtime_hours: '45m',
+        },
+      },
+      {
+        id: '3',
+        values: {
+          employee_code: 'EMP-001',
+          employee_name: 'Ayesha Khan',
+          overtime_date: '2026-09-30',
+          overtime_hours: 8,
+        },
+      },
+      {
+        id: '4',
+        values: {
+          employee_code: 'EMP-002',
+          employee_name: 'Bilal Ahmed',
+          overtime_date: '2026-10-02',
+          overtime_hours: 6,
+        },
+      },
+    ]);
+
+    expect(component.formatRecordCell('monthlyOvertime', component.records()[0])).toBe('2h 15m');
+    expect(component.formatRecordCell('monthlyOvertime', component.records()[1])).toBe('2h 15m');
+    expect(component.formatRecordCell('monthlyOvertime', component.records()[2])).toBe('8h');
+    expect(component.formatRecordCell('monthlyOvertime', component.records()[3])).toBe('6h');
   });
 
   it('does not display or search overtime flag fields', () => {

@@ -69,6 +69,20 @@ export class OvertimeListComponent implements OnInit {
   });
 
   readonly totalPages = computed(() => Math.max(1, Math.ceil(this.filteredRecords().length / this.pageSize())));
+  readonly monthlyOvertimeTotals = computed(() => {
+    const totals = new Map<string, number>();
+    for (const record of this.records()) {
+      const employeeCode = this.employeeValue(record, ['employeecode', 'employeeid']).toLocaleLowerCase();
+      const overtimeDate = this.overtimeDateValue(record);
+      const overtimeMinutes = this.durationToMinutes(this.fieldValue(record, ['overtimehours']));
+      if (!employeeCode || !overtimeDate || overtimeMinutes === null) {
+        continue;
+      }
+      const monthKey = `${employeeCode}:${overtimeDate.slice(0, 7)}`;
+      totals.set(monthKey, (totals.get(monthKey) ?? 0) + overtimeMinutes);
+    }
+    return totals;
+  });
   readonly paginationItems = computed<PaginationFooterItem[]>(() =>
     buildPaginationFooterItems(this.totalPages(), this.currentPage()),
   );
@@ -214,6 +228,16 @@ export class OvertimeListComponent implements OnInit {
     return this.formatDateParts(Number(dateParts[1]), Number(dateParts[2]), Number(dateParts[3]));
   }
 
+  formatRecordCell(key: string, record: OvertimeListRecord): string {
+    if (key === 'monthlyOvertime') {
+      const employeeCode = this.employeeValue(record, ['employeecode', 'employeeid']).toLocaleLowerCase();
+      const month = this.overtimeDateValue(record).slice(0, 7);
+      const minutes = this.monthlyOvertimeTotals().get(`${employeeCode}:${month}`);
+      return minutes === undefined ? '—' : this.formatDuration(minutes);
+    }
+    return this.formatCellValue(key, record.values[key]);
+  }
+
   private createColumns(records: OvertimeListRecord[]): OvertimeListColumn[] {
     const keys = new Set<string>();
     for (const record of records) {
@@ -224,11 +248,13 @@ export class OvertimeListComponent implements OnInit {
       }
     }
 
-    return Array.from(keys, (key) => ({
+    const columns = Array.from(keys, (key) => ({
       key,
       label: this.formatColumnLabel(key),
       visible: true,
     }));
+    columns.push({ key: 'monthlyOvertime', label: 'Monthly Overtime', visible: true });
+    return columns;
   }
 
   private isFlagField(key: string): boolean {
@@ -250,10 +276,48 @@ export class OvertimeListComponent implements OnInit {
   }
 
   private employeeValue(record: OvertimeListRecord, fieldNames: string[]): string {
-    const value = Object.entries(record.values).find(([key]) =>
+    const value = this.fieldValue(record, fieldNames);
+    return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+  }
+
+  private fieldValue(record: OvertimeListRecord, fieldNames: string[]): unknown {
+    return Object.entries(record.values).find(([key]) =>
       fieldNames.includes(key.toLowerCase().replace(/[^a-z]/g, '')),
     )?.[1];
-    return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+  }
+
+  private durationToMinutes(value: unknown): number | null {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) && value >= 0 ? value * 60 : null;
+    }
+    if (typeof value !== 'string' || !value.trim()) {
+      return null;
+    }
+
+    const text = value.trim();
+    const clockFormat = text.match(/^(\d{1,3}):(\d{2})$/);
+    if (clockFormat) {
+      const minutes = Number(clockFormat[2]);
+      return minutes < 60 ? Number(clockFormat[1]) * 60 + minutes : null;
+    }
+    const parts = [...text.matchAll(/(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)/gi)];
+    if (parts.length) {
+      return parts.reduce((total, part) => {
+        const amount = Number(part[1]);
+        return total + (part[2].toLocaleLowerCase().startsWith('h') ? amount * 60 : amount);
+      }, 0);
+    }
+    const numericHours = Number(text);
+    return Number.isFinite(numericHours) && numericHours >= 0 ? numericHours * 60 : null;
+  }
+
+  private formatDuration(totalMinutes: number): string {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = Math.round(totalMinutes % 60);
+    if (hours === 0) {
+      return minutes === 0 ? '0h' : `${minutes}m`;
+    }
+    return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
   }
 
   private dateMatches(overtimeDate: string): boolean {
