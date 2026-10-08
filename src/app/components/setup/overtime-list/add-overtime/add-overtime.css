@@ -97,6 +97,14 @@
   padding: 16px 20px;
 }
 
+.add-overtime-range-error {
+  color: #b42318;
+  flex-basis: 100%;
+  font-size: 13px;
+  margin: -4px 0 0 auto;
+  text-align: right;
+}
+
 .add-overtime-content__filters {
   align-items: center;
   display: flex;

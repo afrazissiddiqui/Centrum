@@ -40,6 +40,24 @@
             Today
           </button>
         </label>
+        <label class="add-overtime-date">
+          <span>Overtime from</span>
+          <input
+            type="date"
+            [ngModel]="overtimeFromDate()"
+            (ngModelChange)="onOvertimeFromDateChange($event)"
+            name="overtime-from-date"
+          />
+        </label>
+        <label class="add-overtime-date">
+          <span>To</span>
+          <input
+            type="date"
+            [ngModel]="overtimeToDate()"
+            (ngModelChange)="onOvertimeToDateChange($event)"
+            name="overtime-to-date"
+          />
+        </label>
         <label class="add-overtime-search">
           <span class="visually-hidden">Search eligible employees</span>
           <input
@@ -51,6 +69,9 @@
           />
         </label>
       </div>
+      @if (overtimeRangeError()) {
+        <p class="add-overtime-range-error" role="alert">{{ overtimeRangeError() }}</p>
+      }
     </div>
 
     <div class="add-overtime-table-wrap">
@@ -65,7 +86,7 @@
             <th scope="col">Working Hours</th>
             <th scope="col">Shift Hours</th>
             <th scope="col">Overtime Hours</th>
-            <th scope="col">Monthly Overtime</th>
+            <th scope="col">Overtime in Range</th>
             <th scope="col">Shift Applicable</th>
             <th scope="col">Overtime Applicable</th>
             <th scope="col">Status</th>
@@ -110,10 +131,10 @@
                 <td>{{ employee.shiftHours || '—' }}</td>
                 <td>{{ overtimeHours(employee) }}</td>
                 <td>
-                  @if (employee.monthlyOvertimeHours !== null) {
-                    {{ employee.monthlyOvertimeHours }}
+                  @if (employee.rangeOvertimeHours !== null) {
+                    {{ employee.rangeOvertimeHours }}
                   } @else if (hoursLoading()) {
-                    <span class="add-overtime-hours-loader" role="status" aria-label="Loading monthly overtime"></span>
+                    <span class="add-overtime-hours-loader" role="status" aria-label="Loading overtime for selected range"></span>
                   } @else {
                     —
                   }

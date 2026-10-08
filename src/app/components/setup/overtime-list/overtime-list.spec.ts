@@ -38,7 +38,7 @@ describe('OvertimeListComponent', () => {
 
   it('loads and displays rows returned by the overtime list API', () => {
     expect(service.fetchOvertimeList).toHaveBeenCalled();
-    expect(fixture.componentInstance.dateFilterMode()).toBe('today');
+    expect(fixture.componentInstance.dateFilterMode()).toBe('all');
     expect(fixture.nativeElement.textContent).toContain('Overtime (1)');
     expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
     expect(fixture.nativeElement.textContent).toContain('Monthly Overtime');
@@ -129,6 +129,28 @@ describe('OvertimeListComponent', () => {
     expect(component.filteredRecords().length).toBe(1);
     component.onSearchChange('missing');
     expect(component.filteredRecords().length).toBe(0);
+  });
+
+  it('hides the API ID field while keeping employee code visible', () => {
+    service.fetchOvertimeList.and.returnValue(of([
+      {
+        id: 'record-1',
+        values: {
+          ID: 42,
+          employee_code: 'EMP-042',
+          employee_name: 'Samira Ali',
+          overtime_date: fixture.componentInstance.todayDate,
+        },
+      },
+    ]));
+    fixture.componentInstance.loadRecords();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.columns().some((column) => column.key.toLowerCase() === 'id')).toBe(false);
+    expect(fixture.componentInstance.columns().some((column) => column.key === 'employee_code')).toBe(true);
+    expect(fixture.nativeElement.querySelector('.overtime-table thead').textContent).not.toContain('ID');
+    expect(fixture.nativeElement.textContent).not.toContain('Marcus Vance');
+    expect(fixture.nativeElement.textContent).toContain('EMP-042');
   });
 
   it('filters records by a specific overtime date', () => {

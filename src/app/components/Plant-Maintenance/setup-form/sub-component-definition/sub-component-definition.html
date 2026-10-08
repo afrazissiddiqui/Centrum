@@ -10,7 +10,7 @@
     >
       <div class="sapMTableTitle sapMBarChild sapMBarChildFirstChild">
         <div class="sapMTitle sapMTitleStyleH5 sapMTitleNoWrap sapMTitleMaxWidth" role="heading" aria-level="5">
-          Sub Component Defination ({{ machineList.length }}) · Selected ({{ getSelectedCount() }})
+          Sub Component Defination ({{ pagination().total }}) · Selected ({{ getSelectedCount() }})
         </div>
       </div>
 
@@ -20,7 +20,6 @@
         <input
           type="text"
           [(ngModel)]="searchText"
-          (ngModelChange)="onSearchChange()"
           placeholder="Search..."
         />
         <span class="sapUiIcon search-icon">🔍</span>
@@ -87,9 +86,12 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngIf="paginatedList.length === 0">
+            <tr *ngIf="paginatedList.length === 0 && machinesLoading()">
+              <td [attr.colspan]="visibleColumnCount" class="scd-table-empty">Loading machines...</td>
+            </tr>
+            <tr *ngIf="paginatedList.length === 0 && !machinesLoading()">
               <td [attr.colspan]="visibleColumnCount" class="scd-table-empty">
-                No machines added yet. Click <strong>Add</strong> to add a machine.
+                No machines found. Click <strong>Add</strong> to add a machine.
               </td>
             </tr>
             <tr *ngFor="let item of paginatedList">
@@ -106,7 +108,15 @@
               <td class="scd-actions-cell">
                 <button type="button" class="view-btn" (click)="viewRecord(item)" title="View">View</button>
                 <button type="button" class="scd-update-btn" (click)="updateRecord(item)" title="Update">Update</button>
-                <button type="button" class="scd-delete-btn" (click)="deleteRecord(item)" title="Delete">Delete</button>
+                <button
+                  type="button"
+                  class="scd-delete-btn"
+                  [disabled]="machinesLoading()"
+                  (click)="deleteRecord(item)"
+                  title="Delete"
+                >
+                  Delete
+                </button>
               </td>
             </tr>
           </tbody>
@@ -115,30 +125,45 @@
 
       <div class="table-pagination">
         <div class="pagination-info">
-          Showing {{ filteredList.length === 0 ? 0 : (currentPage - 1) * pageSize + 1 }} to
-          {{ Math.min(currentPage * pageSize, filteredList.length) }} of {{ filteredList.length }} entries
+          Showing {{ pagination().from ?? 0 }} to {{ pagination().to ?? 0 }} of
+          {{ pagination().total }} entries
         </div>
 
         <div class="pagination-controls">
-          <button type="button" [disabled]="currentPage === 1" (click)="setPage(currentPage - 1)">Previous</button>
+          <button
+            type="button"
+            [disabled]="machinesLoading() || !pagination().prevPageUrl"
+            (click)="goToPreviousPage()"
+          >
+            Previous
+          </button>
           <div class="page-numbers">
             <button
               type="button"
               *ngFor="let page of pages"
               [class.active]="page === currentPage"
+              [disabled]="machinesLoading()"
               (click)="setPage(page)"
             >
               {{ page }}
             </button>
           </div>
-          <button type="button" [disabled]="currentPage === totalPages" (click)="setPage(currentPage + 1)">
+          <button
+            type="button"
+            [disabled]="machinesLoading() || !pagination().nextPageUrl"
+            (click)="goToNextPage()"
+          >
             Next
           </button>
         </div>
 
         <div class="page-size-selector">
-          <select [(ngModel)]="pageSize" (ngModelChange)="onPageSizeChange()">
-            <option *ngFor="let size of pageSizeOptions" [value]="size">Show {{ size }}</option>
+          <select
+            [(ngModel)]="pageSize"
+            (ngModelChange)="onPageSizeChange($event)"
+            [disabled]="machinesLoading()"
+          >
+            <option *ngFor="let size of pageSizeOptions" [ngValue]="size">Show {{ size }}</option>
           </select>
         </div>
       </div>

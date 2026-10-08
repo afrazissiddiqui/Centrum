@@ -48,23 +48,17 @@ export class SubComponentDefinitionComponent implements OnInit {
   sortColumn: MachineTableColumnKey = 'machineId';
   sortDirection: 'asc' | 'desc' = 'asc';
   currentPage = 1;
-  pageSize = 10;
-  pageSizeOptions: number[] = [5, 10, 20, 50];
+  pageSize = 15;
+  pageSizeOptions: number[] = [5, 10, 15, 20, 50];
   showDialog = false;
   readonly showViewDialog = signal(false);
   readonly detailLoading = signal(false);
+  readonly machinesLoading = signal(false);
   readonly selectedRecord = signal<SubComponentMachineRecord | null>(null);
   activeTab: 'sort' | 'filter' | 'group' = 'filter';
 
   ngOnInit(): void {
-    this.subComponentService.fetchMachines().subscribe({
-      error: (error: unknown) => {
-        void this.alertService.error(
-          'Load Failed',
-          formatApiErrorMessage(error, 'Failed to load machines.'),
-        );
-      },
-    });
+    this.loadMachines();
   }
 
   readonly columns: Array<{ key: MachineTableColumnKey; label: string; visible: boolean }> = [
@@ -75,6 +69,10 @@ export class SubComponentDefinitionComponent implements OnInit {
 
   get machineList(): SubComponentMachineRecord[] {
     return this.subComponentService.records();
+  }
+
+  get pagination() {
+    return this.subComponentService.pagination;
   }
 
   get filteredList(): SubComponentMachineRecord[] {
@@ -106,12 +104,11 @@ export class SubComponentDefinitionComponent implements OnInit {
   }
 
   get paginatedList(): SubComponentMachineRecord[] {
-    const start = (this.currentPage - 1) * this.pageSize;
-    return this.filteredList.slice(start, start + this.pageSize);
+    return this.filteredList;
   }
 
   get totalPages(): number {
-    return Math.max(1, Math.ceil(this.filteredList.length / this.pageSize));
+    return Math.max(1, this.pagination().lastPage);
   }
 
   get pages(): number[] {
@@ -192,10 +189,12 @@ export class SubComponentDefinitionComponent implements OnInit {
     this.subComponentService.deleteMachine(item.id).subscribe({
       next: () => {
         this.subComponentService.removeMachineRecord(item);
-        this.subComponentService.fetchMachines().subscribe({ error: () => {} });
         if (this.paginatedList.length === 0 && this.currentPage > 1) {
           this.currentPage -= 1;
         }
+        this.loadMachines(
+          this.subComponentService.buildPageUrl(this.currentPage, this.pageSize),
+        );
         void this.alertService.success('Deleted', 'Machine removed successfully.');
       },
       error: (error: unknown) => {
@@ -241,18 +240,82 @@ export class SubComponentDefinitionComponent implements OnInit {
     return this.machineList.filter((item) => item.selected).length;
   }
 
-  onSearchChange(): void {
-    this.currentPage = 1;
+  setPage(page: number): void {
+    if (
+      this.machinesLoading() ||
+      page < 1 ||
+      page > this.totalPages ||
+      page === this.currentPage
+    ) {
+      return;
+    }
+    this.loadMachines(this.subComponentService.buildPageUrl(page, this.pageSize));
   }
 
-  setPage(page: number): void {
-    if (page >= 1 && page <= this.totalPages) {
-      this.currentPage = page;
+  goToPreviousPage(): void {
+    if (this.machinesLoading()) {
+      return;
+    }
+    const pageUrl = this.pagination().prevPageUrl;
+    if (pageUrl) {
+      this.loadMachines(pageUrl);
     }
   }
 
-  onPageSizeChange(): void {
-    this.currentPage = 1;
+  goToNextPage(): void {
+    if (this.machinesLoading()) {
+      return;
+    }
+    const pageUrl = this.pagination().nextPageUrl;
+    if (pageUrl) {
+      this.loadMachines(pageUrl);
+    }
+  }
+
+  onPageSizeChange(pageSize: number): void {
+    if (this.machinesLoading()) {
+      return;
+    }
+    this.pageSize = pageSize;
+    this.loadMachines(this.subComponentService.buildPageUrl(1, pageSize));
+  }
+
+  private loadMachines(pageUrl?: string, recoverEmptyPage = true): void {
+    if (this.machinesLoading()) {
+      return;
+    }
+    this.machinesLoading.set(true);
+    this.fetchMachines(pageUrl, recoverEmptyPage);
+  }
+
+  private fetchMachines(pageUrl: string | undefined, recoverEmptyPage: boolean): void {
+    this.subComponentService.fetchMachines(pageUrl).subscribe({
+      next: (records) => {
+        const pagination = this.subComponentService.pagination();
+        if (records.length === 0 && pagination.total > 0 && recoverEmptyPage) {
+          const firstPageUrl =
+            pagination.firstPageUrl ??
+            this.subComponentService.buildPageUrl(1, this.pageSize);
+          if (
+            pagination.currentPage > 1 ||
+            (pageUrl !== undefined && pageUrl !== firstPageUrl)
+          ) {
+            this.fetchMachines(firstPageUrl, false);
+            return;
+          }
+        }
+        this.currentPage = pagination.currentPage;
+        this.pageSize = pagination.perPage;
+        this.machinesLoading.set(false);
+      },
+      error: (error: unknown) => {
+        this.machinesLoading.set(false);
+        void this.alertService.error(
+          'Load Failed',
+          formatApiErrorMessage(error, 'Failed to load machines.'),
+        );
+      },
+    });
   }
 
   openDialog(): void {

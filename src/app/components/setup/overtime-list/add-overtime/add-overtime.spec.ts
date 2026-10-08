@@ -85,9 +85,10 @@ describe('AddOvertimeComponent', () => {
     overtimeListService.postOvertimeEmployee.and.returnValue(of({}));
     attendanceService = jasmine.createSpyObj<AttendanceManagementService>(
       'AttendanceManagementService',
-      ['fetchCalculatedWorkingHoursByDate'],
+      ['fetchCalculatedWorkingHoursByDate', 'fetchCalculatedWorkingHours'],
     );
     attendanceService.fetchCalculatedWorkingHoursByDate.and.returnValue(of([]));
+    attendanceService.fetchCalculatedWorkingHours.and.returnValue(of(null));
     workstationService = jasmine.createSpyObj<WorkstationService>(
       'WorkstationService',
       ['fetchWorkstations'],
@@ -122,12 +123,45 @@ describe('AddOvertimeComponent', () => {
 
   it('uses the selected date for attendance hours', () => {
     fixture.componentInstance.onDateChange('2026-10-06');
+    const now = new Date();
+    const fromDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
     expect(fixture.componentInstance.selectedDate()).toBe('2026-10-06');
     expect(attendanceService.fetchCalculatedWorkingHoursByDate).toHaveBeenCalledWith(
-      { mode: 'dateRange', fromDate: '2026-10-01', toDate: '2026-10-31' },
+      { mode: 'dateRange', fromDate, toDate: fixture.componentInstance.overtimeToDate() },
       '4023',
     );
+  });
+
+  it('requests attendance for the selected inclusive date range', () => {
+    const component = fixture.componentInstance;
+    const today = new Date();
+    const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const rangeStart = `${month}-01`;
+    const rangeEnd = `${month}-02`;
+    component.onDateChange(rangeEnd);
+    component.onOvertimeFromDateChange(rangeStart);
+    component.onOvertimeToDateChange(rangeEnd);
+
+    expect(attendanceService.fetchCalculatedWorkingHoursByDate).toHaveBeenCalledWith(
+      { mode: 'dateRange', fromDate: rangeStart, toDate: rangeEnd },
+      '4023',
+    );
+    expect(component.overtimeRangeError()).toBe('');
+    expect(component.employees()[0].rangeOvertimeHours).toBe('0h');
+    expect(fixture.nativeElement.querySelector('[name="overtime-from-date"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[name="overtime-to-date"]')).toBeTruthy();
+  });
+
+  it('rejects an overtime range whose start date is after its end date', () => {
+    const component = fixture.componentInstance;
+    component.onOvertimeFromDateChange('2026-10-10');
+    component.onOvertimeToDateChange('2026-10-05');
+    fixture.detectChanges();
+
+    expect(component.overtimeRangeError()).toContain('on or before');
+    expect(component.hoursLoading()).toBeFalse();
+    expect(fixture.nativeElement.textContent).toContain('The start date must be on or before the end date.');
   });
 
   it('provides a Today shortcut for the date filter', () => {
@@ -184,17 +218,17 @@ describe('AddOvertimeComponent', () => {
       } as ApplicationFormDetail,
     }]));
     const today = new Date();
-    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const monthStart = `${date.slice(0, 7)}-01`;
-    const monthEnd = `${date.slice(0, 7)}-${String(new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
-    const secondWorkedDate = `${date.slice(0, 7)}-01`;
+    const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    const monthStart = `${month}-01`;
+    const secondWorkedDate = `${month}-02`;
+    const outsideWorkedDate = `${month}-03`;
     applicationFormService.fetchEmployeeRosterList.and.returnValue(of([{
       employee_id: 'EMP-001',
       employee_name: 'Ayesha Khan',
       department: 'Finance',
       designation: 'Analyst',
       employment_status: 'Active',
-      shift_date: date,
+      shift_date: monthStart,
       shift: 'M',
       role: '',
       hub: '',
@@ -206,6 +240,17 @@ describe('AddOvertimeComponent', () => {
       designation: 'Analyst',
       employment_status: 'Active',
       shift_date: secondWorkedDate,
+      shift: 'M',
+      role: '',
+      hub: '',
+      note: null,
+    }, {
+      employee_id: 'EMP-001',
+      employee_name: 'Ayesha Khan',
+      department: 'Finance',
+      designation: 'Analyst',
+      employment_status: 'Active',
+      shift_date: outsideWorkedDate,
       shift: 'M',
       role: '',
       hub: '',
@@ -224,21 +269,25 @@ describe('AddOvertimeComponent', () => {
       status: 1,
     }]));
     attendanceService.fetchCalculatedWorkingHoursByDate.and.returnValue(of([
-      { date, hoursWorked: '9h 15m' },
-      { date: secondWorkedDate, hoursWorked: '10h' },
+      { date: monthStart, hoursWorked: '10h' },
+      { date: secondWorkedDate, hoursWorked: '9h 15m' },
+      { date: outsideWorkedDate, hoursWorked: '20h' },
     ]));
 
+    fixture.componentInstance.onDateChange(secondWorkedDate);
     fixture.componentInstance.ngOnInit();
+    fixture.componentInstance.onOvertimeFromDateChange(monthStart);
+    fixture.componentInstance.onOvertimeToDateChange(secondWorkedDate);
     fixture.detectChanges();
 
     expect(attendanceService.fetchCalculatedWorkingHoursByDate).toHaveBeenCalledWith(
-      { mode: 'dateRange', fromDate: monthStart, toDate: monthEnd },
+      { mode: 'dateRange', fromDate: monthStart, toDate: secondWorkedDate },
       '4023',
     );
     expect(fixture.nativeElement.textContent).toContain('9h 15m');
     expect(fixture.nativeElement.textContent).toContain('8h 30m');
     expect(fixture.nativeElement.textContent).toContain('45m');
-    expect(fixture.nativeElement.textContent).toContain('Monthly Overtime');
+    expect(fixture.nativeElement.textContent).toContain('Overtime in Range');
     expect(fixture.nativeElement.textContent).toContain('2h 15m');
   });
 

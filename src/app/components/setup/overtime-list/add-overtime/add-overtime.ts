@@ -21,7 +21,7 @@ interface OvertimeEmployee extends ApplicationFormRecord {
   overtimeStatus: 'Not Posted' | 'Approved';
   workingHours: string | null;
   shiftHours: string | null;
-  monthlyOvertimeHours: string | null;
+  rangeOvertimeHours: string | null;
 }
 
 @Component({
@@ -44,11 +44,13 @@ export class AddOvertimeComponent implements OnInit {
   readonly posting = signal(false);
   readonly searchText = signal('');
   readonly selectedDate = signal(this.localDateValue(new Date()));
+  readonly overtimeFromDate = signal(this.firstDayOfCurrentMonth());
+  readonly overtimeToDate = signal(this.todayDate());
   readonly employees = signal<OvertimeEmployee[]>([]);
   readonly selectedEmployeeKeys = signal<ReadonlySet<string>>(new Set());
   private rosterRecords: EmployeeRosterListRecord[] = [];
   private workstations: WorkstationRecord[] = [];
-  private readonly monthlyHoursCache = new Map<string, Array<{ date: string; hoursWorked: string }>>();
+  private readonly rangeHoursCache = new Map<string, Array<{ date: string; hoursWorked: string }>>();
   private hoursRequestId = 0;
   private hoursSubscription: Subscription | null = null;
   readonly filteredEmployees = computed(() => {
@@ -78,7 +80,7 @@ export class AddOvertimeComponent implements OnInit {
   }
 
   onDateChange(value: string): void {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(new Date(`${value}T00:00:00`).getTime())) {
+    if (!this.isValidDate(value)) {
       return;
     }
     this.selectedDate.set(value);
@@ -86,9 +88,18 @@ export class AddOvertimeComponent implements OnInit {
       ...employee,
       workingHours: null,
       shiftHours: this.shiftHoursForEmployee(employee, value, this.rosterRecords, this.workstations),
-      monthlyOvertimeHours: null,
     })));
     this.loadMonthlyOvertime();
+  }
+
+  onOvertimeFromDateChange(value: string): void {
+    this.overtimeFromDate.set(value);
+    this.resetRangeOvertime();
+  }
+
+  onOvertimeToDateChange(value: string): void {
+    this.overtimeToDate.set(value);
+    this.resetRangeOvertime();
   }
 
   setTodayDate(): void {
@@ -97,6 +108,20 @@ export class AddOvertimeComponent implements OnInit {
 
   todayDate(): string {
     return this.localDateValue(new Date());
+  }
+
+  overtimeRangeError(): string {
+    const fromDate = this.overtimeFromDate();
+    const toDate = this.overtimeToDate();
+    if (!this.isValidDate(fromDate) || !this.isValidDate(toDate)) {
+      return 'Select valid start and end dates to calculate range overtime.';
+    }
+    return fromDate > toDate ? 'The start date must be on or before the end date.' : '';
+  }
+
+  private firstDayOfCurrentMonth(): string {
+    const today = new Date();
+    return this.localDateValue(new Date(today.getFullYear(), today.getMonth(), 1));
   }
 
   overtimeHours(employee: OvertimeEmployee): string {
@@ -231,7 +256,7 @@ export class AddOvertimeComponent implements OnInit {
             overtimeStatus: isPosted ? 'Approved' : 'Not Posted',
             workingHours: null,
             shiftHours: this.shiftHoursForEmployee(employee, date, roster, workstations),
-            monthlyOvertimeHours: null,
+            rangeOvertimeHours: null,
           };
         }));
         this.loading.set(false);
@@ -252,9 +277,17 @@ export class AddOvertimeComponent implements OnInit {
     this.hoursSubscription?.unsubscribe();
     const requestId = ++this.hoursRequestId;
     const date = this.selectedDate();
-    const [year, month] = date.split('-').map(Number);
-    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
-    const monthEnd = this.localDateValue(new Date(year, month, 0));
+    const fromDate = this.overtimeFromDate();
+    const toDate = this.overtimeToDate();
+    if (!this.isValidDate(fromDate) || !this.isValidDate(toDate) || fromDate > toDate) {
+      this.hoursLoading.set(false);
+      this.employees.update((employees) => employees.map((employee) => ({
+        ...employee,
+        rangeOvertimeHours: null,
+      })));
+      return;
+    }
+
     const employees = this.employees().filter((employee) =>
       employee.flag === '0' &&
       this.isYes(employee.detail?.hrSettings.attendanceShiftManagement) &&
@@ -269,63 +302,84 @@ export class AddOvertimeComponent implements OnInit {
     this.hoursSubscription = from(employees).pipe(
       mergeMap((employee) => {
         const legacyCode = employee.detail?.loginDetails?.legacyCode || employee.ExtEmpNo || '';
-        const monthKey = `${monthStart}:${legacyCode}`;
-        const cached = this.monthlyHoursCache.get(monthKey);
+        const cacheKey = `${fromDate}:${toDate}:${legacyCode}`;
+        const cached = this.rangeHoursCache.get(cacheKey);
         const hoursByDate$ = cached !== undefined
           ? of(cached)
           : this.attendanceService.fetchCalculatedWorkingHoursByDate(
-            { mode: 'dateRange', fromDate: monthStart, toDate: monthEnd },
+            { mode: 'dateRange', fromDate, toDate },
             legacyCode,
           ).pipe(
             map((hoursByDate) => {
-              this.monthlyHoursCache.set(monthKey, hoursByDate);
+              this.rangeHoursCache.set(cacheKey, hoursByDate);
               return hoursByDate;
             }),
             catchError(() => of(null)),
           );
-        return hoursByDate$.pipe(map((hoursByDate) => ({
-          employee,
-          hoursByDate,
-          monthlyOvertimeHours: hoursByDate
-            ? this.calculateMonthlyOvertime(employee, hoursByDate, monthStart, monthEnd)
-            : null,
-        })));
+        return hoursByDate$.pipe(
+          mergeMap((hoursByDate) => {
+            const selectedDateHours = hoursByDate?.find((item) => item.date === date)?.hoursWorked;
+            const selectedDayHours$ =
+              hoursByDate !== null && date >= fromDate && date <= toDate
+                ? of(selectedDateHours ?? null)
+                : this.attendanceService.fetchCalculatedWorkingHours({ mode: 'date', date }, legacyCode);
+            return selectedDayHours$.pipe(map((workingHours) => ({
+              employee,
+              workingHours,
+              rangeOvertimeHours: hoursByDate
+                ? this.calculateOvertimeInRange(employee, hoursByDate, fromDate, toDate)
+                : null,
+            })));
+          }),
+        );
       }, 6),
       finalize(() => {
         if (requestId === this.hoursRequestId) {
           this.hoursLoading.set(false);
         }
       }),
-    ).subscribe(({ employee, hoursByDate, monthlyOvertimeHours }) => {
-      if (requestId !== this.hoursRequestId || date !== this.selectedDate()) {
+    ).subscribe(({ employee, workingHours, rangeOvertimeHours }) => {
+      if (
+        requestId !== this.hoursRequestId ||
+        date !== this.selectedDate() ||
+        fromDate !== this.overtimeFromDate() ||
+        toDate !== this.overtimeToDate()
+      ) {
         return;
       }
       const key = this.employeeKey(employee);
-      const workingHours = hoursByDate?.find((item) => item.date === date)?.hoursWorked ?? null;
       this.employees.update((current) => current.map((item) =>
         this.employeeKey(item) === key
           ? {
               ...item,
               workingHours,
-              monthlyOvertimeHours: monthlyOvertimeHours === null
+              rangeOvertimeHours: rangeOvertimeHours === null
                 ? null
-                : this.formatDuration(monthlyOvertimeHours),
+                : this.formatDuration(rangeOvertimeHours),
             }
           : item,
       ));
     });
   }
 
-  private calculateMonthlyOvertime(
+  private resetRangeOvertime(): void {
+    this.employees.update((employees) => employees.map((employee) => ({
+      ...employee,
+      rangeOvertimeHours: null,
+    })));
+    this.loadMonthlyOvertime();
+  }
+
+  private calculateOvertimeInRange(
     employee: OvertimeEmployee,
     hoursByDate: Array<{ date: string; hoursWorked: string }>,
-    monthStart: string,
-    monthEnd: string,
+    fromDate: string,
+    toDate: string,
   ): number {
     const dailyHours = new Map(hoursByDate.map((item) => [item.date, item.hoursWorked]));
     let totalOvertimeMinutes = 0;
     for (const [date, hoursWorked] of dailyHours) {
-      if (date < monthStart || date > monthEnd) {
+      if (date < fromDate || date > toDate) {
         continue;
       }
       const workedMinutes = this.durationToMinutes(hoursWorked);
@@ -407,6 +461,14 @@ export class AddOvertimeComponent implements OnInit {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  private isValidDate(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+    const date = new Date(`${value}T00:00:00`);
+    return !Number.isNaN(date.getTime()) && this.localDateValue(date) === value;
   }
 
   private timeInMinutes(value: string): number | null {

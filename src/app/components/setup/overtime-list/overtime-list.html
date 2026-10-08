@@ -1,82 +1,74 @@
 <div class="overtime-list-view">
-  <div id="table-toolbar" class="overtime-list-toolbar">
-    <div class="overtime-list-title" role="heading" aria-level="2">
-      Overtime ({{ records().length }}) · Filtered ({{ filteredRecords().length }})
+  <header class="payroll-header">
+    <div class="payroll-breadcrumb">Payroll &nbsp;&gt;&nbsp; Overtime Calculation Engine</div>
+    <div class="payroll-header-main">
+      <h1>Overtime Calculation &amp; Rate Processing</h1>
+      <div class="payroll-header-meta">
+        <span class="time-badge">Records returned: {{ records().length }}</span>
+      </div>
     </div>
+    <div class="payroll-header-actions">
+      <button type="button" class="primary-action overtime-add" (click)="goToAddPage()">Add OT</button>
+    </div>
+  </header>
 
-    <div class="overtime-list-actions">
-      <label class="overtime-date-filter">
-        <span>Employee</span>
-        <input
-          type="search"
-          [ngModel]="employeeSearchText()"
-          (ngModelChange)="onEmployeeSearchChange($event)"
-          name="overtime-employee-filter"
-          placeholder="Name or code"
-          aria-label="Search employees by name or code"
-        >
-      </label>
-      <label class="overtime-date-filter">
-        <span>Date filter</span>
-        <select
-          [ngModel]="dateFilterMode()"
-          (ngModelChange)="onDateFilterModeChange($event)"
-          name="overtime-date-filter-mode"
-        >
-          <option value="today">Current date</option>
-          <option value="all">All dates</option>
-          <option value="specific">Specific date</option>
-          <option value="range">Date range</option>
-        </select>
-      </label>
-      @if (dateFilterMode() === 'specific') {
-        <label class="overtime-date-filter">
-          <span>Overtime date</span>
-          <input
-            type="date"
-            [ngModel]="specificDate()"
-            (ngModelChange)="onSpecificDateChange($event)"
-            name="overtime-specific-date"
-          />
-        </label>
-      } @else if (dateFilterMode() === 'range') {
-        <label class="overtime-date-filter">
-          <span>From</span>
-          <input
-            type="date"
-            [ngModel]="dateFrom()"
-            (ngModelChange)="onDateFromChange($event)"
-            name="overtime-date-from"
-          />
-        </label>
-        <label class="overtime-date-filter">
-          <span>To</span>
-          <input
-            type="date"
-            [ngModel]="dateTo()"
-            (ngModelChange)="onDateToChange($event)"
-            name="overtime-date-to"
-          />
-        </label>
-      }
-      <label class="overtime-search">
-        <span class="visually-hidden">Search overtime records</span>
-        <input
-          type="search"
-          [ngModel]="searchText()"
-          (ngModelChange)="onSearchChange($event)"
-          name="overtime-search"
-          placeholder="Search..."
-        />
-      </label>
-      <button type="button" class="overtime-tool-button" (click)="showColumnSettings.set(true)" aria-label="View settings" title="View settings">
-        ⚙
-      </button>
-      <button type="button" class="overtime-add" (click)="goToAddPage()">
-        Add
-      </button>
-    </div>
+  <div class="report-toolbar" aria-label="Overtime date filters">
+    <button type="button" class="filter-tab" [class.is-active]="dateFilterMode() === 'all'" (click)="onDateFilterModeChange('all')">All dates</button>
+    <button type="button" class="filter-tab" [class.is-active]="dateFilterMode() === 'today'" (click)="onDateFilterModeChange('today')">Today</button>
+    <button type="button" class="filter-tab" [class.is-active]="dateFilterMode() === 'specific'" (click)="onDateFilterModeChange('specific')">Specific date</button>
+    <button type="button" class="filter-tab" [class.is-active]="dateFilterMode() === 'range'" (click)="onDateFilterModeChange('range')">Date range</button>
   </div>
+
+  <div class="filter-bar">
+    <span class="filter-tab is-active">Showing {{ filteredRecords().length }} matching overtime records</span>
+    <span class="filter-tab">Search and date filters apply to API records</span>
+  </div>
+
+  <section class="summary-grid" aria-label="Overtime summary">
+    <article class="metric-card">
+      <div class="metric-card__head">
+        <span class="metric-card__title">Total Overtime Hours</span>
+        <span class="metric-card__icon" aria-hidden="true">◔</span>
+      </div>
+      <p class="metric-card__value">{{ formatMinutes(totalOvertimeMinutes()) }}</p>
+      <div class="metric-card__meta">
+        <span>From {{ records().length }} API records</span>
+      </div>
+    </article>
+
+    <article class="metric-card metric-card--success">
+      <div class="metric-card__head">
+        <span class="metric-card__title">Employees with Overtime</span>
+        <span class="metric-card__icon" aria-hidden="true">◌</span>
+      </div>
+      <p class="metric-card__value">{{ employeeCount() }}</p>
+      <div class="metric-card__meta">
+        <span>Distinct employees in records</span>
+      </div>
+    </article>
+
+    <article class="metric-card metric-card--warning">
+      <div class="metric-card__head">
+        <span class="metric-card__title">Pending Records</span>
+        <span class="metric-card__icon" aria-hidden="true">!</span>
+      </div>
+      <p class="metric-card__value">{{ pendingRecordCount() }}</p>
+      <div class="metric-card__meta">
+        <span>Based on API status values</span>
+      </div>
+    </article>
+
+    <article class="metric-card metric-card--status">
+      <div class="metric-card__head">
+        <span class="metric-card__title">Overtime Records</span>
+        <span class="metric-card__icon" aria-hidden="true">✓</span>
+      </div>
+      <p class="metric-card__value">{{ records().length }}</p>
+      <div class="metric-card__meta">
+        <span>Loaded from overtime API</span>
+      </div>
+    </article>
+  </section>
 
   @if (showColumnSettings()) {
     <div class="overtime-dialog-backdrop" (click)="showColumnSettings.set(false)"></div>
@@ -100,92 +92,180 @@
     </section>
   }
 
-  <div class="overtime-table-wrap">
-    <table class="overtime-table">
-      <thead>
-        <tr>
-          @for (column of visibleColumns(); track column.key) {
-            <th>{{ column.label }}</th>
+  <section class="overtime-workbench" aria-label="Overtime records and details">
+    <div class="worker-panel">
+      <div class="records-heading">
+        <div>
+          <h2>Overtime ({{ filteredRecords().length }})</h2>
+          <p>Overtime records returned by the API</p>
+        </div>
+      </div>
+      <div class="panel-toolbar">
+        <div class="panel-toolbar__left">
+          <label class="toolbar-field">
+            <span class="visually-hidden">Search employees</span>
+            <input
+              type="search"
+              [ngModel]="employeeSearchText()"
+              (ngModelChange)="onEmployeeSearchChange($event)"
+              name="overtime-employee-filter"
+              placeholder="Search by name or employee code"
+              aria-label="Search employees by name or code"
+            >
+          </label>
+          @if (dateFilterMode() === 'specific') {
+            <label class="toolbar-field">
+              <span class="visually-hidden">Select overtime date</span>
+              <input type="date" [ngModel]="specificDate()" (ngModelChange)="onSpecificDateChange($event)" name="overtime-specific-date" aria-label="Select overtime date">
+            </label>
           }
-        </tr>
-      </thead>
-      <tbody>
-        @if (loading()) {
-          <tr>
-            <td [attr.colspan]="visibleColumns().length" class="overtime-empty">Loading overtime records…</td>
-          </tr>
-        } @else if (!records().length) {
-          <tr>
-            <td [attr.colspan]="visibleColumns().length" class="overtime-empty">No overtime records to display.</td>
-          </tr>
-        } @else if (!filteredRecords().length) {
-          <tr>
-            <td [attr.colspan]="visibleColumns().length" class="overtime-empty">No records match your search.</td>
-          </tr>
-        } @else {
-          @for (record of paginatedRecords(); track record.id) {
-            <tr>
-              @for (column of visibleColumns(); track column.key) {
-                <td>{{ formatRecordCell(column.key, record) }}</td>
-              }
-            </tr>
-          }
-        }
-      </tbody>
-    </table>
-  </div>
-
-  <div class="overtime-pagination" aria-label="Overtime list pagination">
-    <div class="overtime-pagination-info">
-      @if (filteredRecords().length) {
-        Showing {{ paginationStart() }} to {{ paginationEnd() }} of {{ filteredRecords().length }} entries
-      } @else {
-        No entries to display
-      }
-    </div>
-    <div class="overtime-pagination-bottom">
-      <div class="overtime-pagination-controls">
-        <button type="button" [disabled]="currentPage() === 1" (click)="setPage(currentPage() - 1)">Previous</button>
-        <div class="overtime-page-numbers">
-          @for (item of paginationItems(); track trackPaginationItem($index, item)) {
-            @switch (item.kind) {
-              @case ('page') {
-                <button
-                  type="button"
-                  [class.active]="item.page === currentPage()"
-                  [attr.aria-current]="item.page === currentPage() ? 'page' : null"
-                  (click)="setPage(item.page)"
-                >{{ item.page }}</button>
-              }
-              @case ('ellipsis') {
-                <button
-                  type="button"
-                  class="overtime-ellipsis"
-                  [attr.aria-label]="'Go to page ' + item.jumpTo"
-                  (click)="setPage(item.jumpTo)"
-                >…</button>
-              }
-              @case ('last') {
-                <button
-                  type="button"
-                  [class.active]="totalPages() === currentPage()"
-                  [attr.aria-current]="totalPages() === currentPage() ? 'page' : null"
-                  (click)="setPage(totalPages())"
-                >Last</button>
-              }
-            }
+          @if (dateFilterMode() === 'range') {
+            <label class="toolbar-field">
+              <span class="visually-hidden">Start date</span>
+              <input type="date" [ngModel]="dateFrom()" (ngModelChange)="onDateFromChange($event)" name="overtime-date-from" aria-label="Start date">
+            </label>
+            <label class="toolbar-field">
+              <span class="visually-hidden">End date</span>
+              <input type="date" [ngModel]="dateTo()" (ngModelChange)="onDateToChange($event)" name="overtime-date-to" aria-label="End date">
+            </label>
           }
         </div>
-        <button type="button" [disabled]="currentPage() >= totalPages()" (click)="setPage(currentPage() + 1)">Next</button>
+
+        <div class="panel-toolbar__right">
+          <button type="button" class="icon-button" (click)="showColumnSettings.set(true)" aria-label="View settings" title="View settings">⚙</button>
+        </div>
       </div>
-      <label class="overtime-page-size">
-        <span class="visually-hidden">Rows per page</span>
-        <select [ngModel]="pageSize()" (ngModelChange)="onPageSizeChange($event)" name="overtime-page-size">
-          @for (size of pageSizeOptions; track size) {
-            <option [ngValue]="size">Show {{ size }}</option>
+
+      <div class="overtime-table-wrap">
+        <table class="overtime-table">
+          <thead>
+            <tr>
+              @for (column of visibleColumns(); track column.key) {
+                <th>{{ column.label }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @if (loading()) {
+              <tr>
+                <td [attr.colspan]="visibleColumns().length || 1" class="overtime-empty">Loading overtime records…</td>
+              </tr>
+            } @else if (!records().length) {
+              <tr>
+                <td [attr.colspan]="visibleColumns().length || 1" class="overtime-empty">No overtime records to display.</td>
+              </tr>
+            } @else if (!filteredRecords().length) {
+              <tr>
+                <td [attr.colspan]="visibleColumns().length || 1" class="overtime-empty">No records match your filters.</td>
+              </tr>
+            } @else {
+              @for (record of paginatedRecords(); track record.id) {
+                <tr>
+                  @for (column of visibleColumns(); track column.key) {
+                    <td>{{ formatRecordCell(column.key, record) }}</td>
+                  }
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="overtime-pagination" aria-label="Overtime list pagination">
+        <div class="overtime-pagination-info">
+          @if (filteredRecords().length) {
+            Showing {{ paginationStart() }} to {{ paginationEnd() }} of {{ filteredRecords().length }} entries
+          } @else {
+            No entries to display
           }
-        </select>
-      </label>
+        </div>
+        <div class="overtime-pagination-bottom">
+          <div class="overtime-pagination-controls">
+            <button type="button" [disabled]="currentPage() === 1" (click)="setPage(currentPage() - 1)">Previous</button>
+            <div class="overtime-page-numbers">
+              @for (item of paginationItems(); track trackPaginationItem($index, item)) {
+                @switch (item.kind) {
+                  @case ('page') {
+                    <button
+                      type="button"
+                      [class.active]="item.page === currentPage()"
+                      [attr.aria-current]="item.page === currentPage() ? 'page' : null"
+                      (click)="setPage(item.page)"
+                    >{{ item.page }}</button>
+                  }
+                  @case ('ellipsis') {
+                    <button type="button" class="overtime-ellipsis" [attr.aria-label]="'Go to page ' + item.jumpTo" (click)="setPage(item.jumpTo)">…</button>
+                  }
+                  @case ('last') {
+                    <button
+                      type="button"
+                      [class.active]="totalPages() === currentPage()"
+                      [attr.aria-current]="totalPages() === currentPage() ? 'page' : null"
+                      (click)="setPage(totalPages())"
+                    >Last</button>
+                  }
+                }
+              }
+            </div>
+            <button type="button" [disabled]="currentPage() >= totalPages()" (click)="setPage(currentPage() + 1)">Next</button>
+          </div>
+          <label class="overtime-page-size">
+            <span class="visually-hidden">Rows per page</span>
+            <select [ngModel]="pageSize()" (ngModelChange)="onPageSizeChange($event)" name="overtime-page-size">
+              @for (size of pageSizeOptions; track size) {
+                <option [ngValue]="size">Show {{ size }}</option>
+              }
+            </select>
+          </label>
+        </div>
+      </div>
     </div>
-  </div>
+
+    @if (detailRecord(); as record) {
+      <aside class="employee-detail-panel" aria-label="Overtime record details">
+        <div class="employee-detail-panel__header">
+          <div class="detail-header-row">
+            <div class="detail-employee">
+              <div class="detail-avatar">{{ employeeInitials(record) }}</div>
+              <div>
+                <div class="detail-name">{{ employeeValue(record, ['employeename']) || 'Overtime record' }}</div>
+                <div class="detail-role">{{ employeeValue(record, ['employeecode', 'employeeid']) || 'Employee code not provided' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="employee-detail-panel__body">
+          <div class="summary-kpis">
+            <div class="summary-kpi">
+              <div class="summary-kpi__label">Overtime</div>
+              <div class="summary-kpi__value">{{ overtimeHoursValue(record) }}</div>
+            </div>
+            <div class="summary-kpi">
+              <div class="summary-kpi__label">Monthly Total</div>
+              <div class="summary-kpi__value">{{ formatRecordCell('monthlyOvertime', record) }}</div>
+            </div>
+            <div class="summary-kpi">
+              <div class="summary-kpi__label">Status</div>
+              <div class="summary-kpi__value">{{ employeeValue(record, ['status']) || '—' }}</div>
+            </div>
+          </div>
+
+          <h3 class="detail-section-title">Record information</h3>
+          <div class="detail-list">
+            @for (column of visibleColumns(); track column.key) {
+              <div class="detail-list__item">
+                <strong>{{ column.label }}</strong>
+                <span>{{ formatRecordCell(column.key, record) }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      </aside>
+    } @else {
+      <aside class="employee-detail-panel overtime-detail-empty" aria-label="Overtime record details">
+        <p>No matching overtime record to display.</p>
+      </aside>
+    }
+  </section>
 </div>

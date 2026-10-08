@@ -36,11 +36,47 @@ export interface MachineApiResponse {
   data?: Record<string, unknown>;
 }
 
+export interface MachineListPageLink {
+  url: string | null;
+  label: string;
+  active: boolean;
+}
+
+export interface MachineListPagination {
+  currentPage: number;
+  lastPage: number;
+  perPage: number;
+  total: number;
+  from: number | null;
+  to: number | null;
+  path: string;
+  firstPageUrl: string | null;
+  lastPageUrl: string | null;
+  nextPageUrl: string | null;
+  prevPageUrl: string | null;
+  links: MachineListPageLink[];
+}
+
 const MACHINE_LIST_URL = apiUrl('machine-list');
 const MACHINE_ADD_URL = apiUrl('machine-add');
 const MACHINE_DETAIL_URL = apiUrl('machine-detail');
 const MACHINE_UPDATE_URL = apiUrl('machine-update');
 const MACHINE_DELETE_URL = apiUrl('machine-delete');
+
+const EMPTY_PAGINATION: MachineListPagination = {
+  currentPage: 1,
+  lastPage: 1,
+  perPage: 15,
+  total: 0,
+  from: null,
+  to: null,
+  path: MACHINE_LIST_URL,
+  firstPageUrl: null,
+  lastPageUrl: null,
+  nextPageUrl: null,
+  prevPageUrl: null,
+  links: [],
+};
 
 export function buildMachinePayload(entry: MachineInput): MachinePayload {
   return {
@@ -59,18 +95,40 @@ export function buildMachinePayload(entry: MachineInput): MachinePayload {
 export class SubComponentDefinitionService {
   private readonly http = inject(HttpClient);
   private readonly _records = signal<SubComponentMachineRecord[]>([]);
+  private readonly _pagination = signal<MachineListPagination>(EMPTY_PAGINATION);
 
   readonly records = this._records.asReadonly();
+  readonly pagination = this._pagination.asReadonly();
 
-  fetchMachines(): Observable<SubComponentMachineRecord[]> {
-    return this.http.get<unknown>(MACHINE_LIST_URL).pipe(
-      map((response) =>
-        this.extractApiItems(response)
+  fetchMachines(pageUrl = MACHINE_LIST_URL): Observable<SubComponentMachineRecord[]> {
+    return this.http.get<unknown>(pageUrl).pipe(
+      map((response) => {
+        const items = this.extractApiItems(response);
+        const records = items
           .filter((item) => !this.isSoftDeletedRecord(item))
-          .map((item) => this.mapApiItemToRecord(item)),
-      ),
-      tap((records) => this._records.set(records)),
+          .map((item) => this.mapApiItemToRecord(item));
+        return { records, pagination: this.mapPagination(response, records.length) };
+      }),
+      tap(({ records, pagination }) => {
+        this._records.set(records);
+        this._pagination.set(pagination);
+      }),
+      map(({ records }) => records),
     );
+  }
+
+  buildPageUrl(page: number, perPage = this.pagination().perPage): string {
+    const pageLink = this.pagination().links.find(
+      (link) => link.label.trim() === String(page) && link.url,
+    );
+    if (pageLink?.url && perPage === this.pagination().perPage) {
+      return pageLink.url;
+    }
+
+    const url = new URL(this.pagination().path || MACHINE_LIST_URL, MACHINE_LIST_URL);
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('per_page', String(perPage));
+    return url.toString();
   }
 
   fetchMachineDetail(id: string | number): Observable<SubComponentMachineRecord> {
@@ -209,6 +267,90 @@ export class SubComponentDefinitionService {
     }
 
     return [];
+  }
+
+  private mapPagination(response: unknown, recordCount: number): MachineListPagination {
+    const source = this.findPaginationSource(response);
+    if (!source) {
+      return {
+        ...EMPTY_PAGINATION,
+        total: recordCount,
+        from: recordCount > 0 ? 1 : null,
+        to: recordCount > 0 ? recordCount : null,
+      };
+    }
+
+    const links = Array.isArray(source['links'])
+      ? source['links'].filter(
+          (link): link is Record<string, unknown> => !!link && typeof link === 'object',
+        )
+      : [];
+
+    return {
+      currentPage: this.readPositiveNumber(source['current_page'], 1),
+      lastPage: this.readPositiveNumber(source['last_page'], 1),
+      perPage: this.readPositiveNumber(source['per_page'], recordCount || EMPTY_PAGINATION.perPage),
+      total: this.readNonNegativeNumber(source['total'], recordCount),
+      from: this.readNullableNumber(source['from']),
+      to: this.readNullableNumber(source['to']),
+      path: this.readString(source['path']) || MACHINE_LIST_URL,
+      firstPageUrl: this.readNullableString(source['first_page_url']),
+      lastPageUrl: this.readNullableString(source['last_page_url']),
+      nextPageUrl: this.readNullableString(source['next_page_url']),
+      prevPageUrl: this.readNullableString(source['prev_page_url']),
+      links: links.map((link) => ({
+        url: this.readNullableString(link['url']),
+        label: this.readString(link['label']),
+        active: link['active'] === true,
+      })),
+    };
+  }
+
+  private findPaginationSource(response: unknown): Record<string, unknown> | null {
+    if (!response || typeof response !== 'object' || Array.isArray(response)) {
+      return null;
+    }
+
+    const source = response as Record<string, unknown>;
+    if (
+      Array.isArray(source['data']) &&
+      ('current_page' in source || 'last_page' in source || 'total' in source)
+    ) {
+      return source;
+    }
+
+    const nestedData = source['data'];
+    if (nestedData && typeof nestedData === 'object') {
+      return this.findPaginationSource(nestedData);
+    }
+
+    return null;
+  }
+
+  private readString(value: unknown): string {
+    return typeof value === 'string' ? value : '';
+  }
+
+  private readNullableString(value: unknown): string | null {
+    return typeof value === 'string' && value.length > 0 ? value : null;
+  }
+
+  private readPositiveNumber(value: unknown, fallback: number): number {
+    const number = Number(value);
+    return Number.isInteger(number) && number > 0 ? number : fallback;
+  }
+
+  private readNonNegativeNumber(value: unknown, fallback: number): number {
+    const number = Number(value);
+    return Number.isInteger(number) && number >= 0 ? number : fallback;
+  }
+
+  private readNullableNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    const number = Number(value);
+    return Number.isInteger(number) && number >= 0 ? number : null;
   }
 
   private isSoftDeletedRecord(item: Record<string, unknown>): boolean {

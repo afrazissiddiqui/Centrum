@@ -38,7 +38,7 @@ export class OvertimeListComponent implements OnInit {
   readonly loading = signal(false);
   readonly records = signal<OvertimeListRecord[]>([]);
   readonly searchText = signal('');
-  readonly dateFilterMode = signal<OvertimeDateFilterMode>('today');
+  readonly dateFilterMode = signal<OvertimeDateFilterMode>('all');
   readonly todayDate = toLocalDateInputValue(new Date());
   readonly specificDate = signal('');
   readonly dateFrom = signal('');
@@ -62,13 +62,33 @@ export class OvertimeListComponent implements OnInit {
         employeeCode.includes(employeeQuery) ||
         employeeName.includes(employeeQuery);
       const searchMatches = !query || Object.entries(record.values).some(([key, value]) =>
-        !this.isFlagField(key) && this.formatValue(value).toLocaleLowerCase().includes(query),
+        !this.isHiddenListField(key) && this.formatValue(value).toLocaleLowerCase().includes(query),
       );
       return dateMatches && employeeMatches && searchMatches;
     });
   });
 
   readonly totalPages = computed(() => Math.max(1, Math.ceil(this.filteredRecords().length / this.pageSize())));
+  readonly totalOvertimeMinutes = computed(() =>
+    this.records().reduce((total, record) =>
+      total + (this.durationToMinutes(this.fieldValue(record, ['overtimehours'])) ?? 0),
+    0),
+  );
+  readonly employeeCount = computed(() => {
+    const employees = new Set<string>();
+    for (const record of this.records()) {
+      const employee = this.employeeValue(record, ['employeecode', 'employeeid', 'employeename']);
+      if (employee) {
+        employees.add(employee.toLocaleLowerCase());
+      }
+    }
+    return employees.size;
+  });
+  readonly pendingRecordCount = computed(() =>
+    this.records().filter((record) =>
+      String(this.fieldValue(record, ['status']) ?? '').trim().toLocaleLowerCase() === 'pending',
+    ).length,
+  );
   readonly monthlyOvertimeTotals = computed(() => {
     const totals = new Map<string, number>();
     for (const record of this.records()) {
@@ -98,6 +118,7 @@ export class OvertimeListComponent implements OnInit {
     this.filteredRecords().length,
   ));
   readonly visibleColumns = computed(() => this.columns().filter((column) => column.visible));
+  readonly detailRecord = computed(() => this.paginatedRecords()[0] ?? null);
 
   ngOnInit(): void {
     this.loadRecords();
@@ -199,6 +220,26 @@ export class OvertimeListComponent implements OnInit {
     return String(value);
   }
 
+  formatMinutes(totalMinutes: number): string {
+    return this.formatDuration(totalMinutes);
+  }
+
+  overtimeHoursValue(record: OvertimeListRecord): string {
+    const minutes = this.durationToMinutes(this.fieldValue(record, ['overtimehours']));
+    return minutes === null ? '—' : this.formatDuration(minutes);
+  }
+
+  employeeInitials(record: OvertimeListRecord): string {
+    const name = this.employeeValue(record, ['employeename']);
+    const initials = name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0].toLocaleUpperCase())
+      .join('');
+    return initials || 'OT';
+  }
+
   formatCellValue(key: string, value: unknown): string {
     const normalizedKey = key.toLowerCase().replace(/[^a-z]/g, '');
     if (normalizedKey === 'status' && typeof value === 'string') {
@@ -242,7 +283,7 @@ export class OvertimeListComponent implements OnInit {
     const keys = new Set<string>();
     for (const record of records) {
       for (const key of Object.keys(record.values)) {
-        if (!this.isFlagField(key)) {
+        if (!this.isHiddenListField(key)) {
           keys.add(key);
         }
       }
@@ -257,8 +298,9 @@ export class OvertimeListComponent implements OnInit {
     return columns;
   }
 
-  private isFlagField(key: string): boolean {
-    return key.toLowerCase().replace(/[^a-z]/g, '') === 'flag';
+  private isHiddenListField(key: string): boolean {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z]/g, '');
+    return normalizedKey === 'flag' || normalizedKey === 'id';
   }
 
   private overtimeDateValue(record: OvertimeListRecord): string {
@@ -275,7 +317,7 @@ export class OvertimeListComponent implements OnInit {
     return value.trim().match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? '';
   }
 
-  private employeeValue(record: OvertimeListRecord, fieldNames: string[]): string {
+  employeeValue(record: OvertimeListRecord, fieldNames: string[]): string {
     const value = this.fieldValue(record, fieldNames);
     return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
   }
