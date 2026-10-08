@@ -49,6 +49,7 @@ export class OvertimeListComponent implements OnInit {
   readonly pageSizeOptions = [10, 25, 50, 100];
   readonly showColumnSettings = signal(false);
   readonly columns = signal<OvertimeListColumn[]>([]);
+  readonly selectedRecordId = signal<string | null>(null);
 
   readonly filteredRecords = computed(() => {
     const query = this.searchText().trim().toLocaleLowerCase();
@@ -118,7 +119,13 @@ export class OvertimeListComponent implements OnInit {
     this.filteredRecords().length,
   ));
   readonly visibleColumns = computed(() => this.columns().filter((column) => column.visible));
-  readonly detailRecord = computed(() => this.paginatedRecords()[0] ?? null);
+  readonly detailRecord = computed(() => {
+    const selectedId = this.selectedRecordId();
+    const records = this.filteredRecords();
+    return records.find((record) => record.id === selectedId) ??
+      this.paginatedRecords()[0] ??
+      null;
+  });
 
   ngOnInit(): void {
     this.loadRecords();
@@ -179,6 +186,17 @@ export class OvertimeListComponent implements OnInit {
   onEmployeeSearchChange(value: string): void {
     this.employeeSearchText.set(value);
     this.currentPage.set(1);
+  }
+
+  selectRecord(record: OvertimeListRecord): void {
+    this.selectedRecordId.set(record.id);
+  }
+
+  onRecordRowKeydown(record: OvertimeListRecord, event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.selectRecord(record);
+    }
   }
 
   onPageSizeChange(value: number | string): void {

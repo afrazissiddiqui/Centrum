@@ -97,14 +97,6 @@
   padding: 16px 20px;
 }
 
-.add-overtime-range-error {
-  color: #b42318;
-  flex-basis: 100%;
-  font-size: 13px;
-  margin: -4px 0 0 auto;
-  text-align: right;
-}
-
 .add-overtime-content__filters {
   align-items: center;
   display: flex;
@@ -112,7 +104,7 @@
   gap: 12px;
 }
 
-.add-overtime-date {
+.add-overtime-month {
   align-items: center;
   color: #475569;
   display: inline-flex;
@@ -120,7 +112,7 @@
   gap: 8px;
 }
 
-.add-overtime-date input {
+.add-overtime-month input {
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   box-sizing: border-box;
@@ -129,30 +121,34 @@
   padding: 6px 8px;
 }
 
-.add-overtime-date input:focus-visible {
+.add-overtime-month input:focus-visible {
   border-color: #0070f2;
   outline: 2px solid rgba(0, 112, 242, 0.15);
 }
 
-.add-overtime-today {
+.add-overtime-department {
+  align-items: center;
+  color: #475569;
+  display: inline-flex;
+  font-size: 13px;
+  gap: 8px;
+}
+
+.add-overtime-department select {
   background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
-  color: #1d2d3e;
-  cursor: pointer;
+  box-sizing: border-box;
+  color: #1f2d3d;
   font: inherit;
   min-height: 36px;
-  padding: 6px 10px;
+  min-width: 150px;
+  padding: 6px 8px;
 }
 
-.add-overtime-today:hover:not(:disabled) {
-  background: #f1f5f9;
-}
-
-.add-overtime-today:disabled {
-  color: #64748b;
-  cursor: default;
-  opacity: 0.7;
+.add-overtime-department select:focus-visible {
+  border-color: #0070f2;
+  outline: 2px solid rgba(0, 112, 242, 0.15);
 }
 
 .add-overtime-hours-loader {

@@ -156,6 +156,10 @@
                 <span>{{ selectedRow()?.referenceNo || '—' }}</span>
               </div>
               <div class="js-detail-item">
+                <label>Base doc no.</label>
+                <span>{{ selectedRow()?.baseDocNo || '—' }}</span>
+              </div>
+              <div class="js-detail-item">
                 <label>Date</label>
                 <span>{{ selectedRow()?.submittedDate === '—' ? '—' : (selectedRow()?.submittedDate | date: 'dd/MM/yyyy') }}</span>
               </div>

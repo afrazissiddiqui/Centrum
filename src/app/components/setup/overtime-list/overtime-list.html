@@ -160,7 +160,14 @@
               </tr>
             } @else {
               @for (record of paginatedRecords(); track record.id) {
-                <tr>
+                <tr
+                  tabindex="0"
+                  [class.is-selected]="detailRecord().id === record.id"
+                  [attr.aria-label]="'Show details for ' + (employeeValue(record, ['employeename']) || 'overtime record')"
+                  [attr.aria-selected]="detailRecord().id === record.id"
+                  (click)="selectRecord(record)"
+                  (keydown)="onRecordRowKeydown(record, $event)"
+                >
                   @for (column of visibleColumns(); track column.key) {
                     <td>{{ formatRecordCell(column.key, record) }}</td>
                   }

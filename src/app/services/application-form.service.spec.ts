@@ -45,6 +45,26 @@ describe('ApplicationFormService', () => {
     expect(record.detail.requisition.costCenter).toBe('CC-124');
   });
 
+  it('maps shift and overtime applicability aliases to the employee profile flags', () => {
+    const rootFlags = (service as any).mapApiItemToFullRecord({
+      employeeCode: 'EMP-001',
+      personName: 'Nouman Ahmad Riaz',
+      employee_shift_applicable: 'Yes',
+      overtime_applicable: 'Yes',
+    });
+    const nestedFlags = (service as any).mapApiItemToFullRecord({
+      employeeCode: 'EMP-002',
+      personName: 'Another Employee',
+      hr_settings: { ShiftApplicable: true },
+      remuneration: { OvertimeApplicable: true },
+    });
+
+    expect(rootFlags.detail.hrSettings.attendanceShiftManagement).toBe('Yes');
+    expect(rootFlags.detail.remuneration.overTimeApplicable).toBe('Yes');
+    expect(nestedFlags.detail.hrSettings.attendanceShiftManagement).toBe('Yes');
+    expect(nestedFlags.detail.remuneration.overTimeApplicable).toBe('Yes');
+  });
+
   it('includes a null Cost Center in the employee profile update body', () => {
     service.updateEmployeeProfile(7, { costCenter: null } as any).subscribe();
 

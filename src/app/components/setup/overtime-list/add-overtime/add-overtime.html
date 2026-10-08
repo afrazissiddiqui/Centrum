@@ -23,39 +23,26 @@
     <div class="add-overtime-content__toolbar">
       <h2 id="eligible-employees-title">Eligible Employees ({{ filteredEmployees().length }})</h2>
       <div class="add-overtime-content__filters">
-        <label class="add-overtime-date">
-          <span>Hours for date</span>
-          <input
-            type="date"
-            [ngModel]="selectedDate()"
-            (ngModelChange)="onDateChange($event)"
-            name="hours-date"
-          />
-          <button
-            type="button"
-            class="add-overtime-today"
-            [disabled]="selectedDate() === todayDate()"
-            (click)="setTodayDate()"
+        <label class="add-overtime-department">
+          <span>Department</span>
+          <select
+            [ngModel]="selectedDepartment()"
+            (ngModelChange)="onDepartmentChange($event)"
+            name="department-filter"
           >
-            Today
-          </button>
+            <option value="">All departments</option>
+            @for (department of departments(); track department) {
+              <option [value]="department">{{ department }}</option>
+            }
+          </select>
         </label>
-        <label class="add-overtime-date">
-          <span>Overtime from</span>
+        <label class="add-overtime-month">
+          <span>Overtime month</span>
           <input
-            type="date"
-            [ngModel]="overtimeFromDate()"
-            (ngModelChange)="onOvertimeFromDateChange($event)"
-            name="overtime-from-date"
-          />
-        </label>
-        <label class="add-overtime-date">
-          <span>To</span>
-          <input
-            type="date"
-            [ngModel]="overtimeToDate()"
-            (ngModelChange)="onOvertimeToDateChange($event)"
-            name="overtime-to-date"
+            type="month"
+            [ngModel]="selectedMonth()"
+            (ngModelChange)="onMonthChange($event)"
+            name="hours-month"
           />
         </label>
         <label class="add-overtime-search">
@@ -69,9 +56,6 @@
           />
         </label>
       </div>
-      @if (overtimeRangeError()) {
-        <p class="add-overtime-range-error" role="alert">{{ overtimeRangeError() }}</p>
-      }
     </div>
 
     <div class="add-overtime-table-wrap">
@@ -85,8 +69,7 @@
             <th scope="col">Designation</th>
             <th scope="col">Working Hours</th>
             <th scope="col">Shift Hours</th>
-            <th scope="col">Overtime Hours</th>
-            <th scope="col">Overtime in Range</th>
+            <th scope="col">Overtime Hours (Month Total)</th>
             <th scope="col">Shift Applicable</th>
             <th scope="col">Overtime Applicable</th>
             <th scope="col">Status</th>
@@ -95,12 +78,12 @@
         <tbody>
           @if (loading()) {
             <tr>
-              <td colspan="12" class="add-overtime-empty">Loading eligible employees...</td>
+              <td colspan="11" class="add-overtime-empty">Loading eligible employees...</td>
             </tr>
           } @else if (!filteredEmployees().length) {
             <tr>
-              <td colspan="12" class="add-overtime-empty">
-                {{ searchText().trim() ? 'No employees match your search.' : 'No eligible employees to display.' }}
+              <td colspan="11" class="add-overtime-empty">
+                {{ searchText().trim() || selectedDepartment() ? 'No employees match your filters.' : 'No eligible employees to display.' }}
               </td>
             </tr>
           } @else {
@@ -130,15 +113,6 @@
                 </td>
                 <td>{{ employee.shiftHours || '—' }}</td>
                 <td>{{ overtimeHours(employee) }}</td>
-                <td>
-                  @if (employee.rangeOvertimeHours !== null) {
-                    {{ employee.rangeOvertimeHours }}
-                  } @else if (hoursLoading()) {
-                    <span class="add-overtime-hours-loader" role="status" aria-label="Loading overtime for selected range"></span>
-                  } @else {
-                    —
-                  }
-                </td>
                 <td>Yes</td>
                 <td>Yes</td>
                 <td>{{ employee.overtimeStatus }}</td>

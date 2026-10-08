@@ -45,6 +45,56 @@ describe('OvertimeListComponent', () => {
     expect(fixture.componentInstance.columns().some((column) => column.key === 'monthlyOvertime')).toBe(true);
   });
 
+  it('shows the clicked overtime line in the side card', () => {
+    const component = fixture.componentInstance;
+    component.records.set([
+      {
+        id: '1',
+        values: {
+          employee_code: 'EMP-001',
+          employee_name: 'Ayesha Khan',
+          overtime_date: '2026-10-01',
+          status: 'Pending',
+        },
+      },
+      {
+        id: '2',
+        values: {
+          employee_code: 'EMP-002',
+          employee_name: 'Noor Rehman',
+          overtime_date: '2026-10-02',
+          status: 'Approved',
+        },
+      },
+    ]);
+    fixture.detectChanges();
+
+    const rows = fixture.nativeElement.querySelectorAll('.overtime-table tbody tr') as NodeListOf<HTMLTableRowElement>;
+    rows[1].click();
+    fixture.detectChanges();
+
+    expect(component.detailRecord()?.id).toBe('2');
+    expect(fixture.nativeElement.querySelector('.employee-detail-panel .detail-name').textContent).toContain('Noor Rehman');
+    expect(fixture.nativeElement.querySelector('.employee-detail-panel .detail-role').textContent).toContain('EMP-002');
+    expect(rows[1].getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('selects overtime rows with the keyboard', () => {
+    const component = fixture.componentInstance;
+    component.records.set([
+      { id: '1', values: { employee_code: 'EMP-001', employee_name: 'Ayesha Khan' } },
+      { id: '2', values: { employee_code: 'EMP-002', employee_name: 'Noor Rehman' } },
+    ]);
+    fixture.detectChanges();
+
+    const rows = fixture.nativeElement.querySelectorAll('.overtime-table tbody tr') as NodeListOf<HTMLTableRowElement>;
+    rows[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+
+    expect(component.detailRecord()?.id).toBe('2');
+    expect(fixture.nativeElement.querySelector('.employee-detail-panel .detail-name').textContent).toContain('Noor Rehman');
+  });
+
   it('shows an employee and month total from the daily overtime records', () => {
     const component = fixture.componentInstance;
     component.records.set([
@@ -111,6 +161,36 @@ describe('OvertimeListComponent', () => {
 
     fixture.componentInstance.onSearchChange('1');
     expect(fixture.componentInstance.filteredRecords().length).toBe(0);
+  });
+
+  it('displays all rows returned by the overtime list API, including unposted records', () => {
+    service.fetchOvertimeList.and.returnValue(of([
+      {
+        id: 'unposted',
+        values: {
+          employee_code: 'EMP-001',
+          employee_name: 'Nouman Ahmad Riaz',
+          overtime_date: '2026-10-01',
+          flag: '0',
+        },
+      },
+      {
+        id: 'posted',
+        values: {
+          employee_code: 'EMP-002',
+          employee_name: 'Ayesha Khan',
+          overtime_date: '2026-10-01',
+          flag: '1',
+        },
+      },
+    ]));
+
+    fixture.componentInstance.loadRecords();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.records().map((record) => record.id)).toEqual(['unposted', 'posted']);
+    expect(fixture.nativeElement.textContent).toContain('Nouman Ahmad Riaz');
+    expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
   });
 
   it('navigates to the add page from the Add button', () => {

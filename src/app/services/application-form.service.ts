@@ -513,6 +513,14 @@ const REMUNERATION_FIELD_KEYS: ReadonlyArray<[camel: string, snake: string]> = [
 
 const REMUNERATION_EXTRA_KEYS: Readonly<Record<string, readonly string[]>> = {
   basicSalary: ['grossSalary', 'gross_salary', 'GrossSalary', 'salaryOffer', 'salary_offer'],
+  overTimeApplicable: [
+    'overtimeApplicable',
+    'overtime_applicable',
+    'OvertimeApplicable',
+    'Overtime_Applicable',
+    'isOvertimeApplicable',
+    'is_overtime_applicable',
+  ],
   medicalAllowances: ['medicalAllowance', 'medical_allowance', 'MedicalAllowances', 'MedicalAllowance'],
   fuelAllowances: ['fuelAllowance', 'fuel_allowance', 'FuelAllowances', 'FuelAllowance'],
   fuelLimit: ['FuelLimit', 'fuel_limit', 'petrolLimit', 'petrol_limit', 'fuelLiters', 'fuel_liters', 'allowedLiters', 'allowed_liters'],
@@ -2268,17 +2276,17 @@ export class ApplicationFormService {
       hrSettings: {
         employeeMaster: asNumberString(item['employeeMaster'] ?? item['employee_master']),
         salaryStructure,
-        attendanceShiftManagement:
-          pickFrom(hrSettingsSource, 'attendanceShiftManagement', 'attendance_shift_management') ||
-          this.yesNoFromApi(
-            hrSettingsSource['EmployeeShiftApplicable'] ??
-              hrSettingsSource['employeeShiftApplicable'] ??
-              hrSettingsSource['employee_shift_applicable'] ??
-              item['EmployeeShiftApplicable'] ??
-              item['employeeShiftApplicable'] ??
-              item['employee_shift_applicable'],
-          ) ||
-          pick('attendanceShiftManagement', 'attendance_shift_management'),
+        attendanceShiftManagement: this.yesNoFromApi(
+          this.pickCaseInsensitive(
+            [hrSettingsSource, item],
+            [
+              'attendanceShiftManagement',
+              'employeeShiftApplicable',
+              'shiftApplicable',
+              'shiftManagementApplicable',
+            ],
+          ),
+        ) || pick('attendanceShiftManagement', 'attendance_shift_management'),
         leaveManagement: pick('leaveManagement', 'leave_management'),
         loanAdvancesForm: pick('loanAdvancesForm', 'loan_advances_form'),
         requestStatus: pick('requestStatus', 'request_status'),
@@ -2441,6 +2449,25 @@ export class ApplicationFormService {
     return value && typeof value === 'object' && !Array.isArray(value)
       ? (value as Record<string, unknown>)
       : null;
+  }
+
+  private pickCaseInsensitive(
+    sources: Record<string, unknown>[],
+    fieldNames: string[],
+  ): unknown {
+    const normalizedNames = new Set(fieldNames.map((name) => name.toLowerCase().replace(/[^a-z0-9]/g, '')));
+    for (const source of sources) {
+      const match = Object.entries(source).find(([key, value]) =>
+        normalizedNames.has(key.toLowerCase().replace(/[^a-z0-9]/g, '')) &&
+        value !== undefined &&
+        value !== null &&
+        String(value).trim() !== '',
+      );
+      if (match) {
+        return match[1];
+      }
+    }
+    return undefined;
   }
 
   private parseJsonArray(

@@ -414,11 +414,21 @@
 }
 
 .overtime-table tbody tr {
+  cursor: pointer;
   transition: background 0.2s ease;
 }
 
 .overtime-table tbody tr:hover {
   background: #f8fbff;
+}
+
+.overtime-table tbody tr.is-selected {
+  background: #edf4ff;
+}
+
+.overtime-table tbody tr:focus-visible {
+  outline: 2px solid #2c64d4;
+  outline-offset: -2px;
 }
 
 .overtime-table .selection-col {

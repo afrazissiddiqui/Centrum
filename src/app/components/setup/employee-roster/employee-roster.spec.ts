@@ -1,5 +1,5 @@
 import { ApplicationFormRecord, EmployeeRosterListRecord } from '../../../services/application-form.service';
-import { findUnassignedEmployees, rosterDayIndexForMonth, rosterPeriodForDate, rosterShiftOptions } from './employee-roster';
+import { findUnassignedEmployees, isPastRosterDate, rosterDayIndexForMonth, rosterPeriodForDate, rosterShiftOptions } from './employee-roster';
 import { WorkstationRecord } from '../../../services/workstation.service';
 
 describe('rosterShiftOptions', () => {
@@ -65,5 +65,19 @@ describe('rosterPeriodForDate', () => {
       monthLabel: 'September 2026',
       monthHalf: 'Second Half',
     });
+  });
+});
+
+describe('isPastRosterDate', () => {
+  const today = new Date(2026, 8, 15);
+
+  it('identifies dates before today as uneditable', () => {
+    expect(isPastRosterDate(14, 'September 2026', today)).toBe(true);
+  });
+
+  it('keeps today and future dates editable', () => {
+    expect(isPastRosterDate(15, 'September 2026', today)).toBe(false);
+    expect(isPastRosterDate(16, 'September 2026', today)).toBe(false);
+    expect(isPastRosterDate(1, 'October 2026', today)).toBe(false);
   });
 });

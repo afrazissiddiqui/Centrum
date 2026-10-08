@@ -71,6 +71,7 @@ export class OgpComponent implements OnInit {
 
   columns: ColumnConfig[] = [
     { key: 'referenceNo', label: 'OGP no.', visible: true },
+    { key: 'baseDocNo', label: 'Base doc no.', visible: true },
     { key: 'type', label: 'Type', visible: true },
     { key: 'submittedDate', label: 'Date', visible: true },
     { key: 'businessPartnerName', label: 'Business partner', visible: true },

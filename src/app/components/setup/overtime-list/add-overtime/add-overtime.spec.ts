@@ -85,10 +85,9 @@ describe('AddOvertimeComponent', () => {
     overtimeListService.postOvertimeEmployee.and.returnValue(of({}));
     attendanceService = jasmine.createSpyObj<AttendanceManagementService>(
       'AttendanceManagementService',
-      ['fetchCalculatedWorkingHoursByDate', 'fetchCalculatedWorkingHours'],
+      ['fetchCalculatedWorkingHoursByDate'],
     );
     attendanceService.fetchCalculatedWorkingHoursByDate.and.returnValue(of([]));
-    attendanceService.fetchCalculatedWorkingHours.and.returnValue(of(null));
     workstationService = jasmine.createSpyObj<WorkstationService>(
       'WorkstationService',
       ['fetchWorkstations'],
@@ -121,56 +120,73 @@ describe('AddOvertimeComponent', () => {
     expect(fixture.nativeElement.querySelectorAll('tbody input[type="checkbox"]').length).toBe(1);
   });
 
-  it('uses the selected date for attendance hours', () => {
-    fixture.componentInstance.onDateChange('2026-10-06');
-    const now = new Date();
-    const fromDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  it('still displays eligible employees when roster or workstation data cannot be loaded', () => {
+    applicationFormService.fetchEmployeeRosterList.and.returnValue(
+      throwError(() => new Error('Roster endpoint unavailable')),
+    );
+    workstationService.fetchWorkstations.and.returnValue(
+      throwError(() => new Error('Workstations endpoint unavailable')),
+    );
 
-    expect(fixture.componentInstance.selectedDate()).toBe('2026-10-06');
+    fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.filteredEmployees().map((employee) => employee.EmployeeCode))
+      .toContain('EMP-001');
+    expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
+    expect(fixture.componentInstance.employees()[0].shiftHours).toBeNull();
+    expect(fixture.componentInstance.employees()[0].calculatedOvertimeHours).toBeNull();
+  });
+
+  it('filters eligible employees by department and combines the selection with search', () => {
+    const component = fixture.componentInstance;
+    const employee = {
+      ...component.employees()[0],
+      EmployeeCode: 'EMP-004',
+      EmployeeName: 'Mariam Noor',
+      Department: 'Operations',
+    };
+    component.employees.update((employees) => [...employees, employee]);
+    fixture.detectChanges();
+
+    const departmentFilter = fixture.nativeElement.querySelector(
+      '[name="department-filter"]',
+    ) as HTMLSelectElement;
+    expect([...departmentFilter.options].map((option) => option.textContent?.trim())).toEqual([
+      'All departments',
+      'Finance',
+      'Operations',
+    ]);
+
+    component.onDepartmentChange('Operations');
+    fixture.detectChanges();
+    expect(component.filteredEmployees().map((item) => item.EmployeeCode)).toEqual(['EMP-004']);
+    expect(fixture.nativeElement.textContent).toContain('Mariam Noor');
+    expect(fixture.nativeElement.textContent).not.toContain('Ayesha Khan');
+
+    component.onSearchChange('Ayesha');
+    fixture.detectChanges();
+    expect(component.filteredEmployees()).toEqual([]);
+    expect(fixture.nativeElement.textContent).toContain('No employees match your filters.');
+  });
+
+  it('uses the selected month for attendance hours', () => {
+    fixture.componentInstance.onMonthChange('2026-10');
+
+    expect(fixture.componentInstance.selectedMonth()).toBe('2026-10');
     expect(attendanceService.fetchCalculatedWorkingHoursByDate).toHaveBeenCalledWith(
-      { mode: 'dateRange', fromDate, toDate: fixture.componentInstance.overtimeToDate() },
+      { mode: 'dateRange', fromDate: '2026-10-01', toDate: '2026-10-31' },
       '4023',
     );
   });
 
-  it('requests attendance for the selected inclusive date range', () => {
-    const component = fixture.componentInstance;
-    const today = new Date();
-    const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    const rangeStart = `${month}-01`;
-    const rangeEnd = `${month}-02`;
-    component.onDateChange(rangeEnd);
-    component.onOvertimeFromDateChange(rangeStart);
-    component.onOvertimeToDateChange(rangeEnd);
-
-    expect(attendanceService.fetchCalculatedWorkingHoursByDate).toHaveBeenCalledWith(
-      { mode: 'dateRange', fromDate: rangeStart, toDate: rangeEnd },
-      '4023',
-    );
-    expect(component.overtimeRangeError()).toBe('');
-    expect(component.employees()[0].rangeOvertimeHours).toBe('0h');
-    expect(fixture.nativeElement.querySelector('[name="overtime-from-date"]')).toBeTruthy();
-    expect(fixture.nativeElement.querySelector('[name="overtime-to-date"]')).toBeTruthy();
-  });
-
-  it('rejects an overtime range whose start date is after its end date', () => {
-    const component = fixture.componentInstance;
-    component.onOvertimeFromDateChange('2026-10-10');
-    component.onOvertimeToDateChange('2026-10-05');
-    fixture.detectChanges();
-
-    expect(component.overtimeRangeError()).toContain('on or before');
-    expect(component.hoursLoading()).toBeFalse();
-    expect(fixture.nativeElement.textContent).toContain('The start date must be on or before the end date.');
-  });
-
-  it('provides a Today shortcut for the date filter', () => {
-    fixture.componentInstance.onDateChange('2026-10-06');
-    fixture.componentInstance.setTodayDate();
-    fixture.detectChanges();
-
-    expect(fixture.componentInstance.selectedDate()).toBe(fixture.componentInstance.todayDate());
-    expect(fixture.nativeElement.querySelector('.add-overtime-today')).toBeTruthy();
+  it('displays a month filter without overtime range date filters or the range overtime column', () => {
+    const monthFilter = fixture.nativeElement.querySelector('[name="hours-month"]') as HTMLInputElement;
+    expect(monthFilter.type).toBe('month');
+    expect(fixture.nativeElement.textContent).toContain('Overtime Hours (Month Total)');
+    expect(fixture.nativeElement.querySelector('[name="overtime-from-date"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[name="overtime-to-date"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('Overtime in Range');
   });
 
   it('shows the loading indicator in the working-hours cell only', () => {
@@ -198,7 +214,7 @@ describe('AddOvertimeComponent', () => {
     expect(filteredCheckbox.checked).toBe(true);
   });
 
-  it('loads working hours using the employee legacy code and displays both hour values', () => {
+  it('loads monthly working hours using the employee legacy code', () => {
     applicationFormService.fetchEmployeeProfiles.and.returnValue(of([{
       EmployeeCode: 'EMP-001',
       EmployeeName: 'Ayesha Khan',
@@ -217,11 +233,9 @@ describe('AddOvertimeComponent', () => {
         loginDetails: { legacyCode: '4023' },
       } as ApplicationFormDetail,
     }]));
-    const today = new Date();
-    const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    const monthStart = `${month}-01`;
-    const secondWorkedDate = `${month}-02`;
-    const outsideWorkedDate = `${month}-03`;
+    const monthStart = '2026-10-01';
+    const secondWorkedDate = '2026-10-02';
+    const outsideWorkedDate = '2026-11-03';
     applicationFormService.fetchEmployeeRosterList.and.returnValue(of([{
       employee_id: 'EMP-001',
       employee_name: 'Ayesha Khan',
@@ -240,17 +254,6 @@ describe('AddOvertimeComponent', () => {
       designation: 'Analyst',
       employment_status: 'Active',
       shift_date: secondWorkedDate,
-      shift: 'M',
-      role: '',
-      hub: '',
-      note: null,
-    }, {
-      employee_id: 'EMP-001',
-      employee_name: 'Ayesha Khan',
-      department: 'Finance',
-      designation: 'Analyst',
-      employment_status: 'Active',
-      shift_date: outsideWorkedDate,
       shift: 'M',
       role: '',
       hub: '',
@@ -274,20 +277,16 @@ describe('AddOvertimeComponent', () => {
       { date: outsideWorkedDate, hoursWorked: '20h' },
     ]));
 
-    fixture.componentInstance.onDateChange(secondWorkedDate);
+    fixture.componentInstance.onMonthChange('2026-10');
     fixture.componentInstance.ngOnInit();
-    fixture.componentInstance.onOvertimeFromDateChange(monthStart);
-    fixture.componentInstance.onOvertimeToDateChange(secondWorkedDate);
     fixture.detectChanges();
 
     expect(attendanceService.fetchCalculatedWorkingHoursByDate).toHaveBeenCalledWith(
-      { mode: 'dateRange', fromDate: monthStart, toDate: secondWorkedDate },
+      { mode: 'dateRange', fromDate: '2026-10-01', toDate: '2026-10-31' },
       '4023',
     );
-    expect(fixture.nativeElement.textContent).toContain('9h 15m');
-    expect(fixture.nativeElement.textContent).toContain('8h 30m');
-    expect(fixture.nativeElement.textContent).toContain('45m');
-    expect(fixture.nativeElement.textContent).toContain('Overtime in Range');
+    expect(fixture.nativeElement.textContent).toContain('19h 15m');
+    expect(fixture.nativeElement.textContent).toContain('17h');
     expect(fixture.nativeElement.textContent).toContain('2h 15m');
   });
 
@@ -307,18 +306,13 @@ describe('AddOvertimeComponent', () => {
     fixture.componentInstance.postSelectedEmployees();
     fixture.detectChanges();
 
-    expect(overtimeListService.postOvertimeEmployee).toHaveBeenCalledWith([{
+    const payload = overtimeListService.postOvertimeEmployee.calls.mostRecent().args[0];
+    expect(payload[0]).toEqual(jasmine.objectContaining({
       employee_code: 'EMP-001',
       employee_name: 'Ayesha Khan',
-      overtime_date: '2026-10-01',
-      shift_id: '1',
-      working_hours: 8,
-      shift_hours: 8,
-      overtime_hours: 0,
-      overtime_rate: 0,
-      exceptional_ot: 0,
+      overtime_date: `${fixture.componentInstance.selectedMonth()}-01`,
       flag: '1',
-    }]);
+    }));
     expect(fixture.componentInstance.employees()[0].flag).toBe('1');
     expect(fixture.componentInstance.employees()[0].overtimeStatus).toBe('Approved');
     expect(fixture.componentInstance.filteredEmployees()).toHaveSize(0);
@@ -328,7 +322,14 @@ describe('AddOvertimeComponent', () => {
 
   it('does not show employees already present in the overtime list', () => {
     overtimeListService.fetchOvertimeList.and.returnValue(of([
-      { id: 'overtime-1', values: { employee_code: 'EMP-001', status: 'Pending' } },
+      {
+        id: 'overtime-1',
+        values: {
+          employee_code: 'EMP-001',
+          overtime_date: `${fixture.componentInstance.selectedMonth()}-01`,
+          status: 'Pending',
+        },
+      },
     ]));
 
     fixture.componentInstance.ngOnInit();
@@ -338,6 +339,84 @@ describe('AddOvertimeComponent', () => {
     expect(fixture.componentInstance.employees()[0].flag).toBe('1');
     expect(fixture.componentInstance.filteredEmployees()).toHaveSize(0);
     expect(fixture.nativeElement.textContent).not.toContain('Ayesha Khan');
+  });
+
+  it('keeps employees eligible when the matching overtime record is unposted', () => {
+    overtimeListService.fetchOvertimeList.and.returnValue(of([
+      {
+        id: 'overtime-unposted',
+        values: {
+          employee_code: 'EMP-001',
+          overtime_date: `${fixture.componentInstance.selectedMonth()}-01`,
+          flag: '0',
+        },
+      },
+    ]));
+
+    fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.employees()[0].flag).toBe('0');
+    expect(fixture.componentInstance.filteredEmployees().map((employee) => employee.EmployeeCode))
+      .toContain('EMP-001');
+    expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
+  });
+
+  it('keeps employees eligible when their overtime was posted in a different month', () => {
+    overtimeListService.fetchOvertimeList.and.returnValue(of([
+      {
+        id: 'overtime-previous-month',
+        values: {
+          employee_code: 'EMP-001',
+          overtime_date: '2026-09-30',
+          status: 'Pending',
+        },
+      },
+    ]));
+
+    fixture.componentInstance.onMonthChange('2026-10');
+    fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.employees()[0].flag).toBe('0');
+    expect(fixture.componentInstance.filteredEmployees().map((employee) => employee.EmployeeCode))
+      .toContain('EMP-001');
+    expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
+  });
+
+  it('does not hide an employee for an overtime record without a date', () => {
+    overtimeListService.fetchOvertimeList.and.returnValue(of([
+      { id: 'overtime-without-date', values: { employee_code: 'EMP-001', status: 'Pending' } },
+    ]));
+
+    fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.filteredEmployees().map((employee) => employee.EmployeeCode))
+      .toContain('EMP-001');
+  });
+
+  it('updates posted eligibility when the selected month changes', () => {
+    overtimeListService.fetchOvertimeList.and.returnValue(of([
+      {
+        id: 'overtime-october',
+        values: {
+          employee_code: 'EMP-001',
+          overtime_date: '2026-10-01',
+          status: 'Pending',
+        },
+      },
+    ]));
+
+    fixture.componentInstance.onMonthChange('2026-10');
+    fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.filteredEmployees()).toHaveSize(0);
+
+    fixture.componentInstance.onMonthChange('2026-11');
+    fixture.detectChanges();
+    expect(fixture.componentInstance.filteredEmployees().map((employee) => employee.EmployeeCode))
+      .toContain('EMP-001');
   });
 
   it('keeps a failed employee unposted and selected for retry', () => {

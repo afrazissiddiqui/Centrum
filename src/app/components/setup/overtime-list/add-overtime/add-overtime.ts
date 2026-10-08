@@ -21,7 +21,7 @@ interface OvertimeEmployee extends ApplicationFormRecord {
   overtimeStatus: 'Not Posted' | 'Approved';
   workingHours: string | null;
   shiftHours: string | null;
-  rangeOvertimeHours: string | null;
+  calculatedOvertimeHours: string | null;
 }
 
 @Component({
@@ -43,29 +43,47 @@ export class AddOvertimeComponent implements OnInit {
   readonly hoursLoading = signal(false);
   readonly posting = signal(false);
   readonly searchText = signal('');
-  readonly selectedDate = signal(this.localDateValue(new Date()));
-  readonly overtimeFromDate = signal(this.firstDayOfCurrentMonth());
-  readonly overtimeToDate = signal(this.todayDate());
+  readonly selectedDepartment = signal('');
+  readonly selectedMonth = signal(this.localDateValue(new Date()).slice(0, 7));
   readonly employees = signal<OvertimeEmployee[]>([]);
   readonly selectedEmployeeKeys = signal<ReadonlySet<string>>(new Set());
   private rosterRecords: EmployeeRosterListRecord[] = [];
   private workstations: WorkstationRecord[] = [];
-  private readonly rangeHoursCache = new Map<string, Array<{ date: string; hoursWorked: string }>>();
+  private overtimeRecords: OvertimeListRecord[] = [];
   private hoursRequestId = 0;
   private hoursSubscription: Subscription | null = null;
-  readonly filteredEmployees = computed(() => {
-    const query = this.searchText().trim().toLocaleLowerCase();
-    const eligibleEmployees = this.employees().filter((employee) =>
+  private readonly eligibleEmployees = computed(() =>
+    this.employees().filter((employee) =>
       employee.flag === '0' &&
       this.isYes(employee.detail?.hrSettings.attendanceShiftManagement) &&
       this.isYes(employee.detail?.remuneration.overTimeApplicable),
+    ),
+  );
+  readonly departments = computed(() => {
+    const departments = new Map<string, string>();
+    for (const employee of this.eligibleEmployees()) {
+      const department = employee.Department.trim();
+      if (department) {
+        const key = department.toLocaleLowerCase();
+        if (!departments.has(key)) {
+          departments.set(key, department);
+        }
+      }
+    }
+    return [...departments.values()].sort((left, right) => left.localeCompare(right));
+  });
+  readonly filteredEmployees = computed(() => {
+    const query = this.searchText().trim().toLocaleLowerCase();
+    const department = this.selectedDepartment().trim().toLocaleLowerCase();
+    const departmentEmployees = this.eligibleEmployees().filter((employee) =>
+      !department || employee.Department.trim().toLocaleLowerCase() === department,
     );
 
     if (!query) {
-      return eligibleEmployees;
+      return departmentEmployees;
     }
 
-    return eligibleEmployees.filter((employee) =>
+    return departmentEmployees.filter((employee) =>
       [employee.EmployeeCode, employee.EmployeeName, employee.Department, employee.Designation]
         .some((value) => value.toLocaleLowerCase().includes(query)),
     );
@@ -79,52 +97,29 @@ export class AddOvertimeComponent implements OnInit {
     this.searchText.set(value);
   }
 
-  onDateChange(value: string): void {
-    if (!this.isValidDate(value)) {
+  onDepartmentChange(value: string): void {
+    this.selectedDepartment.set(value);
+  }
+
+  onMonthChange(value: string): void {
+    if (!this.isValidMonth(value)) {
       return;
     }
-    this.selectedDate.set(value);
+    this.selectedMonth.set(value);
+    this.applyPostedEmployeeFlags(value);
     this.employees.update((employees) => employees.map((employee) => ({
       ...employee,
       workingHours: null,
-      shiftHours: this.shiftHoursForEmployee(employee, value, this.rosterRecords, this.workstations),
+      shiftHours: null,
+      calculatedOvertimeHours: null,
     })));
     this.loadMonthlyOvertime();
   }
 
-  onOvertimeFromDateChange(value: string): void {
-    this.overtimeFromDate.set(value);
-    this.resetRangeOvertime();
-  }
-
-  onOvertimeToDateChange(value: string): void {
-    this.overtimeToDate.set(value);
-    this.resetRangeOvertime();
-  }
-
-  setTodayDate(): void {
-    this.onDateChange(this.todayDate());
-  }
-
-  todayDate(): string {
-    return this.localDateValue(new Date());
-  }
-
-  overtimeRangeError(): string {
-    const fromDate = this.overtimeFromDate();
-    const toDate = this.overtimeToDate();
-    if (!this.isValidDate(fromDate) || !this.isValidDate(toDate)) {
-      return 'Select valid start and end dates to calculate range overtime.';
-    }
-    return fromDate > toDate ? 'The start date must be on or before the end date.' : '';
-  }
-
-  private firstDayOfCurrentMonth(): string {
-    const today = new Date();
-    return this.localDateValue(new Date(today.getFullYear(), today.getMonth(), 1));
-  }
-
   overtimeHours(employee: OvertimeEmployee): string {
+    if (employee.calculatedOvertimeHours !== null) {
+      return employee.calculatedOvertimeHours;
+    }
     const workingMinutes = this.durationToMinutes(employee.workingHours);
     const shiftMinutes = this.durationToMinutes(employee.shiftHours);
     if (workingMinutes === null || shiftMinutes === null) {
@@ -180,12 +175,14 @@ export class AddOvertimeComponent implements OnInit {
       return;
     }
 
+    const month = this.selectedMonth();
+    const overtimeDate = `${month}-01`;
     this.posting.set(true);
     forkJoin(employeesToPost.map((employee) =>
       this.overtimeListService.postOvertimeEmployee([{
         employee_code: employee.EmployeeCode,
         employee_name: employee.EmployeeName,
-        overtime_date: '2026-10-01',
+        overtime_date: overtimeDate,
         shift_id: '1',
         working_hours: 8,
         shift_hours: 8,
@@ -205,6 +202,15 @@ export class AddOvertimeComponent implements OnInit {
       const successfulKeys = new Set(
         results.filter((result) => result.success).map((result) => this.employeeKey(result.employee)),
       );
+      this.overtimeRecords = [
+        ...this.overtimeRecords,
+        ...results
+          .filter((result) => result.success)
+          .map(({ employee }) => ({
+            id: `local-${month}-${this.employeeKey(employee)}`,
+            values: { employee_code: employee.EmployeeCode, overtime_date: overtimeDate },
+          })),
+      ];
       this.employees.update((employees) => employees.map((employee) =>
         successfulKeys.has(this.employeeKey(employee))
           ? { ...employee, flag: '1', overtimeStatus: 'Approved' }
@@ -239,14 +245,30 @@ export class AddOvertimeComponent implements OnInit {
     forkJoin({
       employees: this.applicationFormService.fetchEmployeeProfiles(),
       overtimeRecords: this.overtimeListService.fetchOvertimeList(),
-      roster: this.applicationFormService.fetchEmployeeRosterList(),
-      workstations: this.workstationService.fetchWorkstations(),
+      roster: this.applicationFormService.fetchEmployeeRosterList().pipe(
+        catchError((error: unknown) => {
+          void this.alertService.error(
+            'Roster Data Unavailable',
+            formatApiErrorMessage(error, 'Employee roster data could not be loaded. Shift-hour calculations may be unavailable.'),
+          );
+          return of([] as EmployeeRosterListRecord[]);
+        }),
+      ),
+      workstations: this.workstationService.fetchWorkstations().pipe(
+        catchError((error: unknown) => {
+          void this.alertService.error(
+            'Shift Data Unavailable',
+            formatApiErrorMessage(error, 'Workstation data could not be loaded. Shift-hour calculations may be unavailable.'),
+          );
+          return of([] as WorkstationRecord[]);
+        }),
+      ),
     }).subscribe({
       next: ({ employees, overtimeRecords, roster, workstations }) => {
         this.rosterRecords = roster;
         this.workstations = workstations;
-        const postedEmployeeKeys = this.postedEmployeeKeys(overtimeRecords);
-        const date = this.selectedDate();
+        this.overtimeRecords = overtimeRecords;
+        const postedEmployeeKeys = this.postedEmployeeKeys(this.overtimeRecords, this.selectedMonth());
         this.employees.set(employees.map((employee) => {
           const isPosted = postedEmployeeKeys.has(employee.EmployeeCode) ||
             (!!employee.apiId && postedEmployeeKeys.has(employee.apiId));
@@ -255,8 +277,8 @@ export class AddOvertimeComponent implements OnInit {
             flag: isPosted ? '1' : '0',
             overtimeStatus: isPosted ? 'Approved' : 'Not Posted',
             workingHours: null,
-            shiftHours: this.shiftHoursForEmployee(employee, date, roster, workstations),
-            rangeOvertimeHours: null,
+            shiftHours: null,
+            calculatedOvertimeHours: null,
           };
         }));
         this.loading.set(false);
@@ -273,21 +295,26 @@ export class AddOvertimeComponent implements OnInit {
     });
   }
 
+  private applyPostedEmployeeFlags(month: string): void {
+    const postedEmployeeKeys = this.postedEmployeeKeys(this.overtimeRecords, month);
+    this.employees.update((employees) => employees.map((employee) => {
+      const isPosted = postedEmployeeKeys.has(employee.EmployeeCode) ||
+        (!!employee.apiId && postedEmployeeKeys.has(employee.apiId));
+      return {
+        ...employee,
+        flag: isPosted ? '1' : '0',
+        overtimeStatus: isPosted ? 'Approved' : 'Not Posted',
+      };
+    }));
+  }
+
   private loadMonthlyOvertime(): void {
     this.hoursSubscription?.unsubscribe();
     const requestId = ++this.hoursRequestId;
-    const date = this.selectedDate();
-    const fromDate = this.overtimeFromDate();
-    const toDate = this.overtimeToDate();
-    if (!this.isValidDate(fromDate) || !this.isValidDate(toDate) || fromDate > toDate) {
-      this.hoursLoading.set(false);
-      this.employees.update((employees) => employees.map((employee) => ({
-        ...employee,
-        rangeOvertimeHours: null,
-      })));
-      return;
-    }
-
+    const month = this.selectedMonth();
+    const [year, monthNumber] = month.split('-').map(Number);
+    const fromDate = `${month}-01`;
+    const toDate = this.localDateValue(new Date(year, monthNumber, 0));
     const employees = this.employees().filter((employee) =>
       employee.flag === '0' &&
       this.isYes(employee.detail?.hrSettings.attendanceShiftManagement) &&
@@ -302,35 +329,20 @@ export class AddOvertimeComponent implements OnInit {
     this.hoursSubscription = from(employees).pipe(
       mergeMap((employee) => {
         const legacyCode = employee.detail?.loginDetails?.legacyCode || employee.ExtEmpNo || '';
-        const cacheKey = `${fromDate}:${toDate}:${legacyCode}`;
-        const cached = this.rangeHoursCache.get(cacheKey);
-        const hoursByDate$ = cached !== undefined
-          ? of(cached)
-          : this.attendanceService.fetchCalculatedWorkingHoursByDate(
-            { mode: 'dateRange', fromDate, toDate },
-            legacyCode,
-          ).pipe(
-            map((hoursByDate) => {
-              this.rangeHoursCache.set(cacheKey, hoursByDate);
-              return hoursByDate;
-            }),
-            catchError(() => of(null)),
-          );
-        return hoursByDate$.pipe(
-          mergeMap((hoursByDate) => {
-            const selectedDateHours = hoursByDate?.find((item) => item.date === date)?.hoursWorked;
-            const selectedDayHours$ =
-              hoursByDate !== null && date >= fromDate && date <= toDate
-                ? of(selectedDateHours ?? null)
-                : this.attendanceService.fetchCalculatedWorkingHours({ mode: 'date', date }, legacyCode);
-            return selectedDayHours$.pipe(map((workingHours) => ({
-              employee,
-              workingHours,
-              rangeOvertimeHours: hoursByDate
-                ? this.calculateOvertimeInRange(employee, hoursByDate, fromDate, toDate)
-                : null,
-            })));
-          }),
+        return this.attendanceService.fetchCalculatedWorkingHoursByDate(
+          { mode: 'dateRange', fromDate, toDate },
+          legacyCode,
+        ).pipe(
+          map((hoursByDate) => ({
+            employee,
+            ...this.calculateMonthlyHours(employee, hoursByDate, fromDate, toDate),
+          })),
+          catchError(() => of({
+            employee,
+            workingHours: null,
+            shiftHours: null,
+            calculatedOvertimeHours: null,
+          })),
         );
       }, 6),
       finalize(() => {
@@ -338,71 +350,87 @@ export class AddOvertimeComponent implements OnInit {
           this.hoursLoading.set(false);
         }
       }),
-    ).subscribe(({ employee, workingHours, rangeOvertimeHours }) => {
-      if (
-        requestId !== this.hoursRequestId ||
-        date !== this.selectedDate() ||
-        fromDate !== this.overtimeFromDate() ||
-        toDate !== this.overtimeToDate()
-      ) {
+    ).subscribe(({ employee, workingHours, shiftHours, calculatedOvertimeHours }) => {
+      if (requestId !== this.hoursRequestId || month !== this.selectedMonth()) {
         return;
       }
       const key = this.employeeKey(employee);
       this.employees.update((current) => current.map((item) =>
         this.employeeKey(item) === key
-          ? {
-              ...item,
-              workingHours,
-              rangeOvertimeHours: rangeOvertimeHours === null
-                ? null
-                : this.formatDuration(rangeOvertimeHours),
-            }
+          ? { ...item, workingHours, shiftHours, calculatedOvertimeHours }
           : item,
       ));
     });
   }
 
-  private resetRangeOvertime(): void {
-    this.employees.update((employees) => employees.map((employee) => ({
-      ...employee,
-      rangeOvertimeHours: null,
-    })));
-    this.loadMonthlyOvertime();
-  }
-
-  private calculateOvertimeInRange(
+  private calculateMonthlyHours(
     employee: OvertimeEmployee,
     hoursByDate: Array<{ date: string; hoursWorked: string }>,
     fromDate: string,
     toDate: string,
-  ): number {
+  ): Pick<OvertimeEmployee, 'workingHours' | 'shiftHours' | 'calculatedOvertimeHours'> {
     const dailyHours = new Map(hoursByDate.map((item) => [item.date, item.hoursWorked]));
+    let totalWorkingMinutes = 0;
+    let totalShiftMinutes = 0;
     let totalOvertimeMinutes = 0;
+    let hasWorkingHours = false;
+    let hasShiftHours = false;
+
     for (const [date, hoursWorked] of dailyHours) {
       if (date < fromDate || date > toDate) {
         continue;
       }
       const workedMinutes = this.durationToMinutes(hoursWorked);
-      if (workedMinutes === null || workedMinutes === 0) {
+      if (workedMinutes === null) {
         continue;
       }
-      const shiftHours = this.shiftHoursForEmployee(employee, date, this.rosterRecords, this.workstations);
-      const shiftMinutes = this.durationToMinutes(shiftHours);
+      hasWorkingHours = true;
+      totalWorkingMinutes += workedMinutes;
+
+      const shiftMinutes = this.durationToMinutes(
+        this.shiftHoursForEmployee(employee, date, this.rosterRecords, this.workstations),
+      );
       if (shiftMinutes === null) {
         continue;
       }
+      hasShiftHours = true;
+      totalShiftMinutes += shiftMinutes;
       totalOvertimeMinutes += Math.max(0, workedMinutes - shiftMinutes);
     }
-    return totalOvertimeMinutes;
+
+    return {
+      workingHours: hasWorkingHours ? this.formatDuration(totalWorkingMinutes) : null,
+      shiftHours: hasShiftHours ? this.formatDuration(totalShiftMinutes) : null,
+      calculatedOvertimeHours: hasShiftHours ? this.formatDuration(totalOvertimeMinutes) : null,
+    };
   }
 
-  private postedEmployeeKeys(records: OvertimeListRecord[]): Set<string> {
+  private postedEmployeeKeys(records: OvertimeListRecord[], month: string): Set<string> {
     const keys = new Set<string>();
     for (const record of records) {
       const values = record.values;
+      const flag = Object.entries(values).find(([key]) =>
+        key.toLocaleLowerCase().replace(/[^a-z]/g, '') === 'flag',
+      )?.[1];
+      if (flag === false || String(flag ?? '').trim() === '0') {
+        continue;
+      }
       const employeeKey = values['employeeId'] ?? values['employee_id'] ??
         values['employeeCode'] ?? values['employee_code'] ?? values['EmployeeCode'];
-      if (employeeKey !== undefined && employeeKey !== null && String(employeeKey).trim()) {
+      const overtimeDate = Object.entries(values).find(([key]) =>
+        ['overtimedate', 'otdate', 'date'].includes(key.toLocaleLowerCase().replace(/[^a-z]/g, '')),
+      )?.[1];
+      const overtimeMonth = overtimeDate instanceof Date
+        ? `${overtimeDate.getFullYear()}-${String(overtimeDate.getMonth() + 1).padStart(2, '0')}`
+        : typeof overtimeDate === 'string'
+          ? overtimeDate.trim().match(/^\d{4}-\d{2}/)?.[0]
+          : undefined;
+      if (
+        employeeKey !== undefined &&
+        employeeKey !== null &&
+        String(employeeKey).trim() &&
+        overtimeMonth === month
+      ) {
         keys.add(String(employeeKey).trim());
       }
     }
@@ -463,12 +491,13 @@ export class AddOvertimeComponent implements OnInit {
     return `${year}-${month}-${day}`;
   }
 
-  private isValidDate(value: string): boolean {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+  private isValidMonth(value: string): boolean {
+    const match = value.match(/^(\d{4})-(\d{2})$/);
+    if (!match) {
       return false;
     }
-    const date = new Date(`${value}T00:00:00`);
-    return !Number.isNaN(date.getTime()) && this.localDateValue(date) === value;
+    const month = Number(match[2]);
+    return month >= 1 && month <= 12;
   }
 
   private timeInMinutes(value: string): number | null {
