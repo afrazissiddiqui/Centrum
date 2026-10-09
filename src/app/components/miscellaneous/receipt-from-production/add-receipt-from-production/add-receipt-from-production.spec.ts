@@ -218,6 +218,17 @@ describe('AddReceiptFromProduction', () => {
     expect(payload.warehouse).toBe('FSD-WH03');
   });
 
+  it('includes the machine name in the receipt payload', () => {
+    component.headerForm.update((header) => ({
+      ...header,
+      machineName: 'Toll Flint - Preform 45 Gram',
+    }));
+
+    const payload = buildCreateReceiptFromProductionPayload(component.headerForm(), component.contentLines());
+
+    expect(payload.U_MachineName).toBe('Toll Flint - Preform 45 Gram');
+  });
+
   it('normalizes unregistered Pass UR tax status values to UR in the payload', () => {
     for (const documentTaxStatus of ['UR', 'Pass UR', 'UnRegistered Pass UR']) {
       component.headerForm.update((header) => ({ ...header, documentTaxStatus }));

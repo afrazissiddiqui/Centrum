@@ -114,6 +114,7 @@ export interface CreateReceiptFromProductionPayload {
   branch: string;
   expiryDate: string;
   U_MachineID: string;
+  U_MachineName: string;
   U_Shift: string;
   U_MoldNo: string;
   U_Cavity_NUM: string;
@@ -281,6 +282,7 @@ export function buildCreateReceiptFromProductionPayload(
     branch: normalizeBranchCode(header.branchId ?? ''),
     expiryDate: ((line?.expiryDate ?? '') as string).trim(),
     U_MachineID: (header.machineId ?? '').trim(),
+    U_MachineName: (header.machineName ?? '').trim(),
     U_Shift: normalizeShift(header.shift),
     U_MoldNo: (header.moldNumber ?? '').trim(),
     U_Cavity_NUM: (header.cavityNumber ?? '').trim(),
