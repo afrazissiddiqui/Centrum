@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { of } from 'rxjs';
+import { ApplicationFormRecord, ApplicationFormService } from '../../../services/application-form.service';
 import { AlertService } from '../../../services/alert.service';
 import { OvertimeListRecord, OvertimeListService } from '../../../services/overtime-list.service';
 import { OvertimeListComponent } from './overtime-list';
@@ -8,6 +9,7 @@ import { OvertimeListComponent } from './overtime-list';
 describe('OvertimeListComponent', () => {
   let fixture: ComponentFixture<OvertimeListComponent>;
   let service: jasmine.SpyObj<OvertimeListService>;
+  let applicationFormService: jasmine.SpyObj<ApplicationFormService>;
   let router: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
@@ -19,14 +21,36 @@ describe('OvertimeListComponent', () => {
           employee_code: 'EMP-001',
           employee_name: 'Ayesha Khan',
           overtime_date: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`,
+          overtime_rate: 0,
         },
       },
     ]));
+    applicationFormService = jasmine.createSpyObj<ApplicationFormService>(
+      'ApplicationFormService',
+      ['fetchEmployeeProfiles', 'fetchEmployeeProfileDetailsInBatches'],
+    );
+    applicationFormService.fetchEmployeeProfiles.and.returnValue(of([{
+      EmployeeCode: 'EMP-001',
+      EmployeeName: 'Ayesha Khan',
+      Department: 'Finance',
+      EmployeeNature: '',
+      Designation: 'Analyst',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: '',
+      detail: {
+        remuneration: { basicSalary: '30,000' },
+      } as ApplicationFormRecord['detail'],
+    }]));
+    applicationFormService.fetchEmployeeProfileDetailsInBatches.and.returnValue(of([]));
     router = jasmine.createSpyObj<Router>('Router', ['navigate']);
     await TestBed.configureTestingModule({
       imports: [OvertimeListComponent],
       providers: [
         { provide: OvertimeListService, useValue: service },
+        { provide: ApplicationFormService, useValue: applicationFormService },
         { provide: AlertService, useValue: { error: jasmine.createSpy('error') } },
         { provide: Router, useValue: router },
       ],
@@ -38,11 +62,35 @@ describe('OvertimeListComponent', () => {
 
   it('loads and displays rows returned by the overtime list API', () => {
     expect(service.fetchOvertimeList).toHaveBeenCalled();
+    expect(applicationFormService.fetchEmployeeProfiles).toHaveBeenCalled();
     expect(fixture.componentInstance.dateFilterMode()).toBe('all');
     expect(fixture.nativeElement.textContent).toContain('Overtime (1)');
     expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
     expect(fixture.nativeElement.textContent).toContain('Monthly Overtime');
     expect(fixture.componentInstance.columns().some((column) => column.key === 'monthlyOvertime')).toBe(true);
+    expect(fixture.componentInstance.columns().some((column) =>
+      column.label === 'Overtime Rate' && column.key === 'overtime_rate',
+    )).toBe(true);
+    expect(fixture.componentInstance.formatRecordCell('overtime_rate', fixture.componentInstance.records()[0]))
+      .toBe('123.29');
+  });
+
+  it('recalculates a previously stored overtime rate from the employee gross salary', () => {
+    service.fetchOvertimeList.and.returnValue(of([{
+      id: 'old-rate',
+      values: {
+        employee_code: 'EMP-001',
+        employee_name: 'Ayesha Khan',
+        overtime_rate: 1000,
+      },
+    }]));
+
+    fixture.componentInstance.loadRecords();
+
+    expect(fixture.componentInstance.formatRecordCell(
+      'overtime_rate',
+      fixture.componentInstance.records()[0],
+    )).toBe('123.29');
   });
 
   it('shows the clicked overtime line in the side card', () => {

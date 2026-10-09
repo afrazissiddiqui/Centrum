@@ -25,7 +25,7 @@ describe('AddOvertimeComponent', () => {
   beforeEach(async () => {
     applicationFormService = jasmine.createSpyObj<ApplicationFormService>(
       'ApplicationFormService',
-      ['fetchEmployeeProfiles', 'fetchEmployeeRosterList'],
+      ['fetchEmployeeProfiles', 'fetchEmployeeProfileDetailsInBatches', 'fetchEmployeeRosterList'],
     );
     applicationFormService.fetchEmployeeProfiles.and.returnValue(of([
       {
@@ -42,7 +42,7 @@ describe('AddOvertimeComponent', () => {
         ExtEmpNo: '4023',
         detail: {
           hrSettings: { attendanceShiftManagement: 'Yes' },
-          remuneration: { basicSalary: '36500', overTimeApplicable: 'Yes' },
+          remuneration: { overTimeApplicable: 'Yes', basicSalary: '30,000' },
         } as ApplicationFormDetail,
       },
       {
@@ -78,6 +78,7 @@ describe('AddOvertimeComponent', () => {
         } as ApplicationFormDetail,
       },
     ]));
+    applicationFormService.fetchEmployeeProfileDetailsInBatches.and.returnValue(of([]));
     applicationFormService.fetchEmployeeRosterList.and.returnValue(of([]));
     employeeShiftAllocationService = jasmine.createSpyObj<EmployeeShiftAllocationService>(
       'EmployeeShiftAllocationService',
@@ -337,7 +338,7 @@ describe('AddOvertimeComponent', () => {
       employee_code: 'EMP-001',
       employee_name: 'Ayesha Khan',
       overtime_date: `${fixture.componentInstance.selectedMonth()}-01`,
-      overtime_rate: 150,
+      overtime_rate: 123.29,
       flag: '1',
     }));
     expect(fixture.componentInstance.employees()[0].flag).toBe('1');
@@ -345,6 +346,30 @@ describe('AddOvertimeComponent', () => {
     expect(fixture.componentInstance.filteredEmployees()).toHaveSize(0);
     expect(fixture.nativeElement.textContent).not.toContain('Ayesha Khan');
     expect(fixture.nativeElement.textContent).not.toContain('flag');
+  });
+
+  it('does not post an employee when gross salary is missing', () => {
+    const employee = fixture.componentInstance.employees()[0];
+    fixture.componentInstance.employees.set([{
+      ...employee,
+      detail: {
+        ...employee.detail,
+        remuneration: { ...employee.detail?.remuneration, basicSalary: '' } as ApplicationFormDetail['remuneration'],
+      } as ApplicationFormDetail,
+    }]);
+    fixture.componentInstance.selectedEmployeeKeys.set(new Set([employee.EmployeeCode]));
+    applicationFormService.fetchEmployeeProfileDetailsInBatches.and.returnValue(of([{
+      ...employee,
+      detail: {
+        ...employee.detail,
+        remuneration: { ...employee.detail?.remuneration, basicSalary: '' },
+      } as ApplicationFormDetail,
+    }]));
+
+    fixture.componentInstance.postSelectedEmployees();
+
+    expect(overtimeListService.postOvertimeEmployee).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.employees()[0].flag).toBe('0');
   });
 
   it('does not show employees already present in the overtime list', () => {

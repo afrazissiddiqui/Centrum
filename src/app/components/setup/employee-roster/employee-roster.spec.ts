@@ -3,6 +3,7 @@ import {
   findUnassignedEmployees,
   rosterDayIndexForMonth,
   rosterPeriodForDate,
+  rosterShiftInitial,
   rosterShiftsForEmployeeMonth,
   rosterShiftOptions,
 } from './employee-roster';
@@ -16,6 +17,20 @@ describe('rosterShiftOptions', () => {
     ];
 
     expect(rosterShiftOptions(workstations).slice(0, 2).map((option) => option.code)).toEqual(['ME', 'MW']);
+  });
+});
+
+describe('rosterShiftInitial', () => {
+  const workstations: WorkstationRecord[] = [
+    { id: 1, name: 'Morning East', code: 'ME', officeInTime: '', officeOutTime: '', inGraceMinutes: 0, outGraceMinutes: 0, shift: 'M', description: '', status: 1 },
+    { id: 2, name: 'Evening West', code: 'EW', officeInTime: '', officeOutTime: '', inGraceMinutes: 0, outGraceMinutes: 0, shift: 'E', description: '', status: 1 },
+  ];
+
+  it('shows the first letter of the assigned workstation and preserves special roster values', () => {
+    expect(rosterShiftInitial('ME', workstations)).toBe('M');
+    expect(rosterShiftInitial('E', workstations)).toBe('E');
+    expect(rosterShiftInitial('OFF', workstations)).toBe('OFF');
+    expect(rosterShiftInitial('HOL', workstations)).toBe('HOL');
   });
 });
 

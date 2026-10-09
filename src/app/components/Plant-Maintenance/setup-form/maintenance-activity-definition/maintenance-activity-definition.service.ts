@@ -61,6 +61,7 @@ export interface MaintenanceActivityDefinitionInput {
 export interface MaintenanceActivityDefinitionPayload {
   machine_id: string;
   machine_name: string;
+  U_MachineName: string;
   machine_type: string;
   location?: string;
   maintenance_nature: string;
@@ -109,6 +110,7 @@ export function buildMaintenanceActivityPayload(
   return {
     machine_id: entry.machineId.trim(),
     machine_name: entry.machineName.trim(),
+    U_MachineName: entry.machineName.trim(),
     machine_type: (entry.machineType ?? '').trim(),
     location: (entry.location ?? '').trim(),
     maintenance_nature: entry.maintenanceNature.trim(),

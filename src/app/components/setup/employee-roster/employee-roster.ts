@@ -137,6 +137,24 @@ export function rosterShiftOptions(workstations: WorkstationRecord[]) {
   ];
 }
 
+export function rosterShiftInitial(shift: ShiftCode, workstations: WorkstationRecord[]): string {
+  const normalizedShift = shift.trim();
+  if (!normalizedShift || normalizedShift === '+' || ['OFF', 'HOL', 'L'].includes(normalizedShift.toUpperCase())) {
+    return normalizedShift;
+  }
+
+  const lowerShift = normalizedShift.toLowerCase();
+  const workstation = workstations.find((item) =>
+    [item.code, String(item.id), item.shift, item.name, item.description]
+      .some((value) => value.trim().toLowerCase() === lowerShift),
+  );
+  const assignedShift = workstation?.name.trim() ||
+    workstation?.shift.trim() ||
+    workstation?.description.trim() ||
+    normalizedShift;
+  return [...assignedShift][0]?.toLocaleUpperCase() ?? normalizedShift;
+}
+
 @Component({
   selector: 'app-employee-roster',
   imports: [CommonModule, FormsModule, PageToolbarComponent],
@@ -656,6 +674,10 @@ export class EmployeeRosterComponent implements OnInit {
     );
     const label = workstation?.shift.trim() || shift;
     return { M: 'Morning', E: 'Evening', N: 'Night', OFF: 'Day Off', L: 'Leave', HOL: 'Holiday', '+': 'Unassigned' }[label] || label;
+  }
+
+  shiftInitial(shift: ShiftCode): string {
+    return rosterShiftInitial(shift, this.workstationService.workstations());
   }
 
   shiftDescription(shift: string): string {

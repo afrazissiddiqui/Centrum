@@ -5,7 +5,24 @@ import {
   computeGrossSalaryBreakdown,
   computeMedicalAllowance,
   computeNetPayable,
+  computeOvertimeAmount,
+  computeOvertimeRate,
 } from '../../payroll-setup/payroll-setup.service';
+
+describe('computeOvertimeRate', () => {
+  it('calculates the hourly rate from gross salary using the annualized formula', () => {
+    expect(computeOvertimeRate(30000)).toBe(123.29);
+  });
+
+  it('returns zero for non-positive gross salary', () => {
+    expect(computeOvertimeRate(0)).toBe(0);
+    expect(computeOvertimeRate(-30000)).toBe(0);
+  });
+
+  it('calculates overtime pay from the hourly rate and overtime hours', () => {
+    expect(computeOvertimeAmount(computeOvertimeRate(30000), 5)).toBe(616.45);
+  });
+});
 
 describe('computeGrossSalaryBreakdown', () => {
   it('splits hybrid salary between cash and bank based on percentages', () => {

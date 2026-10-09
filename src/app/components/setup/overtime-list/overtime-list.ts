@@ -2,9 +2,17 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { forkJoin, last, of } from 'rxjs';
+import { catchError, map, switchMap } from 'rxjs/operators';
+import {
+  ApplicationFormRecord,
+  ApplicationFormService,
+  canonicalizeEmployeeCodeValue,
+} from '../../../services/application-form.service';
 import { AlertService } from '../../../services/alert.service';
 import { OvertimeListRecord, OvertimeListService } from '../../../services/overtime-list.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
+import { computeOvertimeRate } from '../../HR-Portal/payroll-master/payroll-setup/payroll-setup.service';
 import {
   buildPaginationFooterItems,
   paginationItemTrack,
@@ -32,6 +40,7 @@ function toLocalDateInputValue(date: Date): string {
 })
 export class OvertimeListComponent implements OnInit {
   private readonly overtimeListService = inject(OvertimeListService);
+  private readonly applicationFormService = inject(ApplicationFormService);
   private readonly alertService = inject(AlertService);
   private readonly router = inject(Router);
 
@@ -137,10 +146,52 @@ export class OvertimeListComponent implements OnInit {
 
   loadRecords(): void {
     this.loading.set(true);
-    this.overtimeListService.fetchOvertimeList().subscribe({
-      next: (records) => {
-        this.records.set(records);
-        this.columns.set(this.createColumns(records));
+    forkJoin({
+      records: this.overtimeListService.fetchOvertimeList(),
+      employees: this.applicationFormService.fetchEmployeeProfiles().pipe(
+        catchError((error: unknown) => {
+          void this.alertService.error(
+            'Salary Data Unavailable',
+            formatApiErrorMessage(error, 'Employee gross salaries could not be loaded to calculate overtime rates.'),
+          );
+          return of([] as ApplicationFormRecord[]);
+        }),
+      ),
+    }).pipe(
+      switchMap(({ records, employees }) => {
+        const employeesNeedingDetails = this.employeesNeedingGrossSalary(records, employees);
+        if (!employeesNeedingDetails.length) {
+          return of({ records, employees });
+        }
+        return this.applicationFormService
+          .fetchEmployeeProfileDetailsInBatches(employeesNeedingDetails, employeesNeedingDetails.length)
+          .pipe(
+            last(),
+            map((details) => ({ records, employees: [...employees, ...details] })),
+          );
+      }),
+    ).subscribe({
+      next: ({ records, employees }) => {
+        const salaryByEmployeeCode = this.grossSalaryByEmployeeCode(employees);
+        const recordsWithRates = records.map((record) => {
+          const employeeCode = this.normalizeEmployeeIdentifier(
+            this.employeeValue(record, ['employeecode', 'employeeid']),
+          );
+          const grossSalary = salaryByEmployeeCode.get(employeeCode);
+          if (grossSalary === undefined) {
+            return record;
+          }
+
+          const rateKey = Object.keys(record.values).find(
+            (key) => this.normalizedFieldName(key) === 'overtimerate',
+          ) ?? 'overtime_rate';
+          return {
+            ...record,
+            values: { ...record.values, [rateKey]: computeOvertimeRate(grossSalary) },
+          };
+        });
+        this.records.set(recordsWithRates);
+        this.columns.set(this.createColumns(recordsWithRates));
         this.currentPage.set(1);
         this.loading.set(false);
       },
@@ -154,6 +205,72 @@ export class OvertimeListComponent implements OnInit {
         );
       },
     });
+  }
+
+  private employeesNeedingGrossSalary(
+    records: OvertimeListRecord[],
+    employees: ApplicationFormRecord[],
+  ): ApplicationFormRecord[] {
+    const neededEmployeeKeys = new Set(
+      records
+        .filter((record) => {
+          const rate = Number(this.fieldValue(record, ['overtimerate']));
+          return !Number.isFinite(rate) || rate <= 0;
+        })
+        .map((record) => this.normalizeEmployeeIdentifier(
+          this.employeeValue(record, ['employeecode', 'employeeid']),
+        ))
+        .filter(Boolean),
+    );
+    const selectedProfiles = new Map<string, ApplicationFormRecord>();
+    for (const employee of employees) {
+      const identifiers = [
+        employee.EmployeeCode,
+        employee.apiId ?? '',
+        employee.userId ?? '',
+        employee.ExtEmpNo ?? '',
+        employee.detail?.loginDetails?.employeeCode ?? '',
+        employee.detail?.loginDetails?.userId ?? '',
+      ].map((identifier) => this.normalizeEmployeeIdentifier(identifier));
+      const isNeeded = identifiers.some((identifier) => neededEmployeeKeys.has(identifier));
+      const grossSalary = Number(employee.detail?.remuneration?.basicSalary.replace(/,/g, '').trim());
+      if (isNeeded && (!Number.isFinite(grossSalary) || grossSalary <= 0) && employee.apiId) {
+        selectedProfiles.set(employee.apiId, employee);
+      }
+    }
+    return [...selectedProfiles.values()];
+  }
+
+  private grossSalaryByEmployeeCode(employees: ApplicationFormRecord[]): Map<string, number> {
+    const salaries = new Map<string, number>();
+    for (const employee of employees) {
+      const grossSalary = Number(
+        employee.detail?.remuneration?.basicSalary.replace(/,/g, '').trim(),
+      );
+      if (Number.isFinite(grossSalary) && grossSalary > 0) {
+        const identifiers = [
+          employee.EmployeeCode,
+          employee.apiId ?? '',
+          employee.userId ?? '',
+          employee.ExtEmpNo ?? '',
+          employee.detail?.loginDetails?.employeeCode ?? '',
+          employee.detail?.loginDetails?.userId ?? '',
+        ];
+        for (const identifier of identifiers) {
+          const key = this.normalizeEmployeeIdentifier(identifier);
+          if (key) {
+            salaries.set(key, grossSalary);
+          }
+        }
+      }
+    }
+    return salaries;
+  }
+
+  private normalizeEmployeeIdentifier(value: string): string {
+    const canonical = canonicalizeEmployeeCodeValue(value).toLocaleLowerCase();
+    const employeeCode = canonical.match(/^emp[-\s]?0*(\d+)$/i);
+    return employeeCode ? `emp-${Number(employeeCode[1])}` : canonical;
   }
 
   onSearchChange(value: string): void {
@@ -309,16 +426,25 @@ export class OvertimeListComponent implements OnInit {
 
     const columns = Array.from(keys, (key) => ({
       key,
-      label: this.formatColumnLabel(key),
+      label: this.normalizedFieldName(key) === 'overtimerate'
+        ? 'Overtime Rate'
+        : this.formatColumnLabel(key),
       visible: true,
     }));
+    if (!columns.some((column) => this.normalizedFieldName(column.key) === 'overtimerate')) {
+      columns.push({ key: 'overtime_rate', label: 'Overtime Rate', visible: true });
+    }
     columns.push({ key: 'monthlyOvertime', label: 'Monthly Overtime', visible: true });
     return columns;
   }
 
   private isHiddenListField(key: string): boolean {
-    const normalizedKey = key.toLowerCase().replace(/[^a-z]/g, '');
+    const normalizedKey = this.normalizedFieldName(key);
     return normalizedKey === 'flag' || normalizedKey === 'id';
+  }
+
+  private normalizedFieldName(key: string): string {
+    return key.toLowerCase().replace(/[^a-z]/g, '');
   }
 
   private overtimeDateValue(record: OvertimeListRecord): string {

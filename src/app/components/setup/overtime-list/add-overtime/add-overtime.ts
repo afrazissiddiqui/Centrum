@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { forkJoin, from, of, Subscription } from 'rxjs';
+import { forkJoin, from, last, of, Subscription } from 'rxjs';
 import { catchError, finalize, map, mergeMap } from 'rxjs/operators';
 import { AttendanceManagementService } from '../../../../services/attendance-management.service';
 import { AlertService } from '../../../../services/alert.service';
@@ -19,6 +19,7 @@ import {
 import { OvertimeListRecord, OvertimeListService } from '../../../../services/overtime-list.service';
 import { WorkstationRecord, WorkstationService } from '../../../../services/workstation.service';
 import { formatApiErrorMessage } from '../../../../utils/api-error.util';
+import { computeOvertimeRate } from '../../../HR-Portal/payroll-master/payroll-setup/payroll-setup.service';
 
 interface OvertimeEmployee extends ApplicationFormRecord {
   flag: '0' | '1';
@@ -184,8 +185,63 @@ export class AddOvertimeComponent implements OnInit {
     const month = this.selectedMonth();
     const overtimeDate = `${month}-01`;
     this.posting.set(true);
-    forkJoin(employeesToPost.map((employee) =>
-      this.overtimeListService.postOvertimeEmployee([{
+    const employeesMissingSalary = employeesToPost.filter((employee) =>
+      this.overtimeRate(employee) === null && !!employee.apiId,
+    );
+    const profileDetails$ = employeesMissingSalary.length
+      ? this.applicationFormService
+          .fetchEmployeeProfileDetailsInBatches(employeesMissingSalary, employeesMissingSalary.length)
+          .pipe(last())
+      : of([]);
+    profileDetails$.subscribe({
+      next: (details) => {
+        const employeesWithDetails = employeesToPost.map((employee) => {
+          const detailRecord = details.find((record) =>
+            this.normalizeEmployeeKey(record.EmployeeCode) === this.normalizeEmployeeKey(employee.EmployeeCode),
+          );
+          if (!detailRecord?.detail) {
+            return employee;
+          }
+          return {
+            ...employee,
+            detail: {
+              ...employee.detail,
+              ...detailRecord.detail,
+              remuneration: {
+                ...employee.detail?.remuneration,
+                ...detailRecord.detail.remuneration,
+              },
+            },
+          };
+        });
+        this.submitEmployees(employeesWithDetails, month, overtimeDate);
+      },
+      error: (error: unknown) => {
+        this.posting.set(false);
+        void this.alertService.error(
+          'Salary Data Unavailable',
+          formatApiErrorMessage(error, 'Employee gross salaries could not be loaded to calculate overtime rates.'),
+        );
+      },
+    });
+  }
+
+  private submitEmployees(
+    employeesToPost: OvertimeEmployee[],
+    month: string,
+    overtimeDate: string,
+  ): void {
+    forkJoin(employeesToPost.map((employee) => {
+      const overtimeRate = this.overtimeRate(employee);
+      if (overtimeRate === null) {
+        return of({
+          employee,
+          success: false as const,
+          errorMessage: 'Gross salary is unavailable; overtime rate could not be calculated.',
+        });
+      }
+
+      return this.overtimeListService.postOvertimeEmployee([{
         employee_code: employee.EmployeeCode,
         employee_name: employee.EmployeeName,
         overtime_date: overtimeDate,
@@ -193,7 +249,7 @@ export class AddOvertimeComponent implements OnInit {
         working_hours: 8,
         shift_hours: 8,
         overtime_hours: 0,
-        overtime_rate: this.overtimeRate(employee),
+        overtime_rate: overtimeRate,
         exceptional_ot: 0,
         flag: '1',
       }]).pipe(
@@ -203,8 +259,8 @@ export class AddOvertimeComponent implements OnInit {
           success: false as const,
           errorMessage: formatApiErrorMessage(error, 'Post failed.'),
         })),
-      ),
-    )).subscribe((results) => {
+      );
+    })).subscribe((results) => {
       const successfulKeys = new Set(
         results.filter((result) => result.success).map((result) => this.employeeKey(result.employee)),
       );
@@ -214,7 +270,13 @@ export class AddOvertimeComponent implements OnInit {
           .filter((result) => result.success)
           .map(({ employee }) => ({
             id: `local-${month}-${this.employeeKey(employee)}`,
-            values: { employee_code: employee.EmployeeCode, overtime_date: overtimeDate },
+            values: {
+              employee_code: employee.EmployeeCode,
+              employee_name: employee.EmployeeName,
+              overtime_date: overtimeDate,
+              overtime_rate: this.overtimeRate(employee),
+              flag: '1',
+            },
           })),
       ];
       this.employees.update((employees) => employees.map((employee) =>
@@ -244,14 +306,6 @@ export class AddOvertimeComponent implements OnInit {
         `${successfulKeys.size} employee(s) posted and marked Approved.`,
       );
     });
-  }
-
-  private overtimeRate(employee: OvertimeEmployee): number {
-    const grossSalary = Number(employee.detail?.remuneration.basicSalary);
-    if (!Number.isFinite(grossSalary) || grossSalary <= 0) {
-      return 0;
-    }
-    return ((grossSalary * 12) / 365) / 8;
   }
 
   private loadEmployees(): void {
@@ -330,6 +384,14 @@ export class AddOvertimeComponent implements OnInit {
         overtimeStatus: isPosted ? 'Approved' : 'Not Posted',
       };
     }));
+  }
+
+  private overtimeRate(employee: OvertimeEmployee): number | null {
+    const basicSalary = employee.detail?.remuneration?.basicSalary ?? '';
+    const grossSalary = Number(basicSalary.replace(/,/g, '').trim());
+    return Number.isFinite(grossSalary) && grossSalary > 0
+      ? computeOvertimeRate(grossSalary)
+      : null;
   }
 
   private loadMonthlyOvertime(): void {
