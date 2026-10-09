@@ -11,6 +11,11 @@ export type GatePassModule = 'igp' | 'ogp' | 'agp';
 export interface BaseDocLinePayload {
   itemCode: string;
   itemName: string;
+  vendor?: string;
+  department?: string;
+  accountCode?: string;
+  taxCode?: string;
+  requiredDate?: string;
   category: string;
   packingCondition: string;
   productQuality: string;
@@ -26,6 +31,7 @@ export interface OpenBaseDocument {
   number: string;
   docNum?: string;
   DocNum?: string;
+  docType?: string;
   title: string;
   partner?: string;
   date?: string;
@@ -963,6 +969,7 @@ export class OpenBaseDocumentsService {
     return {
       number,
       docNum: docNum || number,
+      docType: this.pickString(sources, ['DocType', 'docType']),
       title,
       partner: businessPartnerName,
       date: this.normalizeApiDate(
@@ -1165,6 +1172,11 @@ export class OpenBaseDocumentsService {
           'Description',
           'Dscription',
         ]),
+        vendor: this.pickString([line], ['Vendor', 'vendor', 'CardName', 'cardName', 'VendorName', 'vendorName']),
+        department: this.pickString([line], ['department', 'Department', 'DepartmentName', 'department_name']),
+        accountCode: this.pickString([line], ['AccountCode', 'accountCode', 'GLAccount', 'glAccount', 'AcctCode']),
+        taxCode: this.pickString([line], ['taxCode', 'TaxCode', 'VatGroup', 'vatGroup']),
+        requiredDate: this.pickString([line], ['requiredDate', 'RequiredDate', 'ReqDate', 'reqDate']),
         category: this.pickString([line], ['category', 'Category']),
         packingCondition: this.pickString([line], ['packingCondition', 'packing_condition', 'PackingCondition']),
         productQuality: this.pickString([line], ['productQuality', 'product_quality', 'ProductQuality']),

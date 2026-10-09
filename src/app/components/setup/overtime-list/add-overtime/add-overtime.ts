@@ -12,6 +12,10 @@ import {
   EmployeeRosterListRecord,
   canonicalizeEmployeeCodeValue,
 } from '../../../../services/application-form.service';
+import {
+  EmployeeShiftAllocationRecord,
+  EmployeeShiftAllocationService,
+} from '../../../../services/employee-shift-allocation.service';
 import { OvertimeListRecord, OvertimeListService } from '../../../../services/overtime-list.service';
 import { WorkstationRecord, WorkstationService } from '../../../../services/workstation.service';
 import { formatApiErrorMessage } from '../../../../utils/api-error.util';
@@ -33,6 +37,7 @@ interface OvertimeEmployee extends ApplicationFormRecord {
 })
 export class AddOvertimeComponent implements OnInit {
   private readonly applicationFormService = inject(ApplicationFormService);
+  private readonly employeeShiftAllocationService = inject(EmployeeShiftAllocationService);
   private readonly overtimeListService = inject(OvertimeListService);
   private readonly attendanceService = inject(AttendanceManagementService);
   private readonly workstationService = inject(WorkstationService);
@@ -48,6 +53,7 @@ export class AddOvertimeComponent implements OnInit {
   readonly employees = signal<OvertimeEmployee[]>([]);
   readonly selectedEmployeeKeys = signal<ReadonlySet<string>>(new Set());
   private rosterRecords: EmployeeRosterListRecord[] = [];
+  private shiftAllocations: EmployeeShiftAllocationRecord[] = [];
   private workstations: WorkstationRecord[] = [];
   private overtimeRecords: OvertimeListRecord[] = [];
   private hoursRequestId = 0;
@@ -263,10 +269,20 @@ export class AddOvertimeComponent implements OnInit {
           return of([] as WorkstationRecord[]);
         }),
       ),
+      shiftAllocations: this.employeeShiftAllocationService.fetchShiftAllocations().pipe(
+        catchError((error: unknown) => {
+          void this.alertService.error(
+            'Shift Allocation Data Unavailable',
+            formatApiErrorMessage(error, 'Shift allocation details could not be loaded. Shift-hour calculations may be unavailable.'),
+          );
+          return of([] as EmployeeShiftAllocationRecord[]);
+        }),
+      ),
     }).subscribe({
-      next: ({ employees, overtimeRecords, roster, workstations }) => {
+      next: ({ employees, overtimeRecords, roster, workstations, shiftAllocations }) => {
         this.rosterRecords = roster;
         this.workstations = workstations;
+        this.shiftAllocations = shiftAllocations;
         this.overtimeRecords = overtimeRecords;
         const postedEmployeeKeys = this.postedEmployeeKeys(this.overtimeRecords, this.selectedMonth());
         this.employees.set(employees.map((employee) => {
@@ -386,16 +402,33 @@ export class AddOvertimeComponent implements OnInit {
       }
       hasWorkingHours = true;
       totalWorkingMinutes += workedMinutes;
+    }
 
+    const employeeCode = this.normalizeEmployeeKey(employee.EmployeeCode);
+    const shiftsByDate = new Map<string, string>();
+    for (const assignment of this.rosterRecords) {
+      if (this.normalizeEmployeeKey(assignment.employee_id) !== employeeCode) {
+        continue;
+      }
+      const date = this.dateValue(assignment.shift_date);
+      if (date >= fromDate && date <= toDate) {
+        shiftsByDate.set(date, assignment.shift);
+      }
+    }
+
+    for (const [date, shift] of shiftsByDate) {
       const shiftMinutes = this.durationToMinutes(
-        this.shiftHoursForEmployee(employee, date, this.rosterRecords, this.workstations),
+        this.shiftHoursForAssignment(shift, this.shiftAllocations, this.workstations),
       );
       if (shiftMinutes === null) {
         continue;
       }
       hasShiftHours = true;
       totalShiftMinutes += shiftMinutes;
-      totalOvertimeMinutes += Math.max(0, workedMinutes - shiftMinutes);
+      const workedMinutes = this.durationToMinutes(dailyHours.get(date) ?? null);
+      if (workedMinutes !== null) {
+        totalOvertimeMinutes += Math.max(0, workedMinutes - shiftMinutes);
+      }
     }
 
     return {
@@ -437,24 +470,22 @@ export class AddOvertimeComponent implements OnInit {
     return keys;
   }
 
-  private shiftHoursForEmployee(
-    employee: ApplicationFormRecord,
-    date: string,
-    roster: EmployeeRosterListRecord[],
+  private shiftHoursForAssignment(
+    shift: string,
+    shiftAllocations: EmployeeShiftAllocationRecord[],
     workstations: WorkstationRecord[],
   ): string | null {
-    const employeeCode = this.normalizeEmployeeKey(employee.EmployeeCode);
-    const assignment = roster.find((entry) =>
-      this.normalizeEmployeeKey(entry.employee_id) === employeeCode &&
-      this.dateValue(entry.shift_date) === date,
-    );
-    if (!assignment) {
-      return null;
-    }
-
-    const assignedShift = assignment.shift.trim().toLocaleLowerCase();
+    const assignedShift = shift.trim().toLocaleLowerCase();
     if (['off', 'hol', 'l'].includes(assignedShift)) {
       return '0h';
+    }
+
+    const shiftAllocation = shiftAllocations.find((record) =>
+      [record.id, record.code, record.shift, record.name]
+        .some((value) => value.trim().toLocaleLowerCase() === assignedShift),
+    );
+    if (shiftAllocation?.startTime && shiftAllocation.endTime) {
+      return this.shiftDuration(shiftAllocation.startTime, shiftAllocation.endTime);
     }
 
     const workstation = workstations.find((record) =>
@@ -465,8 +496,12 @@ export class AddOvertimeComponent implements OnInit {
       return null;
     }
 
-    const start = this.timeInMinutes(workstation.officeInTime);
-    const end = this.timeInMinutes(workstation.officeOutTime);
+    return this.shiftDuration(workstation.officeInTime, workstation.officeOutTime);
+  }
+
+  private shiftDuration(startTime: string, endTime: string): string | null {
+    const start = this.timeInMinutes(startTime);
+    const end = this.timeInMinutes(endTime);
     if (start === null || end === null) {
       return null;
     }

@@ -8,6 +8,7 @@ import {
   ApplicationFormRecord,
   ApplicationFormService,
 } from '../../../../services/application-form.service';
+import { EmployeeShiftAllocationService } from '../../../../services/employee-shift-allocation.service';
 import { OvertimeListService } from '../../../../services/overtime-list.service';
 import { WorkstationService } from '../../../../services/workstation.service';
 import { AddOvertimeComponent } from './add-overtime';
@@ -15,6 +16,7 @@ import { AddOvertimeComponent } from './add-overtime';
 describe('AddOvertimeComponent', () => {
   let fixture: ComponentFixture<AddOvertimeComponent>;
   let applicationFormService: jasmine.SpyObj<ApplicationFormService>;
+  let employeeShiftAllocationService: jasmine.SpyObj<EmployeeShiftAllocationService>;
   let overtimeListService: jasmine.SpyObj<OvertimeListService>;
   let attendanceService: jasmine.SpyObj<AttendanceManagementService>;
   let workstationService: jasmine.SpyObj<WorkstationService>;
@@ -77,6 +79,11 @@ describe('AddOvertimeComponent', () => {
       },
     ]));
     applicationFormService.fetchEmployeeRosterList.and.returnValue(of([]));
+    employeeShiftAllocationService = jasmine.createSpyObj<EmployeeShiftAllocationService>(
+      'EmployeeShiftAllocationService',
+      ['fetchShiftAllocations'],
+    );
+    employeeShiftAllocationService.fetchShiftAllocations.and.returnValue(of([]));
     overtimeListService = jasmine.createSpyObj<OvertimeListService>(
       'OvertimeListService',
       ['fetchOvertimeList', 'postOvertimeEmployee'],
@@ -99,6 +106,7 @@ describe('AddOvertimeComponent', () => {
       imports: [AddOvertimeComponent],
       providers: [
         { provide: ApplicationFormService, useValue: applicationFormService },
+        { provide: EmployeeShiftAllocationService, useValue: employeeShiftAllocationService },
         { provide: OvertimeListService, useValue: overtimeListService },
         { provide: AttendanceManagementService, useValue: attendanceService },
         { provide: WorkstationService, useValue: workstationService },
@@ -243,7 +251,7 @@ describe('AddOvertimeComponent', () => {
       designation: 'Analyst',
       employment_status: 'Active',
       shift_date: monthStart,
-      shift: 'M',
+      shift: '1',
       role: '',
       hub: '',
       note: null,
@@ -254,7 +262,7 @@ describe('AddOvertimeComponent', () => {
       designation: 'Analyst',
       employment_status: 'Active',
       shift_date: secondWorkedDate,
-      shift: 'M',
+      shift: '2',
       role: '',
       hub: '',
       note: null,
@@ -271,6 +279,24 @@ describe('AddOvertimeComponent', () => {
       description: '',
       status: 1,
     }]));
+    employeeShiftAllocationService.fetchShiftAllocations.and.returnValue(of([
+      {
+        id: '1',
+        name: 'Morning',
+        code: '',
+        shift: '',
+        startTime: '09:00',
+        endTime: '17:30',
+      },
+      {
+        id: '2',
+        name: 'Evening',
+        code: '',
+        shift: '',
+        startTime: '10:00',
+        endTime: '18:00',
+      },
+    ]));
     attendanceService.fetchCalculatedWorkingHoursByDate.and.returnValue(of([
       { date: monthStart, hoursWorked: '10h' },
       { date: secondWorkedDate, hoursWorked: '9h 15m' },
@@ -286,8 +312,8 @@ describe('AddOvertimeComponent', () => {
       '4023',
     );
     expect(fixture.nativeElement.textContent).toContain('19h 15m');
-    expect(fixture.nativeElement.textContent).toContain('17h');
-    expect(fixture.nativeElement.textContent).toContain('2h 15m');
+    expect(fixture.nativeElement.textContent).toContain('16h 30m');
+    expect(fixture.nativeElement.textContent).toContain('2h 45m');
   });
 
   it('shows no overtime when working hours do not exceed shift hours', () => {

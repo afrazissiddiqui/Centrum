@@ -15,6 +15,7 @@ interface PurchaseOrderListColumn {
 interface PurchaseOrderListItem {
   docNum: string;
   docDate: string;
+  docType: string;
   vendor: string;
   warehouse: string;
   itemCount: number;
@@ -23,6 +24,11 @@ interface PurchaseOrderListItem {
   items: Array<{
     itemCode: string;
     itemDescription: string;
+    vendor: string;
+    department: string;
+    glAccount: string;
+    taxCode: string;
+    requiredDate: string;
     warehouse: string;
     quantity: number;
     unitPrice: number;
@@ -108,6 +114,13 @@ export class PurchaseOrderListComponent implements OnInit {
       const itemDescription = this.asString(
         record['itemName'] ?? record['ItemName'] ?? record['description'] ?? record['Description'] ?? '—',
       );
+      const lineVendor = this.asString(record['vendor'] ?? record['Vendor'] ?? record['CardName'] ?? record['cardName']);
+      const department = this.asString(record['department'] ?? record['Department'] ?? record['DepartmentName']);
+      const glAccount = this.asString(
+        record['accountCode'] ?? record['AccountCode'] ?? record['glAccount'] ?? record['GLAccount'] ?? record['AcctCode'],
+      );
+      const taxCode = this.asString(record['taxCode'] ?? record['TaxCode'] ?? record['VatGroup'] ?? record['vatGroup']);
+      const requiredDate = this.asString(record['requiredDate'] ?? record['RequiredDate'] ?? record['ReqDate'] ?? record['reqDate']);
       const warehouse = this.asString(
         record['warehouse'] ?? record['Warehouse'] ?? record['whsCode'] ?? record['WhsCode'] ?? document.store ?? '',
       );
@@ -119,6 +132,11 @@ export class PurchaseOrderListComponent implements OnInit {
       return {
         itemCode,
         itemDescription,
+        vendor: lineVendor || this.asString(document.businessPartnerName ?? document.partner ?? document.businessPartnerCode ?? '—'),
+        department,
+        glAccount,
+        taxCode,
+        requiredDate,
         warehouse,
         quantity,
         unitPrice,
@@ -140,6 +158,7 @@ export class PurchaseOrderListComponent implements OnInit {
     return {
       docNum,
       docDate: displayDateSlash(docDate),
+      docType: this.asString(rawDocument['DocType'] ?? rawDocument['docType'] ?? document.docType).toUpperCase(),
       vendor,
       warehouse: this.asString(document.store ?? ''),
       itemCount: items.length,

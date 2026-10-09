@@ -24,7 +24,7 @@ describe('PurchaseOrderListComponent', () => {
     expect(mapped.vendor).toBe('Demo Vendor');
   });
 
-  it('shows service request DocumentLines in the view details with their description and total', () => {
+  it('maps service request line fields for the service-specific view details', () => {
     const documentsService = Object.create(OpenBaseDocumentsService.prototype) as any;
     const listComponent = Object.create(PurchaseOrderListComponent.prototype) as any;
     listComponent.asString = PurchaseOrderListComponent.prototype['asString'];
@@ -34,14 +34,28 @@ describe('PurchaseOrderListComponent', () => {
       Document: {
         DocNum: 'PR-1002',
         DocType: 'S',
-        DocumentLines: [{ Dscription: 'Equipment maintenance', total: '1250' }],
+        DocumentLines: [{
+          Dscription: 'Equipment maintenance',
+          Vendor: 'Service Vendor',
+          Department: 'Maintenance',
+          AccountCode: '6100',
+          TaxCode: 'VAT15',
+          RequiredDate: '2026-10-15',
+          total: '1250',
+        }],
       },
     });
     const row = listComponent.mapOpenDocumentToListItem(document);
 
     expect(row.docNum).toBe('PR-1002');
+    expect(row.docType).toBe('S');
     expect(row.itemCount).toBe(1);
     expect(row.items[0].itemDescription).toBe('Equipment maintenance');
+    expect(row.items[0].vendor).toBe('Service Vendor');
+    expect(row.items[0].department).toBe('Maintenance');
+    expect(row.items[0].glAccount).toBe('6100');
+    expect(row.items[0].taxCode).toBe('VAT15');
+    expect(row.items[0].requiredDate).toBe('2026-10-15');
     expect(row.items[0].lineTotal).toBe(1250);
   });
 
