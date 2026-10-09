@@ -1,5 +1,11 @@
 import { ApplicationFormRecord, EmployeeRosterListRecord } from '../../../services/application-form.service';
-import { findUnassignedEmployees, isPastRosterDate, rosterDayIndexForMonth, rosterPeriodForDate, rosterShiftOptions } from './employee-roster';
+import {
+  findUnassignedEmployees,
+  rosterDayIndexForMonth,
+  rosterPeriodForDate,
+  rosterShiftsForEmployeeMonth,
+  rosterShiftOptions,
+} from './employee-roster';
 import { WorkstationRecord } from '../../../services/workstation.service';
 
 describe('rosterShiftOptions', () => {
@@ -52,6 +58,21 @@ describe('rosterDayIndexForMonth', () => {
   });
 });
 
+describe('rosterShiftsForEmployeeMonth', () => {
+  const records = [
+    { employee_id: 'Emp-00000002', shift_date: '2026-10-05T00:00:00.000Z', shift: '1' },
+    { employee_id: 'Emp-00000002', shift_date: '2026-11-05T00:00:00.000Z', shift: '2' },
+    { employee_id: 'Emp-00000002', shift_date: '2027-10-05T00:00:00.000Z', shift: '3' },
+  ] as EmployeeRosterListRecord[];
+
+  it('returns shifts only for the requested month and year', () => {
+    expect(rosterShiftsForEmployeeMonth(records, 'EMP-00000002', 'October 2026')[4]).toBe('1');
+    expect(rosterShiftsForEmployeeMonth(records, 'EMP-00000002', 'October 2026')[5]).toBe('+');
+    expect(rosterShiftsForEmployeeMonth(records, 'EMP-00000002', 'November 2026')[4]).toBe('2');
+    expect(rosterShiftsForEmployeeMonth(records, 'EMP-00000002', 'October 2027')[4]).toBe('3');
+  });
+});
+
 describe('rosterPeriodForDate', () => {
   it('selects the first half through the 15th', () => {
     expect(rosterPeriodForDate(new Date(2026, 8, 15))).toEqual({
@@ -65,19 +86,5 @@ describe('rosterPeriodForDate', () => {
       monthLabel: 'September 2026',
       monthHalf: 'Second Half',
     });
-  });
-});
-
-describe('isPastRosterDate', () => {
-  const today = new Date(2026, 8, 15);
-
-  it('identifies dates before today as uneditable', () => {
-    expect(isPastRosterDate(14, 'September 2026', today)).toBe(true);
-  });
-
-  it('keeps today and future dates editable', () => {
-    expect(isPastRosterDate(15, 'September 2026', today)).toBe(false);
-    expect(isPastRosterDate(16, 'September 2026', today)).toBe(false);
-    expect(isPastRosterDate(1, 'October 2026', today)).toBe(false);
   });
 });

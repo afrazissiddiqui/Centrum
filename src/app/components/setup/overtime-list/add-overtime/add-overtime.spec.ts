@@ -42,7 +42,7 @@ describe('AddOvertimeComponent', () => {
         ExtEmpNo: '4023',
         detail: {
           hrSettings: { attendanceShiftManagement: 'Yes' },
-          remuneration: { overTimeApplicable: 'Yes' },
+          remuneration: { basicSalary: '36500', overTimeApplicable: 'Yes' },
         } as ApplicationFormDetail,
       },
       {
@@ -337,6 +337,7 @@ describe('AddOvertimeComponent', () => {
       employee_code: 'EMP-001',
       employee_name: 'Ayesha Khan',
       overtime_date: `${fixture.componentInstance.selectedMonth()}-01`,
+      overtime_rate: 150,
       flag: '1',
     }));
     expect(fixture.componentInstance.employees()[0].flag).toBe('1');

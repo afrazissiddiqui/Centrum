@@ -82,20 +82,36 @@ export function rosterDayIndexForMonth(shiftDate: string, monthLabel: string): n
   return date.getDate() - 1;
 }
 
+export function rosterShiftsForEmployeeMonth(
+  records: EmployeeRosterListRecord[],
+  employeeCode: string,
+  monthLabel: string,
+): ShiftCode[] {
+  const [monthName, yearText] = monthLabel.split(' ');
+  const year = Number(yearText);
+  const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const shifts = Array.from({ length: daysInMonth }, () => '+');
+  const normalizedEmployeeCode = normalizeEmployeeCodeForRoster(employeeCode);
+
+  for (const record of records) {
+    if (normalizeEmployeeCodeForRoster(record.employee_id) !== normalizedEmployeeCode) {
+      continue;
+    }
+    const dayIndex = rosterDayIndexForMonth(record.shift_date, monthLabel);
+    if (dayIndex !== null && record.shift.trim()) {
+      shifts[dayIndex] = record.shift;
+    }
+  }
+
+  return shifts;
+}
+
 export function rosterPeriodForDate(date: Date): { monthLabel: string; monthHalf: MonthHalf } {
   return {
     monthLabel: date.toLocaleString('en-US', { month: 'long', year: 'numeric' }),
     monthHalf: date.getDate() <= 15 ? 'First Half' : 'Second Half',
   };
-}
-
-export function isPastRosterDate(day: number, monthLabel: string, today = new Date()): boolean {
-  const [monthName, yearText] = monthLabel.split(' ');
-  const year = Number(yearText);
-  const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
-  const rosterDate = new Date(year, monthIndex, day);
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  return rosterDate < startOfToday;
 }
 
 export function rosterShiftOptions(workstations: WorkstationRecord[]) {
@@ -142,6 +158,9 @@ export class EmployeeRosterComponent implements OnInit {
   readonly unassignedEmployees = signal<ApplicationFormRecord[]>([]);
   readonly unassignedCalendarEmployee = signal<RosterEmployee | null>(null);
   readonly unassignedSelectedShift = signal<ShiftCode | null>(null);
+  readonly editingRosterCalendar = signal(false);
+  private calendarOriginalShifts: ShiftCode[] = [];
+  private rosterRecords: EmployeeRosterListRecord[] = [];
   private originalRosterShifts = new Map<string, string[]>();
   readonly searchText = signal('');
   readonly selectedHub = signal('Lahore HO');
@@ -298,6 +317,7 @@ export class EmployeeRosterComponent implements OnInit {
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: ({ roster, profiles }: { roster: EmployeeRosterListRecord[]; profiles: ApplicationFormRecord[] }) => {
+          this.rosterRecords = roster;
           const rosterEmployees = this.toRosterEmployees(roster, profiles);
           this.employees.set(rosterEmployees);
           this.originalRosterShifts = new Map(
@@ -323,6 +343,8 @@ export class EmployeeRosterComponent implements OnInit {
 
   openUnassignedCalendar(employee: ApplicationFormRecord): void {
     this.closeUnassignedDialog();
+    this.editingRosterCalendar.set(false);
+    this.calendarOriginalShifts = [];
     this.unassignedCalendarEmployee.set({
       ...this.toRosterEmployee(employee, 0),
       shifts: this.fullMonthDays().map(() => '+'),
@@ -330,9 +352,19 @@ export class EmployeeRosterComponent implements OnInit {
     this.unassignedSelectedShift.set(null);
   }
 
+  openEmployeeCalendar(employee: RosterEmployee): void {
+    const shifts = this.rosterShiftsForMonth(employee.EmployeeCode);
+    this.editingRosterCalendar.set(true);
+    this.calendarOriginalShifts = [...shifts];
+    this.unassignedCalendarEmployee.set({ ...employee, shifts });
+    this.unassignedSelectedShift.set(null);
+  }
+
   closeUnassignedCalendar(): void {
     this.unassignedCalendarEmployee.set(null);
     this.unassignedSelectedShift.set(null);
+    this.editingRosterCalendar.set(false);
+    this.calendarOriginalShifts = [];
   }
 
   selectUnassignedShift(shift: ShiftCode): void {
@@ -341,8 +373,7 @@ export class EmployeeRosterComponent implements OnInit {
 
   assignUnassignedDay(dayIndex: number): void {
     const day = this.fullMonthDays()[dayIndex];
-    if (!day || this.isPastDate(day.date)) {
-      this.alertService.validation('Shifts cannot be assigned to past dates.');
+    if (!day) {
       return;
     }
     const shift = this.unassignedSelectedShift();
@@ -363,11 +394,15 @@ export class EmployeeRosterComponent implements OnInit {
   submitUnassignedCalendar(): void {
     const employee = this.unassignedCalendarEmployee();
     const days = this.fullMonthDays()
-      .map((day, index) => ({ day, index }))
-      .filter(({ day }) => !this.isPastDate(day.date));
-    if (!employee || !days.length || days.some(({ index }) => !this.isAssignedShift(this.shiftForFullMonth(employee, index)))) {
+      .map((day, index) => ({ day, index }));
+    if (this.editingRosterCalendar()) {
+      this.submitExistingEmployeeCalendar(employee, days);
+      return;
+    }
+
+    if (!employee || days.some(({ index }) => !this.isAssignedShift(this.shiftForFullMonth(employee, index)))) {
       this.alertService.validation(
-        days.length ? 'Assign a shift for every current and future day before submitting.' : 'There are no current or future dates to assign.',
+        'Assign a shift for every day before submitting.',
       );
       return;
     }
@@ -393,6 +428,7 @@ export class EmployeeRosterComponent implements OnInit {
             ...employees.filter((item) => item.EmployeeCode !== employee.EmployeeCode),
             employee,
           ]);
+          this.syncRosterRecords(payload.data);
           this.originalRosterShifts.set(employee.EmployeeCode, [...employee.shifts]);
           this.unassignedEmployees.update((employees) =>
             employees.filter((item) => item.EmployeeCode !== employee.EmployeeCode),
@@ -404,6 +440,94 @@ export class EmployeeRosterComponent implements OnInit {
           this.alertService.error('Roster Submit Failed', formatApiErrorMessage(error, 'Could not submit employee roster.'));
         },
       });
+  }
+
+  private submitExistingEmployeeCalendar(
+    employee: RosterEmployee | null,
+    days: Array<{ day: RosterDay; index: number }>,
+  ): void {
+    if (!employee) {
+      return;
+    }
+    const changedDays = days.filter(({ index }) =>
+      this.shiftForFullMonth(employee, index) !== this.calendarOriginalShifts[index],
+    );
+    if (!changedDays.length) {
+      this.closeUnassignedCalendar();
+      return;
+    }
+
+    const payload: EmployeeRosterAddPayload = {
+      data: changedDays.map(({ day, index }) => ({
+        employee_id: this.toApiEmployeeId(employee.EmployeeCode),
+        shift_date: this.rosterDate(day.date),
+        shift: this.toApiShift(this.shiftForFullMonth(employee, index)),
+        role: employee.role,
+        hub: employee.hub || this.selectedHub(),
+        note: null,
+      })),
+    };
+
+    this.saving.set(true);
+    this.employeeService
+      .addEmployeeRoster(payload)
+      .pipe(finalize(() => this.saving.set(false)))
+      .subscribe({
+        next: () => {
+          this.syncRosterRecords(payload.data);
+          this.employees.update((employees) => employees.map((item) =>
+            item.EmployeeCode === employee.EmployeeCode
+              ? { ...item, shifts: [...employee.shifts] }
+              : item,
+          ));
+          this.originalRosterShifts.set(employee.EmployeeCode, [...employee.shifts]);
+          this.hasChanges.set(false);
+          this.closeUnassignedCalendar();
+          this.alertService.success('Roster Updated', `${employee.EmployeeName}'s shifts were updated.`);
+        },
+        error: (error: unknown) => {
+          this.alertService.error(
+            'Roster Update Failed',
+            formatApiErrorMessage(error, 'Could not update employee shifts.'),
+          );
+        },
+      });
+  }
+
+  private rosterShiftsForMonth(employeeCode: string): ShiftCode[] {
+    return rosterShiftsForEmployeeMonth(this.rosterRecords, employeeCode, this.monthLabel());
+  }
+
+  private rosterDateValue(value: string): string {
+    return value.trim().match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? '';
+  }
+
+  private syncRosterRecords(rows: EmployeeRosterAddPayload['data']): void {
+    for (const row of rows) {
+      const normalizedEmployeeCode = this.normalizeRosterEmployeeCode(row.employee_id);
+      const existingIndex = this.rosterRecords.findIndex((record) =>
+        this.normalizeRosterEmployeeCode(record.employee_id) === normalizedEmployeeCode &&
+        this.rosterDateValue(record.shift_date) === row.shift_date,
+      );
+      if (existingIndex >= 0) {
+        this.rosterRecords[existingIndex] = {
+          ...this.rosterRecords[existingIndex],
+          shift: row.shift,
+        };
+        continue;
+      }
+
+      const employee = this.employees().find((record) =>
+        this.normalizeRosterEmployeeCode(record.EmployeeCode) === normalizedEmployeeCode,
+      );
+      this.rosterRecords.push({
+        ...row,
+        employee_name: employee?.EmployeeName ?? '',
+        department: employee?.Department ?? '',
+        designation: employee?.Designation ?? '',
+        employment_status: employee?.EmploymentStatus ?? '',
+      });
+    }
   }
 
   isAssignedShift(shift: ShiftCode): boolean {
@@ -464,10 +588,6 @@ export class EmployeeRosterComponent implements OnInit {
 
   openUnassignedShiftDialog(employee: RosterEmployee, dayIndex: number): void {
     this.assignUnassignedDay(dayIndex);
-  }
-
-  isPastDate(dayDate: number): boolean {
-    return isPastRosterDate(dayDate, this.monthLabel());
   }
 
   shiftFor(employee: RosterEmployee, dayIndex: number): ShiftCode {
@@ -573,7 +693,7 @@ export class EmployeeRosterComponent implements OnInit {
 
   selectCell(employee: RosterEmployee, dayIndex: number): void {
     const dayDate = this.visibleDays()[dayIndex]?.date;
-    if (dayDate === undefined || this.isPastDate(dayDate)) {
+    if (dayDate === undefined) {
       this.selectedCell.set(null);
       return;
     }
@@ -582,8 +702,7 @@ export class EmployeeRosterComponent implements OnInit {
 
   openShiftDialog(employee: RosterEmployee, dayIndex: number, event: MouseEvent): void {
     const dayDate = this.visibleDays()[dayIndex]?.date;
-    if (dayDate === undefined || this.isPastDate(dayDate)) {
-      this.alertService.validation('Shifts cannot be updated for past dates.');
+    if (dayDate === undefined) {
       return;
     }
     this.selectedCell.set({ employeeCode: employee.EmployeeCode, day: dayIndex });
@@ -657,11 +776,6 @@ export class EmployeeRosterComponent implements OnInit {
     if (!dialog) {
       return;
     }
-    if (this.isPastDate(dialog.dayDate)) {
-      this.alertService.validation('Shifts cannot be updated for past dates.');
-      this.closeShiftDialog();
-      return;
-    }
     if (this.unassignedCalendarEmployee()?.EmployeeCode === dialog.employee.EmployeeCode) {
       const updatedEmployee = {
         ...dialog.employee,
@@ -693,6 +807,7 @@ export class EmployeeRosterComponent implements OnInit {
               shifts[dialog.dayDate - 1] = dialog.shift;
               return { ...employee, shifts };
             }));
+            this.syncRosterRecords(payload.data);
             const employee = this.employees().find((item) => item.EmployeeCode === dialog.employee.EmployeeCode);
             if (employee) {
               this.originalRosterShifts.set(employee.EmployeeCode, [...employee.shifts]);
@@ -714,13 +829,7 @@ export class EmployeeRosterComponent implements OnInit {
     const selected = this.selectedCell();
     const employeeCodes = this.selectedEmployees();
     if (employeeCodes.size > 0) {
-      const editableIndexes = this.visibleDays()
-        .filter((day) => !this.isPastDate(day.date))
-        .map((day) => day.date - 1);
-      if (!editableIndexes.length) {
-        this.alertService.validation('Shifts cannot be updated for past dates.');
-        return;
-      }
+      const editableIndexes = this.visibleDays().map((day) => day.date - 1);
       this.employees.update((employees) => employees.map((employee) => {
         if (!employeeCodes.has(employee.EmployeeCode)) {
           return employee;
@@ -739,8 +848,7 @@ export class EmployeeRosterComponent implements OnInit {
       return;
     }
     const dayDate = this.visibleDays()[selected.day]?.date;
-    if (dayDate === undefined || this.isPastDate(dayDate)) {
-      this.alertService.validation('Shifts cannot be updated for past dates.');
+    if (dayDate === undefined) {
       return;
     }
     this.employees.update((employees) => employees.map((employee) => {
@@ -764,13 +872,7 @@ export class EmployeeRosterComponent implements OnInit {
       this.alertService.validation('Select at least one employee first.');
       return;
     }
-    const editableIndexes = this.visibleDays()
-      .filter((day) => !this.isPastDate(day.date))
-      .map((day) => day.date - 1);
-    if (!editableIndexes.length) {
-      this.alertService.validation('Shifts cannot be updated for past dates.');
-      return;
-    }
+    const editableIndexes = this.visibleDays().map((day) => day.date - 1);
     this.employees.update((employees) => employees.map((employee) => {
       if (!selected.has(employee.EmployeeCode) || !employee.shifts.length) {
         return employee;
@@ -790,15 +892,40 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   changeMonth(offset: number): void {
+    if (this.hasChanges()) {
+      this.alertService.validation('Save roster changes before changing the month.');
+      return;
+    }
     const [monthName, yearText] = this.monthLabel().split(' ');
     const date = new Date(`${monthName} 1, ${yearText}`);
     date.setMonth(date.getMonth() + offset);
     this.monthLabel.set(date.toLocaleString('en-US', { month: 'long', year: 'numeric' }));
+    this.refreshEmployeeMonthShifts();
   }
 
   jumpToToday(): void {
     const today = new Date();
-    this.monthLabel.set(today.toLocaleString('en-US', { month: 'long', year: 'numeric' }));
+    const monthLabel = today.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    if (monthLabel === this.monthLabel()) {
+      return;
+    }
+    if (this.hasChanges()) {
+      this.alertService.validation('Save roster changes before changing the month.');
+      return;
+    }
+    this.monthLabel.set(monthLabel);
+    this.refreshEmployeeMonthShifts();
+  }
+
+  private refreshEmployeeMonthShifts(): void {
+    this.employees.update((employees) => employees.map((employee) => ({
+      ...employee,
+      shifts: this.rosterShiftsForMonth(employee.EmployeeCode),
+    })));
+    this.originalRosterShifts = new Map(
+      this.employees().map((employee) => [employee.EmployeeCode, [...employee.shifts]]),
+    );
+    this.clearSelection();
   }
 
   onMonthHalfChange(value: string): void {
@@ -823,9 +950,6 @@ export class EmployeeRosterComponent implements OnInit {
     const changedRows = this.employees().flatMap((employee) => {
       const originalShifts = this.originalRosterShifts.get(employee.EmployeeCode) ?? [];
       return this.visibleDays().flatMap((day) => {
-        if (this.isPastDate(day.date)) {
-          return [];
-        }
         const dayIndex = day.date - 1;
         const currentShift = this.shiftForDate(employee, day.date);
         const originalShift = originalShifts[dayIndex] ?? '+';
@@ -857,6 +981,7 @@ export class EmployeeRosterComponent implements OnInit {
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
         next: () => {
+          this.syncRosterRecords(changedRows);
           this.originalRosterShifts = new Map(
             this.employees().map((employee) => [employee.EmployeeCode, [...employee.shifts]]),
           );

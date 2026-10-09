@@ -56,6 +56,12 @@ export const MISCELLANEOUS_SIDEBAR_SECTIONS: SidebarSection[] = [
         route: '/miscellaneous/purchase-request',
         access: { moduleSlug: 'purchase_request_form', action: 'list' } as AccessRequirement,
       },
+      {
+        id: 'miscellaneous-crushed-risen-consumption',
+        label: 'Crushed Risen Consumption',
+        route: '/miscellaneous/crushed-risen-consumption',
+        access: { moduleSlug: 'purchase_request_form', action: 'list' } as AccessRequirement,
+      },
     ],
   },
 ];
@@ -73,6 +79,9 @@ export function miscellaneousActiveItemFromUrl(url: string): string {
   }
   if (url.includes('/miscellaneous/purchase-request')) {
     return 'miscellaneous-purchase-request';
+  }
+  if (url.includes('/miscellaneous/crushed-risen-consumption')) {
+    return 'miscellaneous-crushed-risen-consumption';
   }
   if (url.includes('/miscellaneous/delivery')) {
     return 'miscellaneous-delivery';

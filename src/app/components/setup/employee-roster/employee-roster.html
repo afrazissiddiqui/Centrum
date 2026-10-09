@@ -51,7 +51,7 @@
           <tbody>
             @if (loading()) { <tr><td class="empty-state" [attr.colspan]="visibleDays().length + 3">Loading employees...</td></tr> }
             @else if (!filteredEmployees().length) { <tr><td class="empty-state" [attr.colspan]="visibleDays().length + 3">No employees found for this search.</td></tr> }
-            @else { @for (employee of filteredEmployees(); track employee.EmployeeCode; let employeeIndex = $index) { <tr><td class="employee-cell"><label><input type="checkbox" [checked]="isEmployeeSelected(employee)" (change)="toggleEmployee(employee, $event)" /><span class="avatar">{{ (employee.EmployeeName || 'EM').slice(0, 2).toUpperCase() }}</span><span class="employee-name"><strong>{{ employee.EmployeeName || 'Employee ' + (employeeIndex + 1) }}</strong><small>{{ employee.EmployeeCode || 'EMP-' + (employeeIndex + 1) }} · {{ employeeIndex % 2 ? '160h' : '168h' }}</small></span></label></td><td class="role-cell"><span>{{ employee.role }}</span></td><td class="row-menu">⋮</td>@for (day of visibleDays(); track day.date; let dayIndex = $index) { @let shift = shiftFor(employee, dayIndex); <td [class.today-column]="day.isToday" [class.weekend-column]="day.isHoliday" (click)="selectCell(employee, dayIndex)"><button type="button" [class]="shiftClass(shift)" [style.background]="shiftBackground(shiftDescription(shift))" [style.color]="shiftForeground(shiftDescription(shift))" [class.roster-shift--selected]="selectedCell()?.employeeCode === employee.EmployeeCode && selectedCell()?.day === dayIndex" [disabled]="isPastDate(day.date)" [title]="isPastDate(day.date) ? 'Past dates cannot be changed' : shiftName(shift)" (click)="openShiftDialog(employee, dayIndex, $event); $event.stopPropagation()">{{ shift }}</button></td> }</tr> } }
+            @else { @for (employee of filteredEmployees(); track employee.EmployeeCode; let employeeIndex = $index) { <tr><td class="employee-cell"><button type="button" class="employee-cell__identity" [attr.aria-label]="'Update shifts for ' + employee.EmployeeName" (click)="openEmployeeCalendar(employee)"><span class="avatar">{{ (employee.EmployeeName || 'EM').slice(0, 2).toUpperCase() }}</span><span class="employee-name"><strong>{{ employee.EmployeeName || 'Employee ' + (employeeIndex + 1) }}</strong><small>{{ employee.EmployeeCode || 'EMP-' + (employeeIndex + 1) }} · {{ employeeIndex % 2 ? '160h' : '168h' }}</small></span></button></td><td class="role-cell"><span>{{ employee.role }}</span></td><td class="row-menu">⋮</td>@for (day of visibleDays(); track day.date; let dayIndex = $index) { @let shift = shiftFor(employee, dayIndex); <td [class.today-column]="day.isToday" [class.weekend-column]="day.isHoliday" (click)="selectCell(employee, dayIndex)"><button type="button" [class]="shiftClass(shift)" [style.background]="shiftBackground(shiftDescription(shift))" [style.color]="shiftForeground(shiftDescription(shift))" [class.roster-shift--selected]="selectedCell()?.employeeCode === employee.EmployeeCode && selectedCell()?.day === dayIndex" [title]="shiftName(shift)" (click)="openShiftDialog(employee, dayIndex, $event); $event.stopPropagation()">{{ shift }}</button></td> }</tr> } }
           </tbody>
         </table>
       </div>
@@ -150,10 +150,10 @@
 
   @if (unassignedCalendarEmployee(); as employee) {
     <div class="dialog-backdrop" (click)="closeUnassignedCalendar()"></div>
-    <section class="unassigned-calendar-dialog" role="dialog" aria-modal="true" aria-labelledby="unassigned-calendar-title" (click)="$event.stopPropagation()">
+    <section class="unassigned-calendar-dialog" role="dialog" aria-modal="true" aria-labelledby="employee-calendar-title" (click)="$event.stopPropagation()">
       <header class="shift-dialog__header">
         <div>
-          <h2 id="unassigned-calendar-title">Assign Employee Shift</h2>
+          <h2 id="employee-calendar-title">{{ editingRosterCalendar() ? 'Update Employee Shifts' : 'Assign Employee Shift' }}</h2>
           <p>{{ employee.EmployeeName }} · {{ monthLabel() }}</p>
         </div>
         <button type="button" class="dialog-close" aria-label="Close calendar" (click)="closeUnassignedCalendar()">×</button>
@@ -167,12 +167,12 @@
       <div class="unassigned-calendar-grid">
         @for (day of fullMonthDays(); track day.date; let dayIndex = $index) {
           @let shift = shiftForFullMonth(employee, dayIndex);
-          <button type="button" class="unassigned-calendar-day" [class.today-column]="day.isToday" [class.unassigned-calendar-day--ready]="!!unassignedSelectedShift()" [disabled]="isPastDate(day.date)" [title]="isPastDate(day.date) ? 'Past dates cannot be changed' : ''" (click)="assignUnassignedDay(dayIndex)">
+          <button type="button" class="unassigned-calendar-day" [class.today-column]="day.isToday" [class.unassigned-calendar-day--ready]="!!unassignedSelectedShift()" (click)="assignUnassignedDay(dayIndex)">
             <span>{{ day.weekday }}</span><strong>{{ day.date }}</strong><em [style.background]="isAssignedShift(shift) ? shiftBackground(shiftDescription(shift)) : '#f1f1f1'" [style.color]="isAssignedShift(shift) ? shiftForeground(shiftDescription(shift)) : '#000'">{{ isAssignedShift(shift) ? shift : 'Unassigned' }}</em>
           </button>
         }
       </div>
-      <footer class="shift-dialog__footer"><span>Select a day to assign a shift</span><div><button type="button" class="dialog-button dialog-button--cancel" (click)="closeUnassignedCalendar()">Close</button><button type="button" class="dialog-button dialog-button--apply" [disabled]="saving()" (click)="submitUnassignedCalendar()">{{ saving() ? 'Submitting...' : 'Submit Month' }}</button></div></footer>
+      <footer class="shift-dialog__footer"><span>Select a day to assign a shift</span><div><button type="button" class="dialog-button dialog-button--cancel" (click)="closeUnassignedCalendar()">Close</button><button type="button" class="dialog-button dialog-button--apply" [disabled]="saving()" (click)="submitUnassignedCalendar()">{{ saving() ? 'Saving...' : (editingRosterCalendar() ? 'Save Changes' : 'Submit Month') }}</button></div></footer>
     </section>
   }
 

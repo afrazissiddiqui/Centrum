@@ -1,0 +1,212 @@
+<div class="sir-page">
+  <app-page-toolbar [showSidebarToggle]="true" (sidebarToggle)="layout.toggleSidebar()">
+    <span pageToolbarActions></span>
+  </app-page-toolbar>
+
+  <header class="sir-page-header">
+    <div class="sir-page-titlebar">
+      <button
+        type="button"
+        class="sir-back-button"
+        title="Back to Crushed Risen Consumption List"
+        aria-label="Back to Crushed Risen Consumption List"
+        (click)="backToPurchaseRequest()"
+      >
+        <span class="sir-back-icon" aria-hidden="true">❮</span>
+      </button>
+      <h1 class="sir-page-title">Crushed Risen Consumption</h1>
+    </div>
+  </header>
+
+  <main class="sir-page-content">
+    <div class="sir-card">
+      <nav class="sir-section-nav" aria-label="Form sections">
+        <ul class="sir-section-nav-list">
+          <li class="sir-section-nav-item sir-section-nav-item--active">Crushed Risen Consumption</li>
+        </ul>
+      </nav>
+
+      <section class="sir-form-section" id="header" aria-labelledby="header-title">
+        <h2 class="sir-section-title" id="header-title">Header Info</h2>
+        <div class="sir-form-grid">
+          <div class="sir-form-column">
+            <div class="sir-field-row">
+              <label for="crushed-risen-series">Series:</label>
+              <input
+                id="crushed-risen-series"
+                type="text"
+                [ngModel]="headerForm().series"
+                (ngModelChange)="updateHeaderField('series', $event)"
+              />
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-signed-user">User Signed:</label>
+              <input id="crushed-risen-signed-user" type="text" [ngModel]="headerForm().signedUser" readonly />
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-remark">Remark:</label>
+              <input
+                id="crushed-risen-remark"
+                type="text"
+                [ngModel]="headerForm().remark"
+                (ngModelChange)="updateHeaderField('remark', $event)"
+              />
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-item-name">Item Name From Production:</label>
+              <input
+                id="crushed-risen-item-name"
+                type="text"
+                [ngModel]="headerForm().itemNameFromProduction"
+                (ngModelChange)="updateHeaderField('itemNameFromProduction', $event)"
+              />
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-document-number">Document Number of From Production:</label>
+              <input
+                id="crushed-risen-document-number"
+                type="text"
+                [ngModel]="headerForm().documentNumberFromProduction"
+                (ngModelChange)="updateHeaderField('documentNumberFromProduction', $event)"
+              />
+            </div>
+          </div>
+
+          <div class="sir-form-column">
+            <div class="sir-field-row">
+              <label for="crushed-risen-cancel">Cancel:</label>
+              <select
+                id="crushed-risen-cancel"
+                [ngModel]="headerForm().cancel"
+                (ngModelChange)="updateHeaderField('cancel', $event)"
+              >
+                <option value="">Select</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-status">Status:</label>
+              <input id="crushed-risen-status" type="text" [ngModel]="headerForm().status" readonly />
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-item-code">Item Code From Production:</label>
+              <input
+                id="crushed-risen-item-code"
+                type="text"
+                [ngModel]="headerForm().itemCodeFromProduction"
+                (ngModelChange)="updateHeaderField('itemCodeFromProduction', $event)"
+              />
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-doc-entry">Doc Entry of Product:</label>
+              <input
+                id="crushed-risen-doc-entry"
+                type="text"
+                [ngModel]="headerForm().productDocEntry"
+                (ngModelChange)="updateHeaderField('productDocEntry', $event)"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="sir-form-section" id="row-level-info" aria-labelledby="row-level-title">
+        <h2 class="sir-section-title" id="row-level-title">Row Level Information</h2>
+        <div class="sir-data-table-sticky-container">
+          <div class="sir-data-table-wrapper">
+            <table class="sir-data-table sir-data-table--row-level">
+              <thead>
+                <tr>
+                  <th class="sir-col-sr">Sr. No</th>
+                  <th>Machine ID</th>
+                  <th>Machine Name</th>
+                  <th>Mold Number From Prod Order</th>
+                  <th>Cavity Number From Prod Order</th>
+                  <th>Employee Shift</th>
+                  <th>Crushed Risen Consumption</th>
+                  <th class="sir-col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (line of contentLines(); track $index) {
+                  <tr>
+                    <td class="sir-col-sr">{{ $index + 1 }}</td>
+                    <td>
+                      <input
+                        type="text"
+                        class="sir-table-input"
+                        [attr.aria-label]="'Machine ID, row ' + ($index + 1)"
+                        [ngModel]="line.machineId"
+                        (ngModelChange)="updateContentLine($index, 'machineId', $event)"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        class="sir-table-input"
+                        [attr.aria-label]="'Machine Name, row ' + ($index + 1)"
+                        [ngModel]="line.machineName"
+                        (ngModelChange)="updateContentLine($index, 'machineName', $event)"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        class="sir-table-input"
+                        [attr.aria-label]="'Mold Number From Prod Order, row ' + ($index + 1)"
+                        [ngModel]="line.moldNumberFromProductionOrder"
+                        (ngModelChange)="updateContentLine($index, 'moldNumberFromProductionOrder', $event)"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        class="sir-table-input"
+                        [attr.aria-label]="'Cavity Number From Prod Order, row ' + ($index + 1)"
+                        [ngModel]="line.cavityNumberFromProductionOrder"
+                        (ngModelChange)="updateContentLine($index, 'cavityNumberFromProductionOrder', $event)"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        class="sir-table-input"
+                        [attr.aria-label]="'Employee Shift, row ' + ($index + 1)"
+                        [ngModel]="line.employeeShift"
+                        (ngModelChange)="updateContentLine($index, 'employeeShift', $event)"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        class="sir-table-input"
+                        min="0"
+                        [attr.aria-label]="'Crushed Risen Consumption, row ' + ($index + 1)"
+                        [ngModel]="line.crushedRisenConsumption"
+                        (ngModelChange)="updateContentLine($index, 'crushedRisenConsumption', $event)"
+                      />
+                    </td>
+                    <td class="sir-col-actions">
+                      <div class="sir-row-action-buttons" data-ui5-compact-size>
+                        <button type="button" class="sir-inline-button" (click)="addContentLine()">Add</button>
+                        <button
+                          type="button"
+                          class="sir-inline-button"
+                          [disabled]="contentLines().length <= 1"
+                          (click)="deleteContentLine($index)"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>

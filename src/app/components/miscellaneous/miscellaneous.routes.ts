@@ -15,6 +15,8 @@ import { ReceiptFromProduction } from './receipt-from-production/receipt-from-pr
 import { AddReceiptFromProduction } from './receipt-from-production/add-receipt-from-production/add-receipt-from-production';
 import { IssueFromProductionListComponent } from '../setup/issue-from-production-list/issue-from-production-list';
 import { PurchaseOrderListComponent } from '../setup/purchase-order-list/purchase-order-list';
+import { CrushedRisenConsumptionComponent } from '../setup/crushed-risen-consumption/crushed-risen-consumption';
+import { CrushedRisenConsumptionListComponent } from '../setup/crushed-risen-consumption-list/crushed-risen-consumption-list';
 
 export const miscellaneousRoutes: Routes = [
   {
@@ -55,6 +57,16 @@ export const miscellaneousRoutes: Routes = [
         path: 'purchase-request',
         component: PurchaseOrderListComponent,
         data: { title: 'Purchase Request' },
+      },
+      {
+        path: 'crushed-risen-consumption',
+        component: CrushedRisenConsumptionListComponent,
+        data: { title: 'Crushed Risen Consumption List' },
+      },
+      {
+        path: 'crushed-risen-consumption/create',
+        component: CrushedRisenConsumptionComponent,
+        data: { title: 'Crushed Risen Consumption' },
       },
       {
         path: 'receipt-from-production/create',

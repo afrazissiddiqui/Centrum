@@ -1,0 +1,49 @@
+<div class="sir-list-page">
+  <header class="sir-page-header">
+    <div class="sir-page-titlebar">
+      <button
+        type="button"
+        class="sir-back-button"
+        aria-label="Toggle sidebar"
+        title="Toggle sidebar"
+        (click)="layout.toggleSidebar()"
+      >
+        <span class="sir-back-icon" aria-hidden="true">❮</span>
+      </button>
+      <h1 class="sir-page-title">Crushed Risen Consumption List</h1>
+    </div>
+
+    <button type="button" class="sir-primary-button" (click)="addRecord()">Add</button>
+  </header>
+
+  <main class="sir-page-content">
+    <div class="sir-card">
+      <div class="sir-toolbar">
+        <div class="sir-toolbar-title">Crushed Risen Consumption (0)</div>
+      </div>
+
+      <div class="sir-table-card">
+        <div class="sir-data-table-sticky-container">
+          <div class="sir-data-table-wrapper">
+            <table class="sir-data-table sir-data-table--row-level">
+              <thead>
+                <tr>
+                  <th>Document Number of From Production</th>
+                  <th>Item Name From Production</th>
+                  <th>Item Code From Production</th>
+                  <th>Status</th>
+                  <th class="sir-col-action">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="5" class="sir-empty-state">No Crushed Risen Consumption records found</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

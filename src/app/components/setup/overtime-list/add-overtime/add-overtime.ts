@@ -193,7 +193,7 @@ export class AddOvertimeComponent implements OnInit {
         working_hours: 8,
         shift_hours: 8,
         overtime_hours: 0,
-        overtime_rate: 0,
+        overtime_rate: this.overtimeRate(employee),
         exceptional_ot: 0,
         flag: '1',
       }]).pipe(
@@ -244,6 +244,14 @@ export class AddOvertimeComponent implements OnInit {
         `${successfulKeys.size} employee(s) posted and marked Approved.`,
       );
     });
+  }
+
+  private overtimeRate(employee: OvertimeEmployee): number {
+    const grossSalary = Number(employee.detail?.remuneration.basicSalary);
+    if (!Number.isFinite(grossSalary) || grossSalary <= 0) {
+      return 0;
+    }
+    return ((grossSalary * 12) / 365) / 8;
   }
 
   private loadEmployees(): void {

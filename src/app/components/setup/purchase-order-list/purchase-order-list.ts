@@ -112,7 +112,7 @@ export class PurchaseOrderListComponent implements OnInit {
         record['itemCode'] ?? record['ItemCode'] ?? record['code'] ?? record['Code'] ?? `${index + 1}`,
       );
       const itemDescription = this.asString(
-        record['itemName'] ?? record['ItemName'] ?? record['description'] ?? record['Description'] ?? '—',
+        record['itemName'] ?? record['ItemName'] ?? record['description'] ?? record['Description'] ?? record['Dscription'] ?? '—',
       );
       const lineVendor = this.asString(record['vendor'] ?? record['Vendor'] ?? record['CardName'] ?? record['cardName']);
       const department = this.asString(record['department'] ?? record['Department'] ?? record['DepartmentName']);
@@ -154,18 +154,49 @@ export class PurchaseOrderListComponent implements OnInit {
     const vendor = this.asString(
       rawDocument['CardName'] ?? rawDocument['cardName'] ?? document.businessPartnerName ?? document.partner ?? document.businessPartnerCode ?? '—',
     );
+    const docType = this.normalizeDocType(rawDocument['DocType'] ?? rawDocument['docType'] ?? document.docType);
 
     return {
       docNum,
       docDate: displayDateSlash(docDate),
-      docType: this.asString(rawDocument['DocType'] ?? rawDocument['docType'] ?? document.docType).toUpperCase(),
+      docType,
       vendor,
       warehouse: this.asString(document.store ?? ''),
       itemCount: items.length,
-      status: this.asString(document.status ?? 'O'),
+      status: this.normalizeStatus(document.status ?? 'O'),
       remarks: this.asString(document.remarks ?? ''),
       items,
     };
+  }
+
+  private normalizeDocType(value: unknown): string {
+    const normalized = this.asString(value).trim().toUpperCase();
+    if (!normalized) {
+      return '';
+    }
+    if (normalized === 'SERVICE' || normalized === 'SERVICE REQUEST' || normalized.startsWith('SERVICE')) {
+      return 'S';
+    }
+    if (normalized === 'PURCHASE REQUEST' || normalized === 'PURCHASE ORDER' || normalized.startsWith('PURCHASE')) {
+      return normalized.slice(0, 1);
+    }
+    return normalized;
+  }
+
+  private normalizeStatus(value: unknown): string {
+    const normalized = this.asString(value).trim().toUpperCase();
+    if (!normalized) {
+      return 'O';
+    }
+    const closedValues = ['C', 'CLOSED', 'CLOSE', 'BOST_CLOSED'];
+    const openValues = ['O', 'OPEN', 'BOST_OPEN'];
+    if (closedValues.includes(normalized)) {
+      return 'C';
+    }
+    if (openValues.includes(normalized)) {
+      return 'O';
+    }
+    return normalized.startsWith('C') ? 'C' : 'O';
   }
 
   private asString(value: unknown): string {
@@ -227,11 +258,11 @@ export class PurchaseOrderListComponent implements OnInit {
   }
 
   statusLabel(status: string): string {
-    return status === 'C' ? 'Close' : 'Open';
+    return this.normalizeStatus(status) === 'C' ? 'Close' : 'Open';
   }
 
   isClosed(status: string): boolean {
-    return status === 'C';
+    return this.normalizeStatus(status) === 'C';
   }
 
   formatAmount(value: number): string {
