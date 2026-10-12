@@ -353,9 +353,10 @@ export class EmployeeRosterComponent implements OnInit {
           this.unassignedEmployees.set(findUnassignedEmployees(profiles, roster));
         },
         error: (error) => {
-          this.employees.set([]);
-          this.unassignedEmployees.set([]);
-          this.alertService.error('Roster Load Failed', formatApiErrorMessage(error, 'Could not load employee profiles.'));
+          this.alertService.error(
+            'Roster Load Failed',
+            formatApiErrorMessage(error, 'Could not load roster employees and shifts.'),
+          );
         },
       });
   }

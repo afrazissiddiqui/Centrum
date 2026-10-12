@@ -46,7 +46,7 @@ export const MISCELLANEOUS_SIDEBAR_SECTIONS: SidebarSection[] = [
       },
       {
         id: 'miscellaneous-issue-from-production',
-        label: 'Issue From Production',
+        label: 'Issue For Production',
         route: '/miscellaneous/issue-from-production',
         access: { moduleSlug: 'issue_from_production_form', action: 'list' } as AccessRequirement,
       },

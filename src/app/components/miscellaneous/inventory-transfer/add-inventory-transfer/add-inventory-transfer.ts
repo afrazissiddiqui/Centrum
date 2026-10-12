@@ -423,7 +423,6 @@ export class AddInventoryTransfer implements OnInit {
               fromWarehouse: line.fromWarehouse,
               fromBinLocation: '',
               toWarehouse: line.toWarehouse,
-              toBinLocation: '',
               firstToBinLocation: '',
               toBranch: lineToBranchName,
               quantity: line.quantity,

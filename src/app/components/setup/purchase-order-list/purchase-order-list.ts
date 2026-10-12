@@ -19,6 +19,7 @@ interface PurchaseOrderListItem {
   vendor: string;
   warehouse: string;
   itemCount: number;
+  total: number;
   status: string;
   remarks?: string;
   items: Array<{
@@ -30,6 +31,7 @@ interface PurchaseOrderListItem {
     taxCode: string;
     requiredDate: string;
     warehouse: string;
+    remarks: string;
     quantity: number;
     unitPrice: number;
     lineTotal: number;
@@ -122,8 +124,10 @@ export class PurchaseOrderListComponent implements OnInit {
       const taxCode = this.asString(record['taxCode'] ?? record['TaxCode'] ?? record['VatGroup'] ?? record['vatGroup']);
       const requiredDate = this.asString(record['requiredDate'] ?? record['RequiredDate'] ?? record['ReqDate'] ?? record['reqDate']);
       const warehouse = this.asString(
-        record['warehouse'] ?? record['Warehouse'] ?? record['whsCode'] ?? record['WhsCode'] ?? document.store ?? '',
+        record['warehouse'] ?? record['Warehouse'] ?? record['warehouseCode'] ?? record['WarehouseCode'] ??
+          record['whsCode'] ?? record['WhsCode'] ?? document.store ?? '',
       );
+      const remarks = this.asString(record['remarks'] ?? record['Remarks'] ?? record['Comments'] ?? record['U_Remarks']);
       const quantity = this.toNumber(record['quantity'] ?? record['Quantity'] ?? record['qty'] ?? record['Qty'] ?? 0);
       const unitPrice = this.toNumber(record['unitPrice'] ?? record['UnitPrice'] ?? record['infoPrice'] ?? record['InfoPrice'] ?? 0);
       const lineTotal = this.toNumber(record['lineTotal'] ?? record['LineTotal'] ?? record['total'] ?? record['Total'] ?? quantity * unitPrice);
@@ -138,6 +142,7 @@ export class PurchaseOrderListComponent implements OnInit {
         taxCode,
         requiredDate,
         warehouse,
+        remarks,
         quantity,
         unitPrice,
         lineTotal,
@@ -163,6 +168,7 @@ export class PurchaseOrderListComponent implements OnInit {
       vendor,
       warehouse: this.asString(document.store ?? ''),
       itemCount: items.length,
+      total: items.reduce((sum, item) => sum + item.lineTotal, 0),
       status: this.normalizeStatus(document.status ?? 'O'),
       remarks: this.asString(document.remarks ?? ''),
       items,

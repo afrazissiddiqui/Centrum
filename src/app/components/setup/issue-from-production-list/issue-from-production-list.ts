@@ -144,7 +144,7 @@ export class IssueFromProductionListComponent implements OnInit {
         this.issues.set([]);
         this.currentPage.set(1);
         this.loading.set(false);
-        this.loadError.set('Could not load issue from production records.');
+        this.loadError.set('Could not load issue for production records.');
       },
     });
   }

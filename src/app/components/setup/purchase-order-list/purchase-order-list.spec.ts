@@ -41,7 +41,12 @@ describe('PurchaseOrderListComponent', () => {
           AccountCode: '6100',
           TaxCode: 'VAT15',
           RequiredDate: '2026-10-15',
+          Warehouse: 'SERVICE-WH',
+          Remarks: 'Service line remarks',
           total: '1250',
+        }, {
+          Dscription: 'Replacement parts',
+          total: '250',
         }],
       },
     });
@@ -49,14 +54,57 @@ describe('PurchaseOrderListComponent', () => {
 
     expect(row.docNum).toBe('PR-1002');
     expect(row.docType).toBe('S');
-    expect(row.itemCount).toBe(1);
+    expect(row.itemCount).toBe(2);
+    expect(row.total).toBe(1500);
     expect(row.items[0].itemDescription).toBe('Equipment maintenance');
     expect(row.items[0].vendor).toBe('Service Vendor');
     expect(row.items[0].department).toBe('Maintenance');
     expect(row.items[0].glAccount).toBe('6100');
     expect(row.items[0].taxCode).toBe('VAT15');
     expect(row.items[0].requiredDate).toBe('2026-10-15');
+    expect(row.items[0].warehouse).toBe('SERVICE-WH');
+    expect(row.items[0].remarks).toBe('Service line remarks');
     expect(row.items[0].lineTotal).toBe(1250);
+  });
+
+  it('maps the item request fields shown in the detail modal', () => {
+    const documentsService = Object.create(OpenBaseDocumentsService.prototype) as any;
+    const listComponent = Object.create(PurchaseOrderListComponent.prototype) as any;
+    listComponent.asString = PurchaseOrderListComponent.prototype['asString'];
+    listComponent.toNumber = PurchaseOrderListComponent.prototype['toNumber'];
+
+    const document = documentsService.mapApiRecordToOpenBaseDocument({
+      DocNum: 'PR-1003',
+      DocType: 'I',
+      CardName: 'Request Vendor',
+      WhsCode: 'ITEM-WH',
+      Comments: 'Header remarks',
+      DocumentLines: [{
+        ItemCode: 'ITEM-01',
+        ItemName: 'Requested item',
+        Vendor: 'Line Vendor',
+        Department: 'Operations',
+        TaxCode: 'VAT5',
+        RequiredDate: '2026-10-20',
+        WhsCode: 'LINE-WH',
+        Remarks: 'Line remarks',
+        Quantity: 2,
+        UnitPrice: 150,
+      }],
+    });
+    const row = listComponent.mapOpenDocumentToListItem(document);
+
+    expect(row.remarks).toBe('Header remarks');
+    expect(row.warehouse).toBe('ITEM-WH');
+    expect(row.items[0]).toMatchObject({
+      itemCode: 'ITEM-01',
+      vendor: 'Line Vendor',
+      department: 'Operations',
+      taxCode: 'VAT5',
+      requiredDate: '2026-10-20',
+      warehouse: 'LINE-WH',
+      remarks: 'Line remarks',
+    });
   });
 
 });

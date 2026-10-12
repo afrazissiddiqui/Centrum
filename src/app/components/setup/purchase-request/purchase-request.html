@@ -132,30 +132,10 @@
                             #glAccountInput
                             [ngModel]="glAccountSearchTerms()[$index] ?? line.glAccount"
                             (ngModelChange)="updateGlAccountSearch($index, $event)"
-                            (focus)="toggleGlAccountDropdown($index)"
+                            (focus)="onGlAccountFocus($index, glAccountInput)"
                             (blur)="scheduleHideGlAccountDropdown()"
                             autocomplete="off"
                           />
-                          @if (activeGlAccountSuggestionIndex() === $index) {
-                            <div [style]="getGlAccountDropdownStyle(glAccountInput)">
-                              @if (inventoryAccountOptionsLoading()) {
-                                <div style="padding: 8px; text-align: center;">Loading...</div>
-                              } @else if (getFilteredInventoryAccounts($index).length === 0) {
-                                <div style="padding: 8px; text-align: center; color: #999;">No results</div>
-                              } @else {
-                                @for (account of getFilteredInventoryAccounts($index); track account.code) {
-                                  <button
-                                    type="button"
-                                    style="display: block; width: 100%; padding: 8px; border: 0; border-bottom: 1px solid #eee; background: white; text-align: left; cursor: pointer;"
-                                    (mousedown)="$event.preventDefault()"
-                                    (click)="selectInventoryAccount($index, account)"
-                                  >
-                                    {{ account.name }} ({{ account.code }})
-                                  </button>
-                                }
-                              }
-                            </div>
-                          }
                         </div>
                       </td>
                       <td class="sir-col-item-name">
@@ -318,6 +298,26 @@
               <div><strong>{{ vendor.code }}</strong></div>
               <div style="font-size: 12px; color: #4a5568;">{{ vendor.name }}</div>
             </button>
+          }
+        </div>
+      }
+      @if (activeGlAccountSuggestionIndex() !== null && glAccountSuggestionPanelStyle()) {
+        <div
+          class="purchase-request-item-suggestion-panel-fixed"
+          [style.left.px]="glAccountSuggestionPanelStyle()!.left"
+          [style.top.px]="glAccountSuggestionPanelStyle()!.top"
+          [style.width.px]="glAccountSuggestionPanelStyle()!.width"
+        >
+          @if (inventoryAccountOptionsLoading()) {
+            <div style="padding: 8px; text-align: center;">Loading...</div>
+          } @else if (getFilteredInventoryAccounts(activeGlAccountSuggestionIndex()!).length === 0) {
+            <div style="padding: 8px; text-align: center; color: #999;">No results</div>
+          } @else {
+            @for (account of getFilteredInventoryAccounts(activeGlAccountSuggestionIndex()!); track account.code) {
+              <button type="button" (mousedown)="selectInventoryAccount(activeGlAccountSuggestionIndex()!, account)">
+                {{ account.name }} ({{ account.code }})
+              </button>
+            }
           }
         </div>
       }

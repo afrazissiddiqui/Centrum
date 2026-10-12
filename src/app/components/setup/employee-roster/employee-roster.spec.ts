@@ -1,3 +1,5 @@
+import '@angular/compiler';
+import { describe, expect, it } from 'vitest';
 import { ApplicationFormRecord, EmployeeRosterListRecord } from '../../../services/application-form.service';
 import {
   findUnassignedEmployees,

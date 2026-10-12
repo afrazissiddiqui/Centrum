@@ -5,7 +5,7 @@
         <span class="sir-back-icon">❮</span>
       </button>
 
-      <h1 class="sir-page-title" title="Issue From Production List">Issue From Production List</h1>
+      <h1 class="sir-page-title" title="Issue For Production List">Issue For Production List</h1>
     </div>
 
     <button type="button" class="sir-primary-button" (click)="onAddNew()">Add New</button>
@@ -14,7 +14,7 @@
   <div class="sir-page-content">
     <div class="sir-card">
       <div class="sir-toolbar">
-        <div class="sir-toolbar-title">Issue From Production ({{ filteredIssues().length }}) · Selected (0)</div>
+        <div class="sir-toolbar-title">Issue For Production ({{ filteredIssues().length }}) · Selected (0)</div>
         <div class="sir-toolbar-spacer"></div>
 
         <div class="sir-search-field">
@@ -62,7 +62,7 @@
 
       <div class="sir-table-card">
         @if (loading()) {
-          <p class="sir-loading">Loading issue from production records…</p>
+          <p class="sir-loading">Loading issue for production records…</p>
         } @else {
           <div class="sir-data-table-sticky-container">
             <div class="sir-data-table-wrapper">
@@ -99,7 +99,7 @@
                     </tr>
                   } @empty {
                     <tr>
-                      <td colspan="8" class="sir-empty-state">No issue from production records found</td>
+                      <td colspan="8" class="sir-empty-state">No issue for production records found</td>
                     </tr>
                   }
                 </tbody>
@@ -131,7 +131,7 @@
   <div class="misc-dialog-backdrop" (click)="closeDetailDialog()"></div>
   <div class="misc-detail-dialog" (click)="$event.stopPropagation()">
     <div class="misc-dialog-header">
-      <h3>Issue From Production #{{ row.docNum }}</h3>
+      <h3>Issue For Production #{{ row.docNum }}</h3>
       <button type="button" class="misc-dialog-close" (click)="closeDetailDialog()">×</button>
     </div>
 

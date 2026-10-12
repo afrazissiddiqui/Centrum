@@ -304,7 +304,7 @@ export const AUTHORIZATION_MODULE_DEFINITIONS = [
   },
   {
     slug: 'issue_from_production_form',
-    name: 'Issue From Production Form',
+    name: 'Issue For Production Form',
     actions: ['add', 'view', 'list', 'update', 'delete'] as const,
   },
   {

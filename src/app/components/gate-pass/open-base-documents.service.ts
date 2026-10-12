@@ -16,6 +16,7 @@ export interface BaseDocLinePayload {
   accountCode?: string;
   taxCode?: string;
   requiredDate?: string;
+  warehouse?: string;
   category: string;
   packingCondition: string;
   productQuality: string;
@@ -1056,7 +1057,7 @@ export class OpenBaseDocumentsService {
         return resolveGatePassLocation(rawLocation) || rawLocation;
       })(),
       referenceNo: this.pickString(sources, ['referenceNo', 'reference_no', 'ReferenceNo', 'U_CusPoNo']),
-      remarks: this.pickString(sources, ['remarks', 'Remarks']),
+      remarks: this.pickString(sources, ['remarks', 'Remarks', 'Comments', 'comments', 'U_Remarks']),
       driverName: this.pickString(sources, [
         'driverName',
         'driver_name',
@@ -1172,11 +1173,12 @@ export class OpenBaseDocumentsService {
           'Description',
           'Dscription',
         ]),
-        vendor: this.pickString([line], ['Vendor', 'vendor', 'CardName', 'cardName', 'VendorName', 'vendorName']),
+        vendor: this.pickString([line], ['Vendor', 'vendor', 'CardName', 'cardName', 'VendorName', 'vendorName', 'U_Vendor']),
         department: this.pickString([line], ['department', 'Department', 'DepartmentName', 'department_name']),
         accountCode: this.pickString([line], ['AccountCode', 'accountCode', 'GLAccount', 'glAccount', 'AcctCode']),
         taxCode: this.pickString([line], ['taxCode', 'TaxCode', 'VatGroup', 'vatGroup']),
         requiredDate: this.pickString([line], ['requiredDate', 'RequiredDate', 'ReqDate', 'reqDate']),
+        warehouse: this.pickString([line], ['warehouse', 'Warehouse', 'warehouseCode', 'WarehouseCode', 'whsCode', 'WhsCode']),
         category: this.pickString([line], ['category', 'Category']),
         packingCondition: this.pickString([line], ['packingCondition', 'packing_condition', 'PackingCondition']),
         productQuality: this.pickString([line], ['productQuality', 'product_quality', 'ProductQuality']),
@@ -1184,7 +1186,7 @@ export class OpenBaseDocumentsService {
         qty: this.pickNumber([line], ['qty', 'quantity', 'Qty', 'Quantity']),
         lineTotal: this.pickNumber([line], ['lineTotal', 'LineTotal', 'total', 'Total']),
         info: this.pickString([line], ['info', 'Info']),
-        remarks: this.pickString([line], ['remarks', 'Remarks']),
+        remarks: this.pickString([line], ['remarks', 'Remarks', 'Comments', 'comments', 'U_Remarks']),
       }));
   }
 

@@ -184,7 +184,7 @@ export class AddDelivery {
   }
 
   updateIntegerHeaderField(field: keyof DeliveryHeader, value: string): void {
-    this.updateHeaderField(field, value.replace(/\D/g, ''));
+    this.updateHeaderField(field, value.replace(/\D/g, '').slice(0, 11));
   }
 
   updateShipToAddress(field: keyof DeliveryAddress, value: string): void {

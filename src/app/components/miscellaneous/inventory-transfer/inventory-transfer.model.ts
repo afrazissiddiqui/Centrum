@@ -26,7 +26,6 @@ export interface InventoryTransferLine {
   fromWarehouse: string;
   fromBinLocation: string;
   toWarehouse: string;
-  toBinLocation: string;
   firstToBinLocation: string;
   toBranch: string;
   quantity: number | null;
@@ -74,7 +73,6 @@ export function createEmptyInventoryTransferLine(
     fromWarehouse,
     fromBinLocation: '',
     toWarehouse,
-    toBinLocation: '',
     firstToBinLocation: '',
     toBranch: '',
     quantity: null,

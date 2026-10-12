@@ -51,7 +51,7 @@ export const miscellaneousRoutes: Routes = [
       {
         path: 'issue-from-production',
         component: IssueFromProductionListComponent,
-        data: { title: 'Issue From Production' },
+        data: { title: 'Issue For Production' },
       },
       {
         path: 'purchase-request',

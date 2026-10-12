@@ -100,9 +100,15 @@ export class PurchaseRequestComponent implements OnInit, OnDestroy {
     if (index !== null && this.activeItemCodeInput?.isConnected) {
       this.updateSuggestionPanelPosition(index, this.activeItemCodeInput);
     }
+    const glAccountIndex = this.activeGlAccountSuggestionIndex();
+    if (glAccountIndex !== null && this.activeGlAccountInput?.isConnected) {
+      this.updateGlAccountSuggestionPanelPosition(glAccountIndex, this.activeGlAccountInput);
+    }
   };
   readonly activeVendorSuggestionIndex = signal<number | null>(null);
   readonly vendorSuggestionPanelStyle = signal<{ left: number; width: number; top: number } | null>(null);
+  readonly glAccountSuggestionPanelStyle = signal<{ left: number; width: number; top: number } | null>(null);
+  private activeGlAccountInput: HTMLInputElement | null = null;
   readonly departmentOptions = signal<DepartmentPr[]>([]);
   readonly warehouseOptions = signal<WarehouseDropdownOption[]>([]);
   readonly filteredWarehouseOptions = computed(() => {
@@ -503,23 +509,31 @@ export class PurchaseRequestComponent implements OnInit, OnDestroy {
     this.activeGlAccountSuggestionIndex.set(null);
   }
 
-  toggleGlAccountDropdown(index: number): void {
+  onGlAccountFocus(index: number, input: HTMLInputElement): void {
     this.loadInventoryAccountOptions();
-    const current = this.activeGlAccountSuggestionIndex();
-    this.activeGlAccountSuggestionIndex.set(current === index ? null : index);
+    this.updateGlAccountSuggestionPanelPosition(index, input);
   }
 
-  scheduleHideGlAccountDropdown(): void {
-    window.setTimeout(() => this.activeGlAccountSuggestionIndex.set(null), 150);
-  }
-
-  getGlAccountDropdownStyle(input: HTMLInputElement | null): string {
+  updateGlAccountSuggestionPanelPosition(index: number, input: HTMLInputElement): void {
     if (!input) {
-      return '';
+      return;
     }
 
     const rect = input.getBoundingClientRect();
-    return `position: fixed; top: ${rect.bottom + 2}px; left: ${rect.left}px; width: ${rect.width}px; background: white; border: 1px solid #ccc; max-height: 200px; overflow-y: auto; z-index: 10000;`;
+    this.activeGlAccountInput = input;
+    this.activeGlAccountSuggestionIndex.set(index);
+    this.glAccountSuggestionPanelStyle.set({
+      left: rect.left,
+      top: rect.bottom,
+      width: rect.width,
+    });
+  }
+
+  scheduleHideGlAccountDropdown(): void {
+    window.setTimeout(() => {
+      this.activeGlAccountSuggestionIndex.set(null);
+      this.activeGlAccountInput = null;
+    }, 150);
   }
 
   selectItem(index: number, value: string): void {
