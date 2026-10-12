@@ -87,7 +87,7 @@
               </td>
             </tr>
           } @else {
-            @for (employee of filteredEmployees(); track employeeKey(employee)) {
+            @for (employee of paginatedEmployees(); track employeeKey(employee)) {
               <tr>
                 <td class="add-overtime-table__selection-cell">
                   <input
@@ -121,6 +121,53 @@
           }
         </tbody>
       </table>
+    </div>
+
+    <div class="add-overtime-pagination" aria-label="Eligible employee list pagination">
+      <div class="add-overtime-pagination__info">
+        @if (filteredEmployees().length) {
+          Showing {{ paginationStart() }} to {{ paginationEnd() }} of {{ filteredEmployees().length }} employees
+        } @else {
+          No employees to display
+        }
+      </div>
+      <div class="add-overtime-pagination__controls">
+        <button type="button" [disabled]="activePage() === 1" (click)="setPage(activePage() - 1)">Previous</button>
+        <div class="add-overtime-pagination__pages">
+          @for (item of paginationItems(); track trackPaginationItem($index, item)) {
+            @switch (item.kind) {
+              @case ('page') {
+                <button
+                  type="button"
+                  [class.active]="item.page === activePage()"
+                  [attr.aria-current]="item.page === activePage() ? 'page' : null"
+                  (click)="setPage(item.page)"
+                >{{ item.page }}</button>
+              }
+              @case ('ellipsis') {
+                <button type="button" class="add-overtime-pagination__ellipsis" [attr.aria-label]="'Go to page ' + item.jumpTo" (click)="setPage(item.jumpTo)">…</button>
+              }
+              @case ('last') {
+                <button
+                  type="button"
+                  [class.active]="totalPages() === activePage()"
+                  [attr.aria-current]="totalPages() === activePage() ? 'page' : null"
+                  (click)="setPage(totalPages())"
+                >Last</button>
+              }
+            }
+          }
+        </div>
+        <button type="button" [disabled]="activePage() >= totalPages()" (click)="setPage(activePage() + 1)">Next</button>
+      </div>
+      <label class="add-overtime-pagination__size">
+        <span class="visually-hidden">Employees per page</span>
+        <select [ngModel]="pageSize()" (ngModelChange)="onPageSizeChange($event)" name="employee-page-size">
+          @for (size of pageSizeOptions; track size) {
+            <option [ngValue]="size">Show {{ size }}</option>
+          }
+        </select>
+      </label>
     </div>
   </section>
 </main>

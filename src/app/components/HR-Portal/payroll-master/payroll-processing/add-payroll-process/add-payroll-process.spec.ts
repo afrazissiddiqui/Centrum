@@ -8,6 +8,7 @@ import {
   computeOvertimeAmount,
   computeOvertimeRate,
 } from '../../payroll-setup/payroll-setup.service';
+import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
 
 describe('computeOvertimeRate', () => {
   it('calculates the hourly rate from gross salary using the annualized formula', () => {
@@ -21,6 +22,60 @@ describe('computeOvertimeRate', () => {
 
   it('calculates overtime pay from the hourly rate and overtime hours', () => {
     expect(computeOvertimeAmount(computeOvertimeRate(30000), 5)).toBe(616.45);
+  });
+});
+
+describe('sumSubmittedOvertimeHours', () => {
+  it('sums only submitted hours for the selected employee and payroll month', () => {
+    const records = [
+      {
+        id: '1',
+        values: {
+          employee_code: 'EMP-001',
+          overtime_date: '2026-10-01',
+          overtime_hours: 2.5,
+          flag: '1',
+        },
+      },
+      {
+        id: '2',
+        values: {
+          employeeCode: 'emp-001',
+          overtimeDate: '2026-10-15',
+          overtimeHours: '1.5',
+          flag: 1,
+        },
+      },
+      {
+        id: '3',
+        values: {
+          employee_code: 'EMP-001',
+          overtime_date: '2026-09-30',
+          overtime_hours: 8,
+          flag: '1',
+        },
+      },
+      {
+        id: '4',
+        values: {
+          employee_code: 'EMP-001',
+          overtime_date: '2026-10-20',
+          overtime_hours: 4,
+          flag: '0',
+        },
+      },
+      {
+        id: '5',
+        values: {
+          employee_code: 'EMP-002',
+          overtime_date: '2026-10-20',
+          overtime_hours: 7,
+          flag: '1',
+        },
+      },
+    ];
+
+    expect(sumSubmittedOvertimeHours(records, ['EMP-001'], '2026-10')).toBe(4);
   });
 });
 

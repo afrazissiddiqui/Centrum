@@ -20,7 +20,12 @@ describe('OvertimeListComponent', () => {
         values: {
           employee_code: 'EMP-001',
           employee_name: 'Ayesha Khan',
+          department: 'Finance',
           overtime_date: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`,
+          working_hours: 8,
+          shift_hours: 8,
+          overtime_hours: 1.5,
+          status: 'Pending',
           overtime_rate: 0,
         },
       },
@@ -68,9 +73,22 @@ describe('OvertimeListComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Ayesha Khan');
     expect(fixture.nativeElement.textContent).toContain('Monthly Overtime');
     expect(fixture.componentInstance.columns().some((column) => column.key === 'monthlyOvertime')).toBe(true);
-    expect(fixture.componentInstance.columns().some((column) =>
-      column.label === 'Overtime Rate' && column.key === 'overtime_rate',
-    )).toBe(true);
+    expect(Array.from(fixture.nativeElement.querySelectorAll('.overtime-table thead th') as NodeListOf<Element>)
+      .map((header: Element) => header.textContent.trim()))
+      .toEqual([
+        'Employee Code',
+        'Employee Name',
+        'Working Hours',
+        'Shift Hours',
+        'Status',
+        'Monthly Overtime',
+      ]);
+    expect(fixture.nativeElement.querySelector('.overtime-table thead').textContent).not.toContain('Overtime Rate');
+    expect(Array.from(fixture.nativeElement.querySelectorAll('.overtime-table tbody tr:first-child td') as NodeListOf<Element>)
+      .map((cell: Element) => cell.textContent.trim()))
+      .toEqual(['EMP-001', 'Ayesha Khan', '8', '8', 'Approved', '1h 30m']);
+    expect(fixture.nativeElement.querySelector('.employee-detail-panel__body').textContent).toContain('Department');
+    expect(fixture.nativeElement.querySelector('.employee-detail-panel__body').textContent).toContain('Finance');
     expect(fixture.componentInstance.formatRecordCell('overtime_rate', fixture.componentInstance.records()[0]))
       .toBe('123.29');
   });

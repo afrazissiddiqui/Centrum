@@ -129,11 +129,17 @@
         </div>
         <button type="button" class="dialog-close" aria-label="Close unassigned employees" (click)="closeUnassignedDialog()">×</button>
       </header>
+      <label class="unassigned-search">
+        <ui5-icon name="search" aria-hidden="true"></ui5-icon>
+        <input type="search" aria-label="Search unassigned employees" placeholder="Search by name, ID, department, or role..." [ngModel]="unassignedSearchText()" (ngModelChange)="unassignedSearchText.set($event)" />
+      </label>
       <div class="unassigned-list">
         @if (!unassignedEmployees().length) {
           <p class="shift-options__status">All shift-applicable employees are in the roster.</p>
+        } @else if (!filteredUnassignedEmployees().length) {
+          <p class="shift-options__status">No unassigned employees found for this search.</p>
         } @else {
-          @for (employee of unassignedEmployees(); track employee.EmployeeCode) {
+          @for (employee of filteredUnassignedEmployees(); track employee.EmployeeCode) {
             <button type="button" class="unassigned-item" (click)="openUnassignedCalendar(employee)">
               <span class="avatar">{{ (employee.EmployeeName || 'EM').slice(0, 2).toUpperCase() }}</span>
               <div>

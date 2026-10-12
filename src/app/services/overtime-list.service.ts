@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, map, retry, throwError, timer } from 'rxjs';
 import { apiUrl } from '../config/api.config';
 
 export interface OvertimeListRecord {
@@ -32,6 +32,13 @@ export class OvertimeListService {
 
   fetchOvertimeList(): Observable<OvertimeListRecord[]> {
     return this.http.get<unknown>(OVERTIME_RECORD_LIST_URL).pipe(
+      retry({
+        count: 2,
+        delay: (error: unknown, retryCount: number) =>
+          error instanceof HttpErrorResponse && (error.status === 0 || error.status >= 500)
+            ? timer(retryCount * 500)
+            : throwError(() => error),
+      }),
       map((response) => this.mapResponse(response)),
     );
   }

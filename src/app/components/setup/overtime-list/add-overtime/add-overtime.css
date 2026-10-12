@@ -245,6 +245,60 @@
   text-align: center !important;
 }
 
+.add-overtime-pagination {
+  align-items: center;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.add-overtime-pagination__controls,
+.add-overtime-pagination__pages {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.add-overtime-pagination button,
+.add-overtime-pagination__size select {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  color: #1f2d3d;
+  font: inherit;
+  min-height: 32px;
+  padding: 5px 9px;
+}
+
+.add-overtime-pagination button {
+  cursor: pointer;
+}
+
+.add-overtime-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.add-overtime-pagination button.active {
+  background: #0070f2;
+  border-color: #0070f2;
+  color: #ffffff;
+}
+
+.add-overtime-pagination__ellipsis {
+  cursor: default !important;
+}
+
+.add-overtime-pagination__size select:focus-visible,
+.add-overtime-pagination button:focus-visible {
+  outline: 2px solid rgba(0, 112, 242, 0.35);
+  outline-offset: 1px;
+}
+
 .visually-hidden {
   clip-path: inset(50%);
   height: 1px;
@@ -261,5 +315,14 @@
 
   .add-overtime-search {
     flex: 1 1 100%;
+  }
+
+  .add-overtime-pagination {
+    justify-content: center;
+  }
+
+  .add-overtime-pagination__info {
+    flex-basis: 100%;
+    text-align: center;
   }
 }

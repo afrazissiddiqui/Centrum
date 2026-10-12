@@ -1,5 +1,6 @@
 import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
+import { extractBatchNumber } from '../batch-number.util';
 import { buildCreateGoodIssuePayload } from './good-issue.service';
 import { createEmptyGoodIssueHeader, createEmptyGoodIssueLine } from './good-issue.model';
 
@@ -71,5 +72,26 @@ describe('GoodIssueService', () => {
       { batchNumber: 'BATCH-001', quantity: 4 },
       { batchNumber: 'BATCH-002', quantity: 6 },
     ]);
+  });
+});
+
+describe('GoodIssueService list parsing', () => {
+  it('maps all batch numbers from the view response', () => {
+    expect(
+      extractBatchNumber({
+        batches: [
+          { batchNumber: 'ISSUE-001' },
+          { batchNumber: 'ISSUE-002' },
+        ],
+      }),
+    ).toBe('ISSUE-001, ISSUE-002');
+  });
+
+  it('maps batch numbers returned in SAP BatchNumbers', () => {
+    expect(
+      extractBatchNumber({
+        BatchNumbers: [{ BatchNum: 'ISSUE-003' }],
+      }),
+    ).toBe('ISSUE-003');
   });
 });

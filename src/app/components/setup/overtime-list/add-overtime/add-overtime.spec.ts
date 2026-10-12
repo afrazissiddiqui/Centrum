@@ -129,6 +129,35 @@ describe('AddOvertimeComponent', () => {
     expect(fixture.nativeElement.querySelectorAll('tbody input[type="checkbox"]').length).toBe(1);
   });
 
+  it('paginates eligible employees and resets to the first page when searching', () => {
+    const component = fixture.componentInstance;
+    const employee = component.employees()[0];
+    component.employees.set(Array.from({ length: 26 }, (_, index) => ({
+      ...employee,
+      EmployeeCode: `EMP-${String(index + 1).padStart(3, '0')}`,
+      EmployeeName: `Employee ${index + 1}`,
+    })));
+    fixture.detectChanges();
+
+    expect(component.totalPages()).toBe(2);
+    expect(fixture.nativeElement.querySelectorAll('.add-overtime-table tbody tr')).toHaveSize(25);
+
+    const nextButton = [...fixture.nativeElement.querySelectorAll('.add-overtime-pagination__controls > button')]
+      .find((button: HTMLButtonElement) => button.textContent.trim() === 'Next') as HTMLButtonElement;
+    nextButton.click();
+    fixture.detectChanges();
+
+    expect(component.activePage()).toBe(2);
+    expect(fixture.nativeElement.querySelectorAll('.add-overtime-table tbody tr')).toHaveSize(1);
+    expect(fixture.nativeElement.textContent).toContain('Showing 26 to 26 of 26 employees');
+    expect(fixture.nativeElement.textContent).toContain('Employee 26');
+
+    component.onSearchChange('Employee');
+    fixture.detectChanges();
+    expect(component.activePage()).toBe(1);
+    expect(fixture.nativeElement.querySelectorAll('.add-overtime-table tbody tr')).toHaveSize(25);
+  });
+
   it('still displays eligible employees when roster or workstation data cannot be loaded', () => {
     applicationFormService.fetchEmployeeRosterList.and.returnValue(
       throwError(() => new Error('Roster endpoint unavailable')),
@@ -326,6 +355,28 @@ describe('AddOvertimeComponent', () => {
   });
 
   it('posts selected employees with hidden posted flag and marks successes Approved', () => {
+    const month = fixture.componentInstance.selectedMonth();
+    applicationFormService.fetchEmployeeRosterList.and.returnValue(of([{
+      employee_id: 'EMP-001',
+      employee_name: 'Ayesha Khan',
+      department: 'Finance',
+      designation: 'Analyst',
+      employment_status: 'Active',
+      shift_date: `${month}-01`,
+      shift: '7',
+      role: '',
+      hub: '',
+      note: null,
+    }]));
+    fixture.componentInstance.ngOnInit();
+    fixture.componentInstance.employees.update((employees) => employees.map((employee) => ({
+      ...employee,
+      workingHours: '10h 30m',
+      shiftHours: '8h',
+      calculatedOvertimeHours: '2h 30m',
+    })));
+    fixture.detectChanges();
+
     const checkbox = fixture.nativeElement.querySelector('tbody input[type="checkbox"]') as HTMLInputElement;
     checkbox.checked = true;
     checkbox.dispatchEvent(new Event('change'));
@@ -337,7 +388,11 @@ describe('AddOvertimeComponent', () => {
     expect(payload[0]).toEqual(jasmine.objectContaining({
       employee_code: 'EMP-001',
       employee_name: 'Ayesha Khan',
-      overtime_date: `${fixture.componentInstance.selectedMonth()}-01`,
+      overtime_date: `${month}-01`,
+      shift_id: '7',
+      working_hours: 10.5,
+      shift_hours: 8,
+      overtime_hours: 2.5,
       overtime_rate: 123.29,
       flag: '1',
     }));
@@ -346,6 +401,16 @@ describe('AddOvertimeComponent', () => {
     expect(fixture.componentInstance.filteredEmployees()).toHaveSize(0);
     expect(fixture.nativeElement.textContent).not.toContain('Ayesha Khan');
     expect(fixture.nativeElement.textContent).not.toContain('flag');
+  });
+
+  it('does not post default hour values when the selected row has no monthly hours', () => {
+    const employee = fixture.componentInstance.employees()[0];
+    fixture.componentInstance.selectedEmployeeKeys.set(new Set([employee.EmployeeCode]));
+
+    fixture.componentInstance.postSelectedEmployees();
+
+    expect(overtimeListService.postOvertimeEmployee).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.employees()[0].flag).toBe('0');
   });
 
   it('does not post an employee when gross salary is missing', () => {

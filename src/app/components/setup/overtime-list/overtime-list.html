@@ -260,10 +260,10 @@
 
           <h3 class="detail-section-title">Record information</h3>
           <div class="detail-list">
-            @for (column of visibleColumns(); track column.key) {
+            @for (field of detailFields(record); track field.key) {
               <div class="detail-list__item">
-                <strong>{{ column.label }}</strong>
-                <span>{{ formatRecordCell(column.key, record) }}</span>
+                <strong>{{ field.label }}</strong>
+                <span>{{ field.value }}</span>
               </div>
             }
           </div>

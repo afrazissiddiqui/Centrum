@@ -174,6 +174,7 @@ export class EmployeeRosterComponent implements OnInit {
   readonly saving = signal(false);
   readonly employees = signal<RosterEmployee[]>([]);
   readonly unassignedEmployees = signal<ApplicationFormRecord[]>([]);
+  readonly unassignedSearchText = signal('');
   readonly unassignedCalendarEmployee = signal<RosterEmployee | null>(null);
   readonly unassignedSelectedShift = signal<ShiftCode | null>(null);
   readonly editingRosterCalendar = signal(false);
@@ -276,6 +277,14 @@ export class EmployeeRosterComponent implements OnInit {
     });
   });
 
+  readonly filteredUnassignedEmployees = computed(() => {
+    const query = this.unassignedSearchText().trim().toLowerCase();
+    return this.unassignedEmployees().filter((employee) =>
+      !query || [employee.EmployeeName, employee.EmployeeCode, employee.Designation, employee.Department]
+        .some((value) => String(value ?? '').toLowerCase().includes(query)),
+    );
+  });
+
   readonly totalEmployees = computed(() => this.employees().length);
   readonly morningCount = computed(() => this.employees().filter((employee) => employee.shifts.some((shift) => this.shiftName(shift) === 'Morning')).length);
   readonly eveningCount = computed(() => this.employees().filter((employee) => employee.shifts.some((shift) => this.shiftName(shift) === 'Evening')).length);
@@ -352,11 +361,13 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   openUnassignedDialog(): void {
+    this.unassignedSearchText.set('');
     this.unassignedDialogOpen.set(true);
   }
 
   closeUnassignedDialog(): void {
     this.unassignedDialogOpen.set(false);
+    this.unassignedSearchText.set('');
   }
 
   openUnassignedCalendar(employee: ApplicationFormRecord): void {

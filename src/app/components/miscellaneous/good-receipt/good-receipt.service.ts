@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, map } from 'rxjs';
 import { apiUrl } from '../../../config/api.config';
 import { GoodReceiptHeader, GoodReceiptLine } from './good-receipt.model';
+import { extractBatchNumber } from '../batch-number.util';
 
 export interface InventoryAccountOption {
   code: string;
@@ -164,13 +165,6 @@ export class GoodReceiptService {
               !!line && typeof line === 'object' && !Array.isArray(line),
           )
           .map((line) => {
-            const batches = this.pickArray(line, ['batches']);
-            const firstBatch =
-              batches.find(
-                (batch): batch is Record<string, unknown> =>
-                  !!batch && typeof batch === 'object' && !Array.isArray(batch),
-              ) ?? null;
-
             return {
               lineNum: this.pickString(line, ['LineNum', 'lineNum']),
               itemCode: this.pickString(line, ['ItemCode', 'itemCode']),
@@ -183,9 +177,7 @@ export class GoodReceiptService {
               unitPrice: this.pickNumber(line, ['Price', 'unitPrice', 'price']),
               warehouse: this.pickString(line, ['WhsCode', 'warehouse']),
               lineTotal: this.pickNumber(line, ['LineTotal', 'lineTotal']),
-              batchNumber: firstBatch
-                ? this.pickString(firstBatch, ['BatchNum', 'batchNumber', 'batch_number'])
-                : this.pickString(line, ['SerialNum', 'batchNumber', 'BatchNum']),
+              batchNumber: extractBatchNumber(line),
               itemColor: this.pickString(line, ['U_ItemColor', 'itemColor', 'Colour', 'Color']),
             };
           });

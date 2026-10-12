@@ -25,6 +25,12 @@ interface OvertimeListColumn {
   visible: boolean;
 }
 
+interface OvertimeDetailField {
+  key: string;
+  label: string;
+  value: string;
+}
+
 type OvertimeDateFilterMode = 'today' | 'all' | 'specific' | 'range';
 
 function toLocalDateInputValue(date: Date): string {
@@ -191,7 +197,7 @@ export class OvertimeListComponent implements OnInit {
           };
         });
         this.records.set(recordsWithRates);
-        this.columns.set(this.createColumns(recordsWithRates));
+        this.columns.set(this.createColumns());
         this.currentPage.set(1);
         this.loading.set(false);
       },
@@ -411,31 +417,32 @@ export class OvertimeListComponent implements OnInit {
       const minutes = this.monthlyOvertimeTotals().get(`${employeeCode}:${month}`);
       return minutes === undefined ? '—' : this.formatDuration(minutes);
     }
-    return this.formatCellValue(key, record.values[key]);
+    const fieldNames = key === 'employee_code'
+      ? ['employeecode', 'employeeid']
+      : [this.normalizedFieldName(key)];
+    const value = this.fieldValue(record, fieldNames);
+    return this.formatCellValue(key, value);
   }
 
-  private createColumns(records: OvertimeListRecord[]): OvertimeListColumn[] {
-    const keys = new Set<string>();
-    for (const record of records) {
-      for (const key of Object.keys(record.values)) {
-        if (!this.isHiddenListField(key)) {
-          keys.add(key);
-        }
-      }
-    }
+  detailFields(record: OvertimeListRecord): OvertimeDetailField[] {
+    return Object.entries(record.values)
+      .filter(([key]) => !this.isHiddenListField(key))
+      .map(([key, value]) => ({
+        key,
+        label: this.formatColumnLabel(key),
+        value: this.formatCellValue(key, value),
+      }));
+  }
 
-    const columns = Array.from(keys, (key) => ({
-      key,
-      label: this.normalizedFieldName(key) === 'overtimerate'
-        ? 'Overtime Rate'
-        : this.formatColumnLabel(key),
-      visible: true,
-    }));
-    if (!columns.some((column) => this.normalizedFieldName(column.key) === 'overtimerate')) {
-      columns.push({ key: 'overtime_rate', label: 'Overtime Rate', visible: true });
-    }
-    columns.push({ key: 'monthlyOvertime', label: 'Monthly Overtime', visible: true });
-    return columns;
+  private createColumns(): OvertimeListColumn[] {
+    return [
+      { key: 'employee_code', label: 'Employee Code', visible: true },
+      { key: 'employee_name', label: 'Employee Name', visible: true },
+      { key: 'working_hours', label: 'Working Hours', visible: true },
+      { key: 'shift_hours', label: 'Shift Hours', visible: true },
+      { key: 'status', label: 'Status', visible: true },
+      { key: 'monthlyOvertime', label: 'Monthly Overtime', visible: true },
+    ];
   }
 
   private isHiddenListField(key: string): boolean {

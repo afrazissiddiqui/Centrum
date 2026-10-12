@@ -13,6 +13,11 @@ import {
   canonicalizeEmployeeCodeValue,
 } from '../../../../services/application-form.service';
 import {
+  buildPaginationFooterItems,
+  paginationItemTrack,
+  PaginationFooterItem,
+} from '../../../../utils/pagination.util';
+import {
   EmployeeShiftAllocationRecord,
   EmployeeShiftAllocationService,
 } from '../../../../services/employee-shift-allocation.service';
@@ -53,6 +58,9 @@ export class AddOvertimeComponent implements OnInit {
   readonly selectedMonth = signal(this.localDateValue(new Date()).slice(0, 7));
   readonly employees = signal<OvertimeEmployee[]>([]);
   readonly selectedEmployeeKeys = signal<ReadonlySet<string>>(new Set());
+  readonly currentPage = signal(1);
+  readonly pageSize = signal(25);
+  readonly pageSizeOptions = [10, 25, 50, 100];
   private rosterRecords: EmployeeRosterListRecord[] = [];
   private shiftAllocations: EmployeeShiftAllocationRecord[] = [];
   private workstations: WorkstationRecord[] = [];
@@ -95,6 +103,21 @@ export class AddOvertimeComponent implements OnInit {
         .some((value) => value.toLocaleLowerCase().includes(query)),
     );
   });
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.filteredEmployees().length / this.pageSize())));
+  readonly activePage = computed(() => Math.min(this.currentPage(), this.totalPages()));
+  readonly paginatedEmployees = computed(() => {
+    const start = (this.activePage() - 1) * this.pageSize();
+    return this.filteredEmployees().slice(start, start + this.pageSize());
+  });
+  readonly paginationItems = computed<PaginationFooterItem[]>(() =>
+    buildPaginationFooterItems(this.totalPages(), this.activePage()),
+  );
+  readonly paginationStart = computed(() =>
+    this.filteredEmployees().length ? (this.activePage() - 1) * this.pageSize() + 1 : 0,
+  );
+  readonly paginationEnd = computed(() =>
+    Math.min(this.activePage() * this.pageSize(), this.filteredEmployees().length),
+  );
 
   ngOnInit(): void {
     this.loadEmployees();
@@ -102,10 +125,12 @@ export class AddOvertimeComponent implements OnInit {
 
   onSearchChange(value: string): void {
     this.searchText.set(value);
+    this.currentPage.set(1);
   }
 
   onDepartmentChange(value: string): void {
     this.selectedDepartment.set(value);
+    this.currentPage.set(1);
   }
 
   onMonthChange(value: string): void {
@@ -113,6 +138,7 @@ export class AddOvertimeComponent implements OnInit {
       return;
     }
     this.selectedMonth.set(value);
+    this.currentPage.set(1);
     this.applyPostedEmployeeFlags(value);
     this.employees.update((employees) => employees.map((employee) => ({
       ...employee,
@@ -121,6 +147,24 @@ export class AddOvertimeComponent implements OnInit {
       calculatedOvertimeHours: null,
     })));
     this.loadMonthlyOvertime();
+  }
+
+  onPageSizeChange(value: number | string): void {
+    const size = Number(value);
+    if (Number.isInteger(size) && size > 0) {
+      this.pageSize.set(size);
+      this.currentPage.set(1);
+    }
+  }
+
+  setPage(page: number): void {
+    if (page >= 1 && page <= this.totalPages()) {
+      this.currentPage.set(page);
+    }
+  }
+
+  trackPaginationItem(index: number, item: PaginationFooterItem): string {
+    return paginationItemTrack(index, item);
   }
 
   overtimeHours(employee: OvertimeEmployee): string {
@@ -241,21 +285,35 @@ export class AddOvertimeComponent implements OnInit {
         });
       }
 
-      return this.overtimeListService.postOvertimeEmployee([{
+      const workingMinutes = this.durationToMinutes(employee.workingHours);
+      const shiftMinutes = this.durationToMinutes(employee.shiftHours);
+      const overtimeMinutes = this.durationToMinutes(this.overtimeHours(employee));
+      const shiftId = this.shiftIdForMonth(employee, month);
+      if (workingMinutes === null || shiftMinutes === null || overtimeMinutes === null || !shiftId) {
+        return of({
+          employee,
+          success: false as const,
+          errorMessage: 'Monthly hours or shift assignment are unavailable; this employee was not posted.',
+        });
+      }
+
+      const payload = {
         employee_code: employee.EmployeeCode,
         employee_name: employee.EmployeeName,
         overtime_date: overtimeDate,
-        shift_id: '1',
-        working_hours: 8,
-        shift_hours: 8,
-        overtime_hours: 0,
+        shift_id: shiftId,
+        working_hours: workingMinutes / 60,
+        shift_hours: shiftMinutes / 60,
+        overtime_hours: overtimeMinutes / 60,
         overtime_rate: overtimeRate,
         exceptional_ot: 0,
-        flag: '1',
-      }]).pipe(
-        map(() => ({ employee, success: true as const })),
+        flag: '1' as const,
+      };
+      return this.overtimeListService.postOvertimeEmployee([payload]).pipe(
+        map(() => ({ employee, payload, success: true as const })),
         catchError((error: unknown) => of({
           employee,
+          payload,
           success: false as const,
           errorMessage: formatApiErrorMessage(error, 'Post failed.'),
         })),
@@ -268,15 +326,9 @@ export class AddOvertimeComponent implements OnInit {
         ...this.overtimeRecords,
         ...results
           .filter((result) => result.success)
-          .map(({ employee }) => ({
+          .map(({ employee, payload }) => ({
             id: `local-${month}-${this.employeeKey(employee)}`,
-            values: {
-              employee_code: employee.EmployeeCode,
-              employee_name: employee.EmployeeName,
-              overtime_date: overtimeDate,
-              overtime_rate: this.overtimeRate(employee),
-              flag: '1',
-            },
+            values: payload,
           })),
       ];
       this.employees.update((employees) => employees.map((employee) =>
@@ -392,6 +444,25 @@ export class AddOvertimeComponent implements OnInit {
     return Number.isFinite(grossSalary) && grossSalary > 0
       ? computeOvertimeRate(grossSalary)
       : null;
+  }
+
+  private shiftIdForMonth(employee: OvertimeEmployee, month: string): string | null {
+    const [year, monthNumber] = month.split('-').map(Number);
+    const fromDate = `${month}-01`;
+    const toDate = this.localDateValue(new Date(year, monthNumber, 0));
+    const employeeCode = this.normalizeEmployeeKey(employee.EmployeeCode);
+    const assignments = this.rosterRecords
+      .filter((assignment) => this.normalizeEmployeeKey(assignment.employee_id) === employeeCode)
+      .map((assignment) => ({
+        date: this.dateValue(assignment.shift_date),
+        shift: assignment.shift.trim(),
+      }))
+      .filter((assignment) => assignment.date >= fromDate && assignment.date <= toDate && assignment.shift)
+      .sort((left, right) => left.date.localeCompare(right.date));
+
+    return assignments.find((assignment) => assignment.date === fromDate)?.shift
+      ?? assignments[0]?.shift
+      ?? null;
   }
 
   private loadMonthlyOvertime(): void {

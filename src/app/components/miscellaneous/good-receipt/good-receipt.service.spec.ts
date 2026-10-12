@@ -1,3 +1,6 @@
+import '@angular/compiler';
+import { describe, expect, it } from 'vitest';
+import { extractBatchNumber } from '../batch-number.util';
 import { createEmptyGoodReceiptHeader, createEmptyGoodReceiptLine, GoodReceiptLine } from './good-receipt.model';
 import { buildCreateGoodReceiptPayload } from './good-receipt.service';
 
@@ -44,5 +47,23 @@ describe('buildCreateGoodReceiptPayload', () => {
       AcctCode: 'T01001005000050',
       }],
     });
+  });
+});
+
+describe('GoodReceiptService list parsing', () => {
+  it('maps batch numbers from SAP BatchNumbers in the view response', () => {
+    expect(
+      extractBatchNumber({
+        BatchNumbers: [{ BatchNumber: 'RECEIPT-001' }],
+      }),
+    ).toBe('RECEIPT-001');
+  });
+
+  it('maps the batch number when the API returns it directly on the line', () => {
+    expect(
+      extractBatchNumber({
+        BatchNo: 'RECEIPT-002',
+      }),
+    ).toBe('RECEIPT-002');
   });
 });

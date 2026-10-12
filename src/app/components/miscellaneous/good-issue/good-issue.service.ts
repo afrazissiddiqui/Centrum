@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, map } from 'rxjs';
 import { apiUrl } from '../../../config/api.config';
 import { GoodIssueHeader, GoodIssueLine } from './good-issue.model';
+import { extractBatchNumber } from '../batch-number.util';
 
 export interface InventoryAccountOption {
   code: string;
@@ -225,12 +226,6 @@ export class GoodIssueService {
         const lines = this.pickArray(item, ['items', 'lines', 'DocumentLines'])
           .filter((line): line is Record<string, unknown> => !!line && typeof line === 'object')
           .map((line) => {
-            const batches = this.pickArray(line, ['batches']);
-            const firstBatch =
-              batches.find(
-                (batch): batch is Record<string, unknown> => !!batch && typeof batch === 'object',
-              ) ?? null;
-
             return {
               lineNum: this.pickString(line, ['LineNum', 'lineNum']),
               itemCode: this.pickString(line, ['ItemCode', 'itemCode']),
@@ -239,9 +234,7 @@ export class GoodIssueService {
               unitPrice: this.pickNumber(line, ['Price', 'unitPrice', 'price']),
               warehouse: this.pickString(line, ['WhsCode', 'warehouse', 'FromWhsCod', 'fromWarehouse']),
               lineTotal: this.pickNumber(line, ['LineTotal', 'lineTotal']),
-              batchNumber: firstBatch
-                ? this.pickString(firstBatch, ['BatchNum', 'batchNumber', 'batch_number'])
-                : '',
+              batchNumber: extractBatchNumber(line),
             };
           });
 

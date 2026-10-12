@@ -25,10 +25,12 @@ import {
   LoanAdvanceRecord,
   LoanAdvanceService,
 } from '../../../../../services/loan-advance.service';
+import { OvertimeListRecord, OvertimeListService } from '../../../../../services/overtime-list.service';
 import {
   PayrollProcessingService,
   PayrollProcessingSubmitPayload,
 } from '../../../../../services/payroll-processing.service';
+import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
 import {
   PayrollSetupService,
   computeBasicSalary,
@@ -163,6 +165,7 @@ export class AddPayrollProcessComponent implements OnInit {
   private readonly alertService = inject(AlertService);
   private readonly authService = inject(AuthService);
   private readonly loanAdvanceService = inject(LoanAdvanceService);
+  private readonly overtimeListService = inject(OvertimeListService);
   private readonly payrollSetupService = inject(PayrollSetupService);
   private readonly payrollProcessingService = inject(PayrollProcessingService);
   private readonly withholdingTaxService = inject(WithholdingTaxService);
@@ -171,6 +174,7 @@ export class AddPayrollProcessComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   readonly employeeSummaries = signal<ApplicationFormRecord[]>([]);
+  readonly overtimeRecords = signal<OvertimeListRecord[]>([]);
   readonly rowCache = signal<Map<string, PayrollProcessRow>>(new Map());
   readonly loading = signal(true);
   readonly loadingPageDetails = signal(false);
@@ -245,7 +249,7 @@ export class AddPayrollProcessComponent implements OnInit {
     { key: 'carAllowance', label: 'Car', groupId: 'allowances', type: 'currency', minWidth: 145 },
     { key: 'otherAllowances', label: 'Other', groupId: 'allowances', type: 'currency', minWidth: 145 },
     { key: 'bonus', label: 'Bonus', groupId: 'bonuses', type: 'currency', minWidth: 145 },
-    { key: 'overtimeHours', label: 'Overtime Hours', groupId: 'bonuses', type: 'currency', minWidth: 140 },
+    { key: 'overtimeHours', label: 'Overtime Hours (Month Total)', groupId: 'bonuses', type: 'currency', minWidth: 190 },
     { key: 'overtime', label: 'Overtime', groupId: 'bonuses', type: 'readonly', minWidth: 145 },
     { key: 'providentFundEmployer', label: 'P.Fund (Employer)', groupId: 'providentFund', type: 'readonly', minWidth: 152 },
     { key: 'providentFund', label: 'P.Fund (Employee)', groupId: 'providentFund', type: 'readonly', minWidth: 152 },
@@ -409,6 +413,7 @@ export class AddPayrollProcessComponent implements OnInit {
     this.destroyRef.onDestroy(() => this.pageDetailsSub?.unsubscribe());
     this.loadWithholdingTaxes();
     this.loadLoanAdvances();
+    this.loadOvertimeRecords();
     this.loadEmployees();
   }
 
@@ -1172,6 +1177,35 @@ export class AddPayrollProcessComponent implements OnInit {
     });
   }
 
+  private loadOvertimeRecords(): void {
+    this.overtimeListService.fetchOvertimeList().subscribe({
+      next: (records) => {
+        this.overtimeRecords.set(records);
+        this.rowCache.update((cache) => {
+          const next = new Map(cache);
+          for (const [apiId, row] of next) {
+            next.set(apiId, this.recalculateRow({
+              ...row,
+              overtimeHours: sumSubmittedOvertimeHours(
+                records,
+                [row.employeeCode, row.apiId],
+                this.getSelectedPayrollMonth(),
+              ),
+            }));
+          }
+          return next;
+        });
+        this.cdr.markForCheck();
+      },
+      error: (error: unknown) => {
+        void this.alertService.error(
+          'Overtime Data Unavailable',
+          formatApiErrorMessage(error, 'Submitted overtime hours could not be loaded.'),
+        );
+      },
+    });
+  }
+
   private refreshPayrollRows(): void {
     this.rowCache.set(new Map());
     if (this.employeeSummaries().length > 0) {
@@ -1356,7 +1390,11 @@ export class AddPayrollProcessComponent implements OnInit {
       otherAllowances: this.parseAmount(remuneration?.otherAllowances ?? 0),
       bonus: 0,
       lastMonthGrossSalary,
-      overtimeHours: 0,
+      overtimeHours: sumSubmittedOvertimeHours(
+        this.overtimeRecords(),
+        [employeeCode, record.apiId ?? ''],
+        this.getSelectedPayrollMonth(),
+      ),
       overtime: 0,
       providentFund: 0,
       providentFundEmployer: 0,

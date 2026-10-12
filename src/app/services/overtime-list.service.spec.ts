@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpClient } from '@angular/common/http';
-import { of } from 'rxjs';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { of, throwError } from 'rxjs';
 import { apiUrl } from '../config/api.config';
 import { OvertimeListRecord, OvertimeListService } from './overtime-list.service';
 
@@ -28,6 +28,36 @@ describe('OvertimeListService', () => {
       id: '12',
       values: { id: 12, employee_code: 'EMP-001', employee_name: 'Ayesha Khan', overtime_hours: 2.5 },
     }]);
+  });
+
+  it('retries transient server failures when fetching overtime records', (done) => {
+    const http = jasmine.createSpyObj<HttpClient>('HttpClient', ['get']);
+    http.get.and.returnValues(
+      throwError(() => new HttpErrorResponse({
+        status: 500,
+        error: "SQLSTATE[42S02]: Base table or view not found: 1146 Table 'ahcp_db_live.overtime_records' doesn't exist",
+      })),
+      of({ data: [{ id: 12, employee_code: 'EMP-001' }] }),
+    );
+    TestBed.configureTestingModule({
+      providers: [
+        OvertimeListService,
+        { provide: HttpClient, useValue: http },
+      ],
+    });
+    const service = TestBed.inject(OvertimeListService);
+
+    service.fetchOvertimeList().subscribe({
+      next: (records) => {
+        expect(records).toEqual([{
+          id: '12',
+          values: { id: 12, employee_code: 'EMP-001' },
+        }]);
+        expect(http.get).toHaveBeenCalledTimes(2);
+        done();
+      },
+      error: done.fail,
+    });
   });
 
   it('posts an employee to the overtime endpoint', () => {
