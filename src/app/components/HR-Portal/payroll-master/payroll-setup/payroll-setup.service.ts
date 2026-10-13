@@ -174,12 +174,12 @@ export function computeProvidentFund(basicSalary: number): number {
   return roundPayrollAmount(basicSalary * 0.0833);
 }
 
-/** Overtime Rate = (Last Month Gross Salary × 12 ÷ 365) ÷ 8 */
+/** Overtime Rate = (Gross Salary ÷ 365) ÷ 8 */
 export function computeOvertimeRate(lastMonthGrossSalary: number): number {
   if (lastMonthGrossSalary <= 0) {
     return 0;
   }
-  return roundPayrollAmount(((lastMonthGrossSalary * 12) / 365) / 8);
+  return roundPayrollAmount((lastMonthGrossSalary / 365) / 8);
 }
 
 /** Overtime Amount = Overtime Rate × Overtime Hours */

@@ -62,7 +62,18 @@
       <table class="add-overtime-table">
         <thead>
           <tr>
-            <th scope="col" class="add-overtime-table__selection-heading">Select</th>
+            <th scope="col" class="add-overtime-table__selection-heading">
+              <label class="add-overtime-table__selection-toggle">
+                <input
+                  type="checkbox"
+                  [checked]="allVisibleSelected()"
+                  [disabled]="!filteredSelectableEmployees().length || posting()"
+                  [attr.aria-label]="'Select all visible employees'"
+                  (change)="toggleAllVisible($event)"
+                />
+                <span>Select All</span>
+              </label>
+            </th>
             <th scope="col">Employee Code</th>
             <th scope="col">Employee Name</th>
             <th scope="col">Department</th>

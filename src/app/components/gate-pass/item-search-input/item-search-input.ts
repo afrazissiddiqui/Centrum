@@ -21,6 +21,7 @@ export class GatePassItemSearchInputComponent {
 
   @Output() valueChange = new EventEmitter<string>();
   @Output() itemSelected = new EventEmitter<GatePassItemMaster>();
+  @Output() editAttempt = new EventEmitter<void>();
 
   suggestionsOpen = false;
   suggestions: GatePassItemMaster[] = [];
@@ -41,6 +42,7 @@ export class GatePassItemSearchInputComponent {
     if (this.disabled) {
       return;
     }
+    this.editAttempt.emit();
     if (this.value.trim()) {
       this.refreshSuggestions(this.value);
       // compute position for suggestions to avoid clipping

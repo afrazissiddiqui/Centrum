@@ -142,6 +142,14 @@
             }
           </select>
         </label>
+        <label class="unassigned-department-filter">
+          <span>Branch</span>
+          <select aria-label="Filter unassigned employees by branch" [ngModel]="unassignedBranchFilter()" (ngModelChange)="unassignedBranchFilter.set($event)">
+            @for (branch of unassignedBranchOptions; track branch) {
+              <option [value]="branch">{{ branch }}</option>
+            }
+          </select>
+        </label>
       </div>
       <div class="unassigned-list">
         @if (!unassignedEmployees().length) {

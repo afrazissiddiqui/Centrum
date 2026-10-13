@@ -252,6 +252,27 @@ describe('AddOvertimeComponent', () => {
     expect(filteredCheckbox.checked).toBe(true);
   });
 
+  it('selects all visible eligible employees with the header checkbox', () => {
+    const component = fixture.componentInstance;
+    component.employees.set([
+      { ...component.employees()[0], EmployeeCode: 'EMP-004', EmployeeName: 'Mariam Noor', Department: 'Finance' },
+      { ...component.employees()[0], EmployeeCode: 'EMP-005', EmployeeName: 'Nadia Ali', Department: 'Finance' },
+      { ...component.employees()[0], EmployeeCode: 'EMP-006', EmployeeName: 'Farhan Khan', Department: 'Finance', flag: '1' },
+    ]);
+    fixture.detectChanges();
+
+    const selectAllCheckbox = fixture.nativeElement.querySelector(
+      '.add-overtime-table__selection-heading input',
+    ) as HTMLInputElement;
+    selectAllCheckbox.checked = true;
+    selectAllCheckbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(component.selectedEmployeeKeys().has('EMP-004')).toBeTrue();
+    expect(component.selectedEmployeeKeys().has('EMP-005')).toBeTrue();
+    expect(component.selectedEmployeeKeys().has('EMP-006')).toBeFalse();
+  });
+
   it('loads monthly working hours using the employee legacy code', () => {
     applicationFormService.fetchEmployeeProfiles.and.returnValue(of([{
       EmployeeCode: 'EMP-001',

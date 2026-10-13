@@ -118,6 +118,15 @@ export class AddOvertimeComponent implements OnInit {
   readonly paginationEnd = computed(() =>
     Math.min(this.activePage() * this.pageSize(), this.filteredEmployees().length),
   );
+  readonly filteredSelectableEmployees = computed(() =>
+    this.filteredEmployees().filter((employee) => employee.flag === '0'),
+  );
+  readonly allVisibleSelected = computed(() => {
+    const visible = this.filteredSelectableEmployees();
+    return visible.length > 0 && visible.every((employee) =>
+      this.selectedEmployeeKeys().has(this.employeeKey(employee)),
+    );
+  });
 
   ngOnInit(): void {
     this.loadEmployees();
@@ -194,6 +203,27 @@ export class AddOvertimeComponent implements OnInit {
 
   employeeKey(employee: ApplicationFormRecord): string {
     return employee.EmployeeCode;
+  }
+
+  toggleAllVisible(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const checked = target.checked;
+    this.selectedEmployeeKeys.update((selectedKeys) => {
+      const nextSelectedKeys = new Set(selectedKeys);
+      for (const employee of this.filteredSelectableEmployees()) {
+        const key = this.employeeKey(employee);
+        if (checked) {
+          nextSelectedKeys.add(key);
+        } else {
+          nextSelectedKeys.delete(key);
+        }
+      }
+      return nextSelectedKeys;
+    });
   }
 
   toggleEmployeeSelection(employee: ApplicationFormRecord, event: Event): void {

@@ -396,10 +396,7 @@ export class CreateAgpComponent implements OnInit {
   }
 
   removeLine(index: number): void {
-    const line = this.lines[index];
-    if (line && !line.deleted) {
-      line.deleted = true;
-    }
+    this.lines = this.lines.filter((_, lineIndex) => lineIndex !== index);
   }
 
   applyItemMaster(line: AgpLineItem, item: GatePassItemMaster): void {
@@ -429,6 +426,17 @@ export class CreateAgpComponent implements OnInit {
 
   onDriverPhoneChange(value: string): void {
     this.driverPhone = formatGatePassPhoneDigits(value);
+  }
+
+  warnBeforeEditingItemDetails(): void {
+    if (!this.editingId) {
+      return;
+    }
+
+    this.alertService.warning(
+      'Item details',
+      'Please avoid changing the item code or item name while updating an AGP.',
+    );
   }
 
   onAttachmentChange(event: Event): void {

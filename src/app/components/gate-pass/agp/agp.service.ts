@@ -232,13 +232,13 @@ export class AgpService {
 
   updateArticleGatePass(id: string | number, payload: AgpAddPayload): Observable<AgpApiResponse> {
     const identifier = encodeURIComponent(String(id));
-    const normalizedPayload: AgpAddPayload = {
-      ...payload,
-      baseDocNo: String(payload.baseDocNo ?? '').trim() || 'N/A',
-    };
+    const updatePayload: Partial<AgpAddPayload> = { ...payload };
+    // The base document is immutable during edits; resubmitting it triggers the API's uniqueness check.
+    delete updatePayload.baseDocNo;
+
     return this.http.post<AgpApiResponse>(
       `${ARTICLE_GATE_PASS_UPDATE_URL}/${identifier}`,
-      JSON.stringify(normalizedPayload),
+      JSON.stringify(updatePayload),
       { headers: { 'Content-Type': 'application/json' } },
     );
   }

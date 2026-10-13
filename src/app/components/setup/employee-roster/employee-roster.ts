@@ -86,23 +86,29 @@ export function matchesRosterBranch(employeeBranch: string, selectedBranch: stri
 }
 
 const NO_DEPARTMENT_FILTER = '__no_department__';
+const ALL_BRANCHES_FILTER = 'All Branches';
 
 export function filterUnassignedEmployees(
   employees: ApplicationFormRecord[],
   searchText: string,
   departmentFilter: string,
+  branchFilter = ALL_BRANCHES_FILTER,
 ): ApplicationFormRecord[] {
   const query = searchText.trim().toLowerCase();
   return employees.filter((employee) => {
     const department = String(employee.Department ?? '').trim();
+    const branch = rosterBranchName(
+      employee.detail?.personalInfo?.branchLocation || employee.detail?.requisition?.location,
+    );
     const matchesDepartment = !departmentFilter ||
       (departmentFilter === NO_DEPARTMENT_FILTER
         ? !department
         : department.toLowerCase() === departmentFilter.toLowerCase());
+    const matchesBranch = matchesRosterBranch(branch, branchFilter);
     const matchesSearch = !query ||
       [employee.EmployeeName, employee.EmployeeCode, employee.Designation, department]
         .some((value) => String(value ?? '').toLowerCase().includes(query));
-    return matchesDepartment && matchesSearch;
+    return matchesDepartment && matchesBranch && matchesSearch;
   });
 }
 
@@ -262,6 +268,7 @@ export class EmployeeRosterComponent implements OnInit {
   readonly unassignedEmployees = signal<ApplicationFormRecord[]>([]);
   readonly unassignedSearchText = signal('');
   readonly unassignedDepartmentFilter = signal('');
+  readonly unassignedBranchFilter = signal(ALL_BRANCHES_FILTER);
   readonly unassignedCalendarEmployee = signal<RosterEmployee | null>(null);
   readonly unassignedSelectedShift = signal<ShiftCode | null>(null);
   readonly editingRosterCalendar = signal(false);
@@ -289,6 +296,7 @@ export class EmployeeRosterComponent implements OnInit {
   readonly branchHolidaysOpen = signal(false);
   readonly unassignedDialogOpen = signal(false);
   readonly shiftOptions = computed(() => rosterShiftOptions(this.workstationService.workstations()));
+  readonly unassignedBranchOptions = [ALL_BRANCHES_FILTER, ...ROSTER_BRANCH_OPTIONS];
   readonly unassignedDepartmentOptions = computed(() => {
     const departments = [...new Set(
       this.unassignedEmployees()
@@ -386,6 +394,7 @@ export class EmployeeRosterComponent implements OnInit {
       this.unassignedEmployees(),
       this.unassignedSearchText(),
       this.unassignedDepartmentFilter(),
+      this.unassignedBranchFilter(),
     );
   });
 
@@ -471,6 +480,7 @@ export class EmployeeRosterComponent implements OnInit {
   openUnassignedDialog(): void {
     this.unassignedSearchText.set('');
     this.unassignedDepartmentFilter.set('');
+    this.unassignedBranchFilter.set(ALL_BRANCHES_FILTER);
     this.unassignedDialogOpen.set(true);
   }
 
@@ -478,6 +488,7 @@ export class EmployeeRosterComponent implements OnInit {
     this.unassignedDialogOpen.set(false);
     this.unassignedSearchText.set('');
     this.unassignedDepartmentFilter.set('');
+    this.unassignedBranchFilter.set(ALL_BRANCHES_FILTER);
   }
 
   openUnassignedCalendar(employee: ApplicationFormRecord): void {
@@ -487,7 +498,9 @@ export class EmployeeRosterComponent implements OnInit {
     this.calendarOriginalShifts = [];
     this.unassignedCalendarEmployee.set({
       ...this.toRosterEmployee(employee, 0),
-      hub: rosterBranchName(employee.detail?.personalInfo.branchLocation || employee.detail?.requisition.location) || this.selectedHub(),
+      hub: rosterBranchName(
+        employee.detail?.personalInfo?.branchLocation || employee.detail?.requisition?.location,
+      ) || this.selectedHub(),
       shifts: this.fullMonthDays().map(() => '+'),
     });
     this.unassignedSelectedShift.set(null);

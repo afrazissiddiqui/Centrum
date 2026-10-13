@@ -33,8 +33,20 @@ describe('matchesRosterBranch', () => {
 
 describe('filterUnassignedEmployees', () => {
   const employees = [
-    { EmployeeCode: 'E001', EmployeeName: 'Ali Khan', Department: 'Operations', Designation: 'Officer' },
-    { EmployeeCode: 'E002', EmployeeName: 'Sara Ahmed', Department: 'Finance', Designation: 'Officer' },
+    {
+      EmployeeCode: 'E001',
+      EmployeeName: 'Ali Khan',
+      Department: 'Operations',
+      Designation: 'Officer',
+      detail: { personalInfo: { branchLocation: '1' } },
+    },
+    {
+      EmployeeCode: 'E002',
+      EmployeeName: 'Sara Ahmed',
+      Department: 'Finance',
+      Designation: 'Officer',
+      detail: { requisition: { location: 'AHCP_Faisalabad' } },
+    },
     { EmployeeCode: 'E003', EmployeeName: 'No Dept', Department: '', Designation: 'Officer' },
   ] as ApplicationFormRecord[];
 
@@ -48,6 +60,15 @@ describe('filterUnassignedEmployees', () => {
     expect(filterUnassignedEmployees(employees, '', '').length).toBe(3);
     expect(filterUnassignedEmployees(employees, '', '__no_department__').map((employee) => employee.EmployeeCode))
       .toEqual(['E003']);
+  });
+
+  it('filters by branch using the employee profile branch code or requisition location', () => {
+    expect(filterUnassignedEmployees(employees, '', '', 'AHCP_Peshawar').map((employee) => employee.EmployeeCode))
+      .toEqual(['E001']);
+    expect(filterUnassignedEmployees(employees, '', '', 'AHCP_Faisalabad').map((employee) => employee.EmployeeCode))
+      .toEqual(['E002']);
+    expect(filterUnassignedEmployees(employees, '', '', 'AHCP_HO')).toEqual([]);
+    expect(filterUnassignedEmployees(employees, '', '', 'All Branches').length).toBe(3);
   });
 });
 

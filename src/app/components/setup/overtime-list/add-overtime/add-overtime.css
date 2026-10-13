@@ -228,6 +228,16 @@
   width: 56px;
 }
 
+.add-overtime-table__selection-toggle {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  justify-content: center;
+}
+
+.add-overtime-table__selection-heading input,
 .add-overtime-table__selection-cell input {
   cursor: pointer;
   height: 16px;
