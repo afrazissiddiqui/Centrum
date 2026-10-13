@@ -14,7 +14,7 @@
     </header>
 
     <section class="roster-controls" aria-label="Roster filters">
-      <label class="select-control"><ui5-icon name="building" aria-hidden="true"></ui5-icon><select [ngModel]="selectedHub()" (ngModelChange)="selectedHub.set($event)"><option>Lahore HO</option><option>AHCP_Peshawar</option><option>AHCP_Faisalabad</option></select><ui5-icon name="slim-arrow-down" aria-hidden="true"></ui5-icon></label>
+      <label class="select-control"><ui5-icon name="building" aria-hidden="true"></ui5-icon><select aria-label="Filter employees by branch" [ngModel]="selectedHub()" (ngModelChange)="selectedHub.set($event)">@for (branch of rosterBranchOptions; track branch) { <option [value]="branch">{{ branch }}</option> }</select><ui5-icon name="slim-arrow-down" aria-hidden="true"></ui5-icon></label>
       <label class="select-control"><ui5-icon name="group" aria-hidden="true"></ui5-icon><select [ngModel]="selectedDepartment()" (ngModelChange)="onDepartmentChange($event)"><option>All Departments</option>@for (department of departmentOptions(); track department.id) { <option [value]="department.name">{{ department.name }}</option> } </select><ui5-icon name="slim-arrow-down" aria-hidden="true"></ui5-icon></label>
       <div class="month-control"><button type="button" aria-label="Previous month" (click)="changeMonth(-1)">‹</button><span><ui5-icon name="calendar" aria-hidden="true"></ui5-icon> {{ monthLabel() }}</span><button type="button" aria-label="Next month" (click)="changeMonth(1)">›</button></div>
       <label class="select-control month-half-control"><ui5-icon name="time-entry-request" aria-hidden="true"></ui5-icon><select [ngModel]="selectedMonthHalf()" (ngModelChange)="onMonthHalfChange($event)"><option>First Half</option><option>Second Half</option></select><ui5-icon name="slim-arrow-down" aria-hidden="true"></ui5-icon></label>
@@ -129,10 +129,20 @@
         </div>
         <button type="button" class="dialog-close" aria-label="Close unassigned employees" (click)="closeUnassignedDialog()">×</button>
       </header>
-      <label class="unassigned-search">
-        <ui5-icon name="search" aria-hidden="true"></ui5-icon>
-        <input type="search" aria-label="Search unassigned employees" placeholder="Search by name, ID, department, or role..." [ngModel]="unassignedSearchText()" (ngModelChange)="unassignedSearchText.set($event)" />
-      </label>
+      <div class="unassigned-filters">
+        <label class="unassigned-search">
+          <ui5-icon name="search" aria-hidden="true"></ui5-icon>
+          <input type="search" aria-label="Search unassigned employees" placeholder="Search by name, ID, department, or role..." [ngModel]="unassignedSearchText()" (ngModelChange)="unassignedSearchText.set($event)" />
+        </label>
+        <label class="unassigned-department-filter">
+          <span>Department</span>
+          <select aria-label="Filter unassigned employees by department" [ngModel]="unassignedDepartmentFilter()" (ngModelChange)="unassignedDepartmentFilter.set($event)">
+            @for (option of unassignedDepartmentOptions(); track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+      </div>
       <div class="unassigned-list">
         @if (!unassignedEmployees().length) {
           <p class="shift-options__status">All shift-applicable employees are in the roster.</p>
@@ -166,8 +176,15 @@
       </header>
       <div class="unassigned-shift-picker" aria-label="Select shift to assign">
         <span>Choose shift, then click dates:</span>
-        @for (option of shiftOptions(); track option.code) {
-          <button type="button" class="unassigned-shift-option" [class.unassigned-shift-option--selected]="unassignedSelectedShift() === option.code" [style.background]="shiftBackground(option.title)" [style.color]="shiftForeground(option.title)" (click)="selectUnassignedShift(option.code)">{{ option.title }}</button>
+        @if (workstationLoading()) {
+          <p class="shift-options__status">Loading workstation shifts...</p>
+        } @else {
+          @if (shiftOptions().length === 2) {
+            <p class="shift-options__status">No workstation shifts found.</p>
+          }
+          @for (option of shiftOptions(); track option.code) {
+            <button type="button" class="unassigned-shift-option" [class.unassigned-shift-option--selected]="unassignedSelectedShift() === option.code" [style.background]="shiftBackground(option.title)" [style.color]="shiftForeground(option.title)" (click)="selectUnassignedShift(option.code)">{{ option.title }}</button>
+          }
         }
       </div>
       <div class="unassigned-calendar-grid">

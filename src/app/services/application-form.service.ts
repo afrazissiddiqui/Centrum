@@ -216,6 +216,9 @@ export interface EmployeeRosterAddPayload {
 }
 
 export interface EmployeeRosterListRecord {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
   employee_id: string;
   employee_name: string;
   department: string;
@@ -1795,6 +1798,9 @@ export class ApplicationFormService {
     };
 
     return {
+      id: pick('id', 'Id', 'ID', 'employee_roster_id', 'employeeRosterId', 'roster_id', 'rosterId') || undefined,
+      created_at: pick('created_at', 'createdAt') || undefined,
+      updated_at: pick('updated_at', 'updatedAt') || undefined,
       employee_id: pick('employee_id', 'employeeId', 'employeeID', 'EmployeeCode', 'employee_code'),
       employee_name: pick('employee_name', 'employeeName', 'EmployeeName', 'person_name', 'personName'),
       department: pick('department', 'Department'),

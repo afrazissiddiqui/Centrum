@@ -8,9 +8,12 @@ import { formatApiErrorMessage } from '../../../utils/api-error.util';
 import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
 import { GatePassDepartmentService } from '../../gate-pass/gate-pass-department.service';
 import { WorkstationRecord, WorkstationService } from '../../../services/workstation.service';
+import { glAccountBranchLabel, resolveBranchCode } from '../gl-account-determination/gl-account-branch.options';
 
 type ShiftCode = string;
 type MonthHalf = 'First Half' | 'Second Half';
+const ROSTER_BRANCH_OPTIONS = ['AHCP_Peshawar', 'AHCP_HO', 'AHCP_Faisalabad'];
+
 interface RosterDay {
   date: number;
   weekday: string;
@@ -66,6 +69,48 @@ function normalizeEmployeeCodeForRoster(value: string | null | undefined): strin
   return numericCode ? `emp-${numericCode.padStart(8, '0')}` : normalized;
 }
 
+export function rosterBranchName(value: string | null | undefined): string {
+  const branch = String(value ?? '').trim();
+  if (!branch) {
+    return '';
+  }
+  if (branch.toLowerCase() === 'lahore ho') {
+    return 'AHCP_HO';
+  }
+  return glAccountBranchLabel(resolveBranchCode(branch));
+}
+
+export function matchesRosterBranch(employeeBranch: string, selectedBranch: string): boolean {
+  return selectedBranch === 'All Branches' ||
+    rosterBranchName(employeeBranch).toLowerCase() === rosterBranchName(selectedBranch).toLowerCase();
+}
+
+const NO_DEPARTMENT_FILTER = '__no_department__';
+
+export function filterUnassignedEmployees(
+  employees: ApplicationFormRecord[],
+  searchText: string,
+  departmentFilter: string,
+): ApplicationFormRecord[] {
+  const query = searchText.trim().toLowerCase();
+  return employees.filter((employee) => {
+    const department = String(employee.Department ?? '').trim();
+    const matchesDepartment = !departmentFilter ||
+      (departmentFilter === NO_DEPARTMENT_FILTER
+        ? !department
+        : department.toLowerCase() === departmentFilter.toLowerCase());
+    const matchesSearch = !query ||
+      [employee.EmployeeName, employee.EmployeeCode, employee.Designation, department]
+        .some((value) => String(value ?? '').toLowerCase().includes(query));
+    return matchesDepartment && matchesSearch;
+  });
+}
+
+function isAssignedRosterShift(shift: string): boolean {
+  const normalized = shift.trim().toLowerCase();
+  return normalized !== '' && normalized !== '+' && normalized !== 'null' && normalized !== 'undefined';
+}
+
 export function rosterDayIndexForMonth(shiftDate: string, monthLabel: string): number | null {
   const [monthName, yearText] = monthLabel.split(' ');
   const targetYear = Number(yearText);
@@ -93,18 +138,49 @@ export function rosterShiftsForEmployeeMonth(
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   const shifts = Array.from({ length: daysInMonth }, () => '+');
   const normalizedEmployeeCode = normalizeEmployeeCodeForRoster(employeeCode);
+  const latestRecordByDay = new Map<number, EmployeeRosterListRecord>();
 
   for (const record of records) {
-    if (normalizeEmployeeCodeForRoster(record.employee_id) !== normalizedEmployeeCode) {
+    if (
+      normalizeEmployeeCodeForRoster(record.employee_id) !== normalizedEmployeeCode ||
+      !isAssignedRosterShift(record.shift)
+    ) {
       continue;
     }
     const dayIndex = rosterDayIndexForMonth(record.shift_date, monthLabel);
-    if (dayIndex !== null && record.shift.trim()) {
-      shifts[dayIndex] = record.shift;
+    if (dayIndex === null) {
+      continue;
+    }
+    const current = latestRecordByDay.get(dayIndex);
+    if (!current || compareRosterRecordVersion(current, record) <= 0) {
+      latestRecordByDay.set(dayIndex, record);
     }
   }
 
+  for (const [dayIndex, record] of latestRecordByDay) {
+    shifts[dayIndex] = record.shift;
+  }
+
   return shifts;
+}
+
+function compareRosterRecordVersion(
+  left: EmployeeRosterListRecord,
+  right: EmployeeRosterListRecord,
+): number {
+  const leftTimestamp = Date.parse(left.updated_at || left.created_at || '');
+  const rightTimestamp = Date.parse(right.updated_at || right.created_at || '');
+  if (Number.isFinite(leftTimestamp) && Number.isFinite(rightTimestamp) && leftTimestamp !== rightTimestamp) {
+    return leftTimestamp - rightTimestamp;
+  }
+
+  const leftId = Number(left.id);
+  const rightId = Number(right.id);
+  if (Number.isFinite(leftId) && Number.isFinite(rightId) && leftId !== rightId) {
+    return leftId - rightId;
+  }
+
+  return 0;
 }
 
 export function rosterPeriodForDate(date: Date): { monthLabel: string; monthHalf: MonthHalf } {
@@ -117,7 +193,7 @@ export function rosterPeriodForDate(date: Date): { monthLabel: string; monthHalf
 export function rosterShiftOptions(workstations: WorkstationRecord[]) {
   const options = workstations
     .map((workstation) => {
-      const code = workstation.code.trim() || String(workstation.id).trim() || workstation.shift.trim();
+      const code = rosterWorkstationCode(workstation, workstations);
       const description = workstation.description.trim() || workstation.name.trim() || workstation.shift.trim();
       return {
         code,
@@ -137,6 +213,18 @@ export function rosterShiftOptions(workstations: WorkstationRecord[]) {
   ];
 }
 
+function rosterWorkstationCode(
+  workstation: WorkstationRecord,
+  workstations: WorkstationRecord[],
+): string {
+  const baseCode = workstation.code.trim() || String(workstation.id).trim() || workstation.shift.trim();
+  const duplicateCode = workstations.some((item) =>
+    item !== workstation &&
+    (item.code.trim() || String(item.id).trim() || item.shift.trim()).toLowerCase() === baseCode.toLowerCase(),
+  );
+  return duplicateCode ? String(workstation.id).trim() || baseCode : baseCode;
+}
+
 export function rosterShiftInitial(shift: ShiftCode, workstations: WorkstationRecord[]): string {
   const normalizedShift = shift.trim();
   if (!normalizedShift || normalizedShift === '+' || ['OFF', 'HOL', 'L'].includes(normalizedShift.toUpperCase())) {
@@ -144,15 +232,13 @@ export function rosterShiftInitial(shift: ShiftCode, workstations: WorkstationRe
   }
 
   const lowerShift = normalizedShift.toLowerCase();
-  const workstation = workstations.find((item) =>
+  const workstationIndex = workstations.findIndex((item) =>
     [item.code, String(item.id), item.shift, item.name, item.description]
       .some((value) => value.trim().toLowerCase() === lowerShift),
   );
-  const assignedShift = workstation?.name.trim() ||
-    workstation?.shift.trim() ||
-    workstation?.description.trim() ||
-    normalizedShift;
-  return [...assignedShift][0]?.toLocaleUpperCase() ?? normalizedShift;
+  return workstationIndex >= 0
+    ? String(workstationIndex + 1)
+    : normalizedShift;
 }
 
 @Component({
@@ -175,6 +261,7 @@ export class EmployeeRosterComponent implements OnInit {
   readonly employees = signal<RosterEmployee[]>([]);
   readonly unassignedEmployees = signal<ApplicationFormRecord[]>([]);
   readonly unassignedSearchText = signal('');
+  readonly unassignedDepartmentFilter = signal('');
   readonly unassignedCalendarEmployee = signal<RosterEmployee | null>(null);
   readonly unassignedSelectedShift = signal<ShiftCode | null>(null);
   readonly editingRosterCalendar = signal(false);
@@ -182,7 +269,8 @@ export class EmployeeRosterComponent implements OnInit {
   private rosterRecords: EmployeeRosterListRecord[] = [];
   private originalRosterShifts = new Map<string, string[]>();
   readonly searchText = signal('');
-  readonly selectedHub = signal('Lahore HO');
+  readonly selectedHub = signal('All Branches');
+  readonly rosterBranchOptions = ['All Branches', ...ROSTER_BRANCH_OPTIONS];
   readonly selectedDepartment = signal('All Departments');
   readonly selectedDepartmentCode = signal('');
   readonly departmentOptions = this.departmentService.departments;
@@ -201,6 +289,21 @@ export class EmployeeRosterComponent implements OnInit {
   readonly branchHolidaysOpen = signal(false);
   readonly unassignedDialogOpen = signal(false);
   readonly shiftOptions = computed(() => rosterShiftOptions(this.workstationService.workstations()));
+  readonly unassignedDepartmentOptions = computed(() => {
+    const departments = [...new Set(
+      this.unassignedEmployees()
+        .map((employee) => String(employee.Department ?? '').trim())
+        .filter(Boolean),
+    )].sort((left, right) => left.localeCompare(right));
+    const options = [
+      { value: '', label: 'All Departments' },
+      ...departments.map((department) => ({ value: department, label: department })),
+    ];
+    if (this.unassignedEmployees().some((employee) => !String(employee.Department ?? '').trim())) {
+      options.push({ value: NO_DEPARTMENT_FILTER, label: 'No department' });
+    }
+    return options;
+  });
 
   readonly visibleDays = computed<RosterDay[]>(() => {
     const [monthName, yearText] = this.monthLabel().split(' ');
@@ -268,20 +371,21 @@ export class EmployeeRosterComponent implements OnInit {
     const query = this.searchText().trim().toLowerCase();
     const department = this.selectedDepartment();
     return this.employees().filter((employee) => {
+      const matchesBranch = matchesRosterBranch(employee.hub, this.selectedHub());
       const matchesDepartment = department === 'All Departments' || employee.Department === department;
       const matchesSearch = !query || [employee.EmployeeName, employee.EmployeeCode, employee.Designation, employee.Department]
         .join(' ')
         .toLowerCase()
         .includes(query);
-      return matchesDepartment && matchesSearch;
+      return matchesBranch && matchesDepartment && matchesSearch;
     });
   });
 
   readonly filteredUnassignedEmployees = computed(() => {
-    const query = this.unassignedSearchText().trim().toLowerCase();
-    return this.unassignedEmployees().filter((employee) =>
-      !query || [employee.EmployeeName, employee.EmployeeCode, employee.Designation, employee.Department]
-        .some((value) => String(value ?? '').toLowerCase().includes(query)),
+    return filterUnassignedEmployees(
+      this.unassignedEmployees(),
+      this.unassignedSearchText(),
+      this.unassignedDepartmentFilter(),
     );
   });
 
@@ -305,6 +409,9 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   private loadWorkstations(): void {
+    if (this.workstationLoading()) {
+      return;
+    }
     this.workstationLoading.set(true);
     this.workstationService.fetchWorkstations().pipe(finalize(() => this.workstationLoading.set(false))).subscribe({
       error: (error: unknown) => {
@@ -363,26 +470,31 @@ export class EmployeeRosterComponent implements OnInit {
 
   openUnassignedDialog(): void {
     this.unassignedSearchText.set('');
+    this.unassignedDepartmentFilter.set('');
     this.unassignedDialogOpen.set(true);
   }
 
   closeUnassignedDialog(): void {
     this.unassignedDialogOpen.set(false);
     this.unassignedSearchText.set('');
+    this.unassignedDepartmentFilter.set('');
   }
 
   openUnassignedCalendar(employee: ApplicationFormRecord): void {
     this.closeUnassignedDialog();
+    this.loadWorkstations();
     this.editingRosterCalendar.set(false);
     this.calendarOriginalShifts = [];
     this.unassignedCalendarEmployee.set({
       ...this.toRosterEmployee(employee, 0),
+      hub: rosterBranchName(employee.detail?.personalInfo.branchLocation || employee.detail?.requisition.location) || this.selectedHub(),
       shifts: this.fullMonthDays().map(() => '+'),
     });
     this.unassignedSelectedShift.set(null);
   }
 
   openEmployeeCalendar(employee: RosterEmployee): void {
+    this.loadWorkstations();
     const shifts = this.rosterShiftsForMonth(employee.EmployeeCode);
     this.editingRosterCalendar.set(true);
     this.calendarOriginalShifts = [...shifts];
@@ -421,24 +533,40 @@ export class EmployeeRosterComponent implements OnInit {
     });
   }
 
-  submitUnassignedCalendar(): void {
+  async submitUnassignedCalendar(): Promise<void> {
     const employee = this.unassignedCalendarEmployee();
     const days = this.fullMonthDays()
       .map((day, index) => ({ day, index }));
     if (this.editingRosterCalendar()) {
-      this.submitExistingEmployeeCalendar(employee, days);
+      await this.submitExistingEmployeeCalendar(employee, days);
       return;
     }
 
-    if (!employee || days.some(({ index }) => !this.isAssignedShift(this.shiftForFullMonth(employee, index)))) {
-      this.alertService.validation(
-        'Assign a shift for every day before submitting.',
-      );
+    if (!employee) {
+      return;
+    }
+
+    const assignedDays = days.filter(({ index }) =>
+      this.isAssignedShift(this.shiftForFullMonth(employee, index)),
+    );
+    if (!assignedDays.length) {
+      this.alertService.validation('Assign at least one shift before submitting.');
+      return;
+    }
+    const unassignedCount = days.length - assignedDays.length;
+    if (
+      unassignedCount > 0 &&
+      !(await this.alertService.confirmWarning(
+        'Unassigned shifts remain',
+        `${unassignedCount} day(s) have no shift. Continue to post the assigned shifts and leave the other days unassigned?`,
+        'Post assigned shifts',
+      ))
+    ) {
       return;
     }
 
     const payload: EmployeeRosterAddPayload = {
-      data: days.map(({ day, index }) => ({
+      data: assignedDays.map(({ day, index }) => ({
         employee_id: this.toApiEmployeeId(employee.EmployeeCode),
         shift_date: this.rosterDate(day.date),
         shift: this.toApiShift(this.shiftForFullMonth(employee, index)),
@@ -472,18 +600,33 @@ export class EmployeeRosterComponent implements OnInit {
       });
   }
 
-  private submitExistingEmployeeCalendar(
+  private async submitExistingEmployeeCalendar(
     employee: RosterEmployee | null,
     days: Array<{ day: RosterDay; index: number }>,
-  ): void {
+  ): Promise<void> {
     if (!employee) {
-      return;
+      return Promise.resolve();
     }
-    const changedDays = days.filter(({ index }) =>
+    const assignedDays = days.filter(({ index }) =>
+      this.isAssignedShift(this.shiftForFullMonth(employee, index)),
+    );
+    const changedDays = assignedDays.filter(({ index }) =>
       this.shiftForFullMonth(employee, index) !== this.calendarOriginalShifts[index],
     );
     if (!changedDays.length) {
       this.closeUnassignedCalendar();
+      return Promise.resolve();
+    }
+
+    const unassignedCount = days.length - assignedDays.length;
+    if (
+      unassignedCount > 0 &&
+      !(await this.alertService.confirmWarning(
+        'Unassigned shifts remain',
+        `${unassignedCount} day(s) have no shift. Continue to save the assigned shift changes and leave the other days unassigned?`,
+        'Save assigned shifts',
+      ))
+    ) {
       return;
     }
 
@@ -561,8 +704,7 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   isAssignedShift(shift: ShiftCode): boolean {
-    const normalized = shift.trim().toLowerCase();
-    return normalized !== '' && normalized !== '+' && normalized !== 'null' && normalized !== 'undefined';
+    return isAssignedRosterShift(shift);
   }
 
   private toApiShift(shift: ShiftCode): string {
@@ -570,17 +712,22 @@ export class EmployeeRosterComponent implements OnInit {
     const lower = normalized.toLowerCase();
     const workstations = this.workstationService.workstations();
     const workstation = workstations.find((item) =>
-      [item.code, String(item.id)].some((value) => value.trim().toLowerCase() === lower),
+      rosterWorkstationCode(item, workstations).toLowerCase() === lower,
     ) ?? workstations.find((item) =>
       [item.shift, item.code, item.name, item.description]
         .some((value) => value.trim().toLowerCase() === lower),
     );
-    const workstationCode = workstation?.code.trim() || '';
-    if (workstationCode && workstationCode.length <= 8) {
-      return workstationCode;
-    }
-    if (workstation && String(workstation.id).trim()) {
-      return String(workstation.id).trim();
+    if (workstation) {
+      const workstationCode = workstation.code.trim();
+      const isUniqueCode = !workstations.some((item) =>
+        item !== workstation && item.code.trim().toLowerCase() === workstationCode.toLowerCase(),
+      );
+      if (isUniqueCode && workstationCode && workstationCode.length <= 8) {
+        return workstationCode;
+      }
+      if (String(workstation.id).trim()) {
+        return String(workstation.id).trim();
+      }
     }
     if (['m', 'morning', 'morning shift'].includes(lower)) {
       return 'M';
@@ -739,6 +886,7 @@ export class EmployeeRosterComponent implements OnInit {
     if (dayDate === undefined) {
       return;
     }
+    this.loadWorkstations();
     this.selectedCell.set({ employeeCode: employee.EmployeeCode, day: dayIndex });
     this.shiftDialog.set({ employee, dayIndex, dayDate, shift: this.shiftFor(employee, dayIndex) });
     const popoverWidth = 350;
@@ -994,7 +1142,7 @@ export class EmployeeRosterComponent implements OnInit {
               shift_date: this.rosterDate(day.date),
               shift: this.toApiShift(currentShift),
               role: employee.role,
-              hub: this.selectedHub(),
+              hub: employee.hub || this.selectedHub(),
               note: null,
             }];
       });
@@ -1071,11 +1219,10 @@ export class EmployeeRosterComponent implements OnInit {
     records: EmployeeRosterListRecord[],
     profiles: ApplicationFormRecord[],
   ): RosterEmployee[] {
-    const grouped = new Map<string, { record: EmployeeRosterListRecord; shifts: string[] }>();
+    const grouped = new Map<string, EmployeeRosterListRecord>();
     const profilesByCode = new Map(
       profiles.map((profile) => [this.normalizeRosterEmployeeCode(profile.EmployeeCode), profile]),
     );
-    const monthDays = this.fullMonthDays();
 
     for (const record of records) {
       const employeeCode = this.normalizeRosterEmployeeCode(record.employee_id);
@@ -1085,32 +1232,23 @@ export class EmployeeRosterComponent implements OnInit {
 
       const existing = grouped.get(employeeCode);
       if (!existing) {
-        grouped.set(employeeCode, {
-          record,
-          shifts: monthDays.map(() => '+'),
-        });
-      }
-
-      const employee = grouped.get(employeeCode);
-      if (!employee) {
-        continue;
-      }
-
-      const dayIndex = rosterDayIndexForMonth(record.shift_date, this.monthLabel());
-      if (dayIndex !== null && dayIndex < employee.shifts.length && this.isAssignedShift(record.shift)) {
-        employee.shifts[dayIndex] = record.shift;
+        grouped.set(employeeCode, record);
       }
     }
 
-    return Array.from(grouped.values()).map(({ record, shifts }, index) => {
+    return Array.from(grouped.values()).map((record, index) => {
       const employeeCode = this.normalizeRosterEmployeeCode(record.employee_id);
       const profile = profilesByCode.get(employeeCode);
       const rosterEmployee = this.toRosterEmployee(this.toApplicationRecord(record, profile), index);
       return {
         ...rosterEmployee,
-        hub: record.hub || this.selectedHub(),
+        hub: rosterBranchName(
+          profile?.detail?.personalInfo.branchLocation ||
+          profile?.detail?.requisition.location ||
+          record.hub,
+        ),
         role: record.role || record.designation || rosterEmployee.role,
-        shifts,
+        shifts: rosterShiftsForEmployeeMonth(records, employeeCode, this.monthLabel()),
       };
     });
   }

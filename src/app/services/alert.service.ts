@@ -44,6 +44,19 @@ export class AlertService {
     });
   }
 
+  confirmWarning(title: string, message: string, confirmButtonText: string): Promise<boolean> {
+    return Swal.fire({
+      title,
+      text: message,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#0052cc',
+      cancelButtonColor: '#777',
+      confirmButtonText,
+      cancelButtonText: 'Cancel',
+    }).then((result) => result.isConfirmed);
+  }
+
   validation(message: string): void {
     void Swal.fire({
       title: 'Missing Fields',

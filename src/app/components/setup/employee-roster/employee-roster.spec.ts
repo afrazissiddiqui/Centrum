@@ -2,14 +2,54 @@ import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
 import { ApplicationFormRecord, EmployeeRosterListRecord } from '../../../services/application-form.service';
 import {
+  filterUnassignedEmployees,
   findUnassignedEmployees,
+  matchesRosterBranch,
   rosterDayIndexForMonth,
+  rosterBranchName,
   rosterPeriodForDate,
   rosterShiftInitial,
   rosterShiftsForEmployeeMonth,
   rosterShiftOptions,
 } from './employee-roster';
 import { WorkstationRecord } from '../../../services/workstation.service';
+
+describe('rosterBranchName', () => {
+  it('normalizes branch codes and legacy head office labels', () => {
+    expect(rosterBranchName('1')).toBe('AHCP_Peshawar');
+    expect(rosterBranchName('2')).toBe('AHCP_HO');
+    expect(rosterBranchName('Lahore HO')).toBe('AHCP_HO');
+    expect(rosterBranchName('AHCP_Faisalabad')).toBe('AHCP_Faisalabad');
+  });
+});
+
+describe('matchesRosterBranch', () => {
+  it('matches employees by branch and allows all branches', () => {
+    expect(matchesRosterBranch('1', 'AHCP_Peshawar')).toBe(true);
+    expect(matchesRosterBranch('AHCP_Faisalabad', 'AHCP_Peshawar')).toBe(false);
+    expect(matchesRosterBranch('2', 'All Branches')).toBe(true);
+  });
+});
+
+describe('filterUnassignedEmployees', () => {
+  const employees = [
+    { EmployeeCode: 'E001', EmployeeName: 'Ali Khan', Department: 'Operations', Designation: 'Officer' },
+    { EmployeeCode: 'E002', EmployeeName: 'Sara Ahmed', Department: 'Finance', Designation: 'Officer' },
+    { EmployeeCode: 'E003', EmployeeName: 'No Dept', Department: '', Designation: 'Officer' },
+  ] as ApplicationFormRecord[];
+
+  it('filters by department while retaining matching text search results', () => {
+    expect(filterUnassignedEmployees(employees, 'ali', 'Operations').map((employee) => employee.EmployeeCode))
+      .toEqual(['E001']);
+    expect(filterUnassignedEmployees(employees, 'ali', 'Finance')).toEqual([]);
+  });
+
+  it('supports showing all departments and employees without a department', () => {
+    expect(filterUnassignedEmployees(employees, '', '').length).toBe(3);
+    expect(filterUnassignedEmployees(employees, '', '__no_department__').map((employee) => employee.EmployeeCode))
+      .toEqual(['E003']);
+  });
+});
 
 describe('rosterShiftOptions', () => {
   it('keeps distinct workstations when their shift labels are the same', () => {
@@ -20,6 +60,24 @@ describe('rosterShiftOptions', () => {
 
     expect(rosterShiftOptions(workstations).slice(0, 2).map((option) => option.code)).toEqual(['ME', 'MW']);
   });
+
+  it('keeps workstations with duplicate codes selectable by their workstation IDs', () => {
+    const workstations: WorkstationRecord[] = [17, 18, 19, 20, 21].map((id) => ({
+      id,
+      name: `Shift ${id}`,
+      code: '1',
+      officeInTime: '',
+      officeOutTime: '',
+      inGraceMinutes: 0,
+      outGraceMinutes: 0,
+      shift: 'Shift',
+      description: `Shift ${id}`,
+      status: 1,
+    }));
+
+    expect(rosterShiftOptions(workstations).slice(0, 5).map((option) => option.code))
+      .toEqual(['17', '18', '19', '20', '21']);
+  });
 });
 
 describe('rosterShiftInitial', () => {
@@ -28,9 +86,10 @@ describe('rosterShiftInitial', () => {
     { id: 2, name: 'Evening West', code: 'EW', officeInTime: '', officeOutTime: '', inGraceMinutes: 0, outGraceMinutes: 0, shift: 'E', description: '', status: 1 },
   ];
 
-  it('shows the first letter of the assigned workstation and preserves special roster values', () => {
-    expect(rosterShiftInitial('ME', workstations)).toBe('M');
-    expect(rosterShiftInitial('E', workstations)).toBe('E');
+  it('shows the workstation number and preserves special roster values', () => {
+    expect(rosterShiftInitial('ME', workstations)).toBe('1');
+    expect(rosterShiftInitial('EW', workstations)).toBe('2');
+    expect(rosterShiftInitial('E', workstations)).toBe('2');
     expect(rosterShiftInitial('OFF', workstations)).toBe('OFF');
     expect(rosterShiftInitial('HOL', workstations)).toBe('HOL');
   });
@@ -87,6 +146,16 @@ describe('rosterShiftsForEmployeeMonth', () => {
     expect(rosterShiftsForEmployeeMonth(records, 'EMP-00000002', 'October 2026')[5]).toBe('+');
     expect(rosterShiftsForEmployeeMonth(records, 'EMP-00000002', 'November 2026')[4]).toBe('2');
     expect(rosterShiftsForEmployeeMonth(records, 'EMP-00000002', 'October 2027')[4]).toBe('3');
+  });
+
+  it('uses the newest roster row when the API returns duplicate employee dates newest-first', () => {
+    const duplicateRecords = [
+      { id: '24', employee_id: 'Emp-00000002', shift_date: '2026-10-05', shift: 'new' },
+      { id: '12', employee_id: 'Emp-00000002', shift_date: '2026-10-05', shift: 'old' },
+    ] as EmployeeRosterListRecord[];
+
+    expect(rosterShiftsForEmployeeMonth(duplicateRecords, 'EMP-00000002', 'October 2026')[4])
+      .toBe('new');
   });
 });
 
