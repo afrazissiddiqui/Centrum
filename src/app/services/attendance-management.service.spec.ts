@@ -5,6 +5,7 @@ import { ApplicationFormRecord, ApplicationFormService } from './application-for
 import {
   AttendanceManagementService,
   formatPunchTime,
+  parseWorkingDurationMinutes,
 } from './attendance-management.service';
 
 describe('AttendanceManagementService calculated working hours', () => {
@@ -119,6 +120,32 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(record.PunchIn).toBe('2026-09-01T09:06:48.000Z');
     expect(record.PunchOut).toBe('2026-09-01T17:37:31.000Z');
     expect(record.PunchCount).toBe(2);
+    expect(record.WorkingHours).toBe('8h 45m');
+    expect(record.WorkingMinutes).toBe(525);
+  });
+
+  it('uses the calculated hours_worked value even when it differs from the punch-time difference', () => {
+    service.loadSession({ mode: 'date', userId: '00000007', date: '2026-09-01' }).subscribe();
+    const request = httpMock.expectOne((req) => req.url.endsWith('/rawpunch'));
+    request.flush(JSON.stringify({
+      data: [{
+        card_no: '00001161',
+        punch_in: '2026-09-01T09:00:00',
+        punch_out: '2026-09-01T17:00:00',
+        hours_worked: '7h 30m',
+      }],
+    }));
+
+    const [slot] = service.slots();
+    const [record] = service.materializeSlots([slot]);
+    expect(record.WorkingHours).toBe('7h 30m');
+    expect(record.WorkingMinutes).toBe(450);
+  });
+
+  it('parses API working-hours values for date-range totals', () => {
+    expect(parseWorkingDurationMinutes('12h 33m')).toBe(753);
+    expect(parseWorkingDurationMinutes('9')).toBe(540);
+    expect(parseWorkingDurationMinutes('')).toBeNull();
   });
 
   it('formats punch times in 12-hour clock with AM/PM', () => {

@@ -479,6 +479,7 @@
   --attendance-date-range-code-width: 150px;
   --attendance-date-range-name-width: 150px;
   --attendance-date-range-punch-width: 112px;
+  --attendance-date-range-summary-width: 144px;
   --attendance-date-range-view-width: var(--attendance-date-range-punch-width);
   table-layout: fixed;
   width: max-content;
@@ -511,6 +512,13 @@
   width: var(--attendance-date-range-punch-width) !important;
   min-width: var(--attendance-date-range-punch-width) !important;
   max-width: var(--attendance-date-range-punch-width) !important;
+}
+
+.attendance-table--date-range .attendance-table__date-range-summary-header,
+.attendance-table--date-range .attendance-table__date-range-summary-value {
+  width: var(--attendance-date-range-summary-width) !important;
+  min-width: var(--attendance-date-range-summary-width) !important;
+  max-width: var(--attendance-date-range-summary-width) !important;
 }
 
 .attendance-table--date-range .attendance-table__date-range-view,

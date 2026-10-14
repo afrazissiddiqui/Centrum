@@ -20,6 +20,7 @@ export interface AttendancePunchRecord {
   PunchDatetime: string;
   DeviceNo: string;
   Status: string;
+  WorkingHours?: string;
   selected?: boolean;
 }
 
@@ -32,6 +33,7 @@ export interface AttendanceDailyRecord {
   PunchInDevice: string;
   PunchOutDevice: string;
   WorkingMinutes: number;
+  WorkingHours: string;
   AttendanceStatus: 'Present' | 'Absent';
   PunchCount: number;
   Punches: AttendancePunchRecord[];
@@ -50,6 +52,7 @@ export interface AttendanceSlotRef {
   punchInDevice: string;
   punchOutDevice: string;
   workingMinutes: number;
+  workingHours: string;
   punchCount: number;
 }
 
@@ -339,6 +342,7 @@ export class AttendanceManagementService {
         punchInDevice: '',
         punchOutDevice: '',
         workingMinutes: 0,
+        workingHours: '',
         punchCount: 0,
       };
     }
@@ -346,6 +350,7 @@ export class AttendanceManagementService {
     const sorted = sortPunchesChronologically(punches);
     const firstPunch = sorted[0];
     const secondPunch = sorted.length >= 2 ? sorted[1] : null;
+    const workingHours = sorted.find((punch) => punch.WorkingHours?.trim())?.WorkingHours?.trim() ?? '';
 
     return {
       employeeKey,
@@ -357,7 +362,10 @@ export class AttendanceManagementService {
       punchOut: secondPunch?.PunchDatetime ?? '',
       punchInDevice: firstPunch.DeviceNo,
       punchOutDevice: secondPunch?.DeviceNo ?? '',
-      workingMinutes: calcWorkingMinutes(firstPunch.PunchDatetime, secondPunch?.PunchDatetime ?? ''),
+      workingMinutes:
+        parseWorkingDurationMinutes(workingHours) ??
+        calcWorkingMinutes(firstPunch.PunchDatetime, secondPunch?.PunchDatetime ?? ''),
+      workingHours,
       punchCount: sorted.length,
     };
   }
@@ -374,6 +382,7 @@ export class AttendanceManagementService {
       PunchInDevice: slot.punchInDevice,
       PunchOutDevice: slot.punchOutDevice,
       WorkingMinutes: slot.workingMinutes,
+      WorkingHours: slot.workingHours,
       AttendanceStatus: slot.status,
       PunchCount: slot.punchCount,
       Punches: sorted,
@@ -613,6 +622,9 @@ export class AttendanceManagementService {
       item['Device No'] ?? item.DeviceNo ?? item.deviceNo ?? item.machine_id ?? record['DeviceNo'] ?? '',
       ).trim();
     const status = String(item.Status ?? item.status ?? '').trim();
+    const workingHours = typeof item.hours_worked === 'string' || typeof item.hours_worked === 'number'
+      ? String(item.hours_worked).trim()
+      : '';
 
     if (punchIn || punchOut) {
       return [
@@ -623,6 +635,7 @@ export class AttendanceManagementService {
         EmployeeId: normalizedEmployeeId,
         DeviceNo: deviceNo,
         Status: status,
+        ...(workingHours ? { WorkingHours: workingHours } : {}),
         selected: false,
       }));
     }
@@ -633,6 +646,7 @@ export class AttendanceManagementService {
       PunchDatetime: punchDatetime,
       DeviceNo: deviceNo,
       Status: status,
+      ...(workingHours ? { WorkingHours: workingHours } : {}),
       selected: false,
     }];
   }
@@ -1143,6 +1157,23 @@ export function calcWorkingMinutes(punchIn: string, punchOut: string): number {
     return 0;
   }
   return Math.round((outTime - inTime) / 60000);
+}
+
+export function parseWorkingDurationMinutes(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const duration = trimmed.match(/^(?:(\d+(?:\.\d+)?)\s*h)?\s*(?:(\d+)\s*m)?$/i);
+  if (duration && (duration[1] !== undefined || duration[2] !== undefined)) {
+    return Math.round(Number(duration[1] ?? 0) * 60 + Number(duration[2] ?? 0));
+  }
+
+  const numericHours = Number(trimmed);
+  return Number.isFinite(numericHours) && numericHours >= 0
+    ? Math.round(numericHours * 60)
+    : null;
 }
 
 export function formatWorkingDuration(minutes: number): string {

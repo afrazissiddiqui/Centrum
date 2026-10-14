@@ -52,6 +52,8 @@ interface DateRangeAttendanceRow {
   employeeCode: string;
   employeeName: string;
   recordsByDate: Record<string, AttendanceSlotRef>;
+  totalWorkingMinutes: number;
+  workingDays: number;
 }
 
 @Component({
@@ -235,10 +237,16 @@ export class AttendanceManagmentComponent implements OnInit {
           employeeCode: slot.displayId,
           employeeName: slot.employeeName,
           recordsByDate: {},
+          totalWorkingMinutes: 0,
+          workingDays: 0,
         };
         rowsByEmployee.set(slot.employeeKey, row);
       }
       row.recordsByDate[slot.date] = slot;
+      row.totalWorkingMinutes += slot.workingMinutes;
+      if (slot.punchIn || slot.punchOut) {
+        row.workingDays += 1;
+      }
     }
 
     return [...rowsByEmployee.values()].sort((left, right) =>
@@ -417,7 +425,7 @@ export class AttendanceManagmentComponent implements OnInit {
       case 'PunchOut':
         return formatPunchTime(row.PunchOut);
       case 'WorkingHours':
-        return formatWorkingDuration(row.WorkingMinutes);
+        return row.WorkingHours || formatWorkingDuration(row.WorkingMinutes);
       case 'AttendanceStatus':
         return row.AttendanceStatus;
       case 'PunchCount':
@@ -485,6 +493,14 @@ export class AttendanceManagmentComponent implements OnInit {
 
   getDateRangeDetailRecord(date: string): AttendanceDailyRecord | undefined {
     return this.selectedDateRangeRecords().find((record) => record.AttendanceDate === date);
+  }
+
+  get selectedDateRangeTotalWorkingMinutes(): number {
+    return this.selectedDateRangeRecords().reduce((total, record) => total + record.WorkingMinutes, 0);
+  }
+
+  get selectedDateRangeWorkingDays(): number {
+    return this.selectedDateRangeRecords().filter((record) => record.PunchIn || record.PunchOut).length;
   }
 
   closeViewDialog(): void {

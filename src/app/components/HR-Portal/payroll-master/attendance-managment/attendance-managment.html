@@ -316,6 +316,8 @@
                 <col class="attendance-table__date-range-punch">
                 <col class="attendance-table__date-range-punch">
               </ng-container>
+              <col class="attendance-table__date-range-summary">
+              <col class="attendance-table__date-range-summary">
               <col class="attendance-table__date-range-view">
             </colgroup>
             <thead>
@@ -323,6 +325,8 @@
                 <th class="attendance-table__group attendance-table__group--identity attendance-table__date-range-identity" rowspan="3" scope="col">Employee Code</th>
                 <th class="attendance-table__group attendance-table__group--identity attendance-table__date-range-identity" rowspan="3" scope="col">Employee Name</th>
                 <th class="attendance-table__group attendance-table__group--time" [attr.colspan]="dateRangeDates.length * 2" scope="colgroup">Date</th>
+                <th class="attendance-table__group attendance-table__group--time attendance-table__date-range-summary-header" rowspan="3" scope="col">Total Working Hours</th>
+                <th class="attendance-table__group attendance-table__group--time attendance-table__date-range-summary-header" rowspan="3" scope="col">Working Days</th>
                 <th class="attendance-table__actions-header attendance-table__date-range-view-header" rowspan="3" scope="col">View</th>
               </tr>
               <tr class="attendance-table__column-row">
@@ -339,10 +343,10 @@
             </thead>
             <tbody>
               <tr *ngIf="loading()" class="attendance-skeleton-row">
-                <td class="attendance-table__empty" [attr.colspan]="3 + dateRangeDates.length * 2">Loading attendance…</td>
+                <td class="attendance-table__empty" [attr.colspan]="5 + dateRangeDates.length * 2">Loading attendance…</td>
               </tr>
               <tr *ngIf="!loading() && dateRangeRows.length === 0">
-                <td class="attendance-table__empty" [attr.colspan]="3 + dateRangeDates.length * 2">
+                <td class="attendance-table__empty" [attr.colspan]="5 + dateRangeDates.length * 2">
                   Enter a User ID and load attendance to view this date range.
                 </td>
               </tr>
@@ -361,6 +365,10 @@
                     {{ row.recordsByDate[date]?.punchOut ? formatAttendanceTime(row.recordsByDate[date].punchOut) : '—' }}
                   </td>
                 </ng-container>
+                <td class="attendance-col--time attendance-table__date-range-summary-value">
+                  {{ formatWorkingDuration(row.totalWorkingMinutes) }}
+                </td>
+                <td class="attendance-col--time attendance-table__date-range-summary-value">{{ row.workingDays }}</td>
                 <td class="attendance-table__actions attendance-table__date-range-view">
                   <button type="button" class="attendance-view-btn" (click)="viewDateRangeRecord(row)" title="View attendance for each date">
                     <ui5-icon name="detail-view" class="attendance-btn-icon" aria-hidden="true"></ui5-icon>
@@ -457,6 +465,16 @@
     <div class="js-modal-body">
       <div class="attendance-detail-section attendance-detail-section--time" *ngIf="selectedDateRangeRecords().length > 0">
         <h3>Punch In / Out by Date</h3>
+        <div class="js-detail-grid">
+          <div class="js-detail-item">
+            <label>Total Working Hours:</label>
+            <span>{{ formatWorkingDuration(selectedDateRangeTotalWorkingMinutes) }}</span>
+          </div>
+          <div class="js-detail-item">
+            <label>Working Days:</label>
+            <span>{{ selectedDateRangeWorkingDays }}</span>
+          </div>
+        </div>
         <div class="attendance-punch-log">
           <table class="attendance-punch-log__table">
             <thead>
@@ -464,6 +482,7 @@
                 <th>Date</th>
                 <th>Punch In</th>
                 <th>Punch Out</th>
+                <th>Working Hours</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -476,6 +495,7 @@
                 <td class="attendance-time-value attendance-time-value--out">
                   {{ getDateRangeDetailRecord(date)?.PunchOut ? formatAttendanceTime(getDateRangeDetailRecord(date)?.PunchOut ?? '') : '—' }}
                 </td>
+                <td>{{ getDateRangeDetailRecord(date)?.WorkingHours || (getDateRangeDetailRecord(date) ? formatWorkingDuration(getDateRangeDetailRecord(date)?.WorkingMinutes ?? 0) : '—') }}</td>
                 <td>{{ getDateRangeDetailRecord(date)?.AttendanceStatus || '—' }}</td>
               </tr>
             </tbody>
@@ -500,7 +520,7 @@
           <div class="js-detail-grid">
             <div class="js-detail-item"><label>Punch In:</label> <span class="attendance-time-value attendance-time-value--in">{{ formatAttendanceTime(record.PunchIn) }}</span></div>
             <div class="js-detail-item"><label>Punch Out:</label> <span class="attendance-time-value attendance-time-value--out">{{ formatAttendanceTime(record.PunchOut) }}</span></div>
-            <div class="js-detail-item"><label>Working Hours:</label> <span>{{ formatWorkingDuration(record.WorkingMinutes) }}</span></div>
+            <div class="js-detail-item"><label>Working Hours:</label> <span>{{ record.WorkingHours || formatWorkingDuration(record.WorkingMinutes) }}</span></div>
             <div class="js-detail-item"><label>In Device:</label> <span class="attendance-device-chip">{{ record.PunchInDevice || '—' }}</span></div>
             <div class="js-detail-item"><label>Out Device:</label> <span class="attendance-device-chip">{{ record.PunchOutDevice || '—' }}</span></div>
             <div class="js-detail-item"><label>Total Punches:</label> <span>{{ record.PunchCount }}</span></div>

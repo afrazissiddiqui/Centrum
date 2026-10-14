@@ -184,6 +184,7 @@ export class CreateAgpComponent implements OnInit {
       .subscribe({
         next: (record) => {
           this.populateFromRecord(record);
+          this.loadSignedInUserDetails();
         },
         error: (error: unknown) => {
           void this.alertService.error(
@@ -282,10 +283,6 @@ export class CreateAgpComponent implements OnInit {
   }
 
   private loadSignedInUserDetails(): void {
-    if (this.editingId) {
-      return;
-    }
-
     const hasRecords = this.applicationFormService.getApplicationRecords().length > 0;
     if (hasRecords) {
       this.applyLoggedInUserDefaults();
@@ -299,10 +296,6 @@ export class CreateAgpComponent implements OnInit {
   }
 
   private applyLoggedInUserDefaults(): void {
-    if (this.editingId) {
-      return;
-    }
-
     const sessionUser = this.authService.getSessionUser();
     const sessionUserId = this.authService.getSessionUserId();
     const profileRecord = this.findProfileRecordForSessionUser();
