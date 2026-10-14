@@ -36,6 +36,7 @@ describe('filterUnassignedEmployees', () => {
     {
       EmployeeCode: 'E001',
       EmployeeName: 'Ali Khan',
+      ExtEmpNo: '00001161',
       Department: 'Operations',
       Designation: 'Officer',
       detail: { personalInfo: { branchLocation: '1' } },
@@ -45,7 +46,10 @@ describe('filterUnassignedEmployees', () => {
       EmployeeName: 'Sara Ahmed',
       Department: 'Finance',
       Designation: 'Officer',
-      detail: { requisition: { location: 'AHCP_Faisalabad' } },
+      detail: {
+        requisition: { location: 'AHCP_Faisalabad' },
+        loginDetails: { legacyCode: '00002222' },
+      },
     },
     { EmployeeCode: 'E003', EmployeeName: 'No Dept', Department: '', Designation: 'Officer' },
   ] as ApplicationFormRecord[];
@@ -54,6 +58,13 @@ describe('filterUnassignedEmployees', () => {
     expect(filterUnassignedEmployees(employees, 'ali', 'Operations').map((employee) => employee.EmployeeCode))
       .toEqual(['E001']);
     expect(filterUnassignedEmployees(employees, 'ali', 'Finance')).toEqual([]);
+  });
+
+  it('searches by the employee profile or login legacy code', () => {
+    expect(filterUnassignedEmployees(employees, '00001161', '').map((employee) => employee.EmployeeCode))
+      .toEqual(['E001']);
+    expect(filterUnassignedEmployees(employees, '00002222', '').map((employee) => employee.EmployeeCode))
+      .toEqual(['E002']);
   });
 
   it('supports showing all departments and employees without a department', () => {

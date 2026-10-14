@@ -106,7 +106,14 @@ export function filterUnassignedEmployees(
         : department.toLowerCase() === departmentFilter.toLowerCase());
     const matchesBranch = matchesRosterBranch(branch, branchFilter);
     const matchesSearch = !query ||
-      [employee.EmployeeName, employee.EmployeeCode, employee.Designation, department]
+      [
+        employee.EmployeeName,
+        employee.EmployeeCode,
+        employee.ExtEmpNo,
+        employee.detail?.loginDetails?.legacyCode,
+        employee.Designation,
+        department,
+      ]
         .some((value) => String(value ?? '').toLowerCase().includes(query));
     return matchesDepartment && matchesBranch && matchesSearch;
   });
