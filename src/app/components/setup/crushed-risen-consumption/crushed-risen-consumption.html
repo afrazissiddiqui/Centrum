@@ -31,6 +31,36 @@
         <div class="sir-form-grid">
           <div class="sir-form-column">
             <div class="sir-field-row">
+              <label for="crushed-risen-document-number">Document Number of From Production:</label>
+              <div class="sir-input-group">
+                <input
+                  id="crushed-risen-document-number"
+                  type="text"
+                  [ngModel]="headerForm().documentNumberFromProduction"
+                  (ngModelChange)="updateHeaderField('documentNumberFromProduction', $event)"
+                />
+                <button type="button" class="sir-inline-button" (click)="openProductionOrderDialog()">Copy from PO</button>
+              </div>
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-item-code">Item Code From Production:</label>
+              <input
+                id="crushed-risen-item-code"
+                type="text"
+                [ngModel]="headerForm().itemCodeFromProduction"
+                (ngModelChange)="updateHeaderField('itemCodeFromProduction', $event)"
+              />
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-crc-number">CRC Number:</label>
+              <input
+                id="crushed-risen-crc-number"
+                type="text"
+                [ngModel]="headerForm().crcNumber"
+                (ngModelChange)="updateHeaderField('crcNumber', $event)"
+              />
+            </div>
+            <div class="sir-field-row">
               <label for="crushed-risen-series">Series:</label>
               <input
                 id="crushed-risen-series"
@@ -52,6 +82,18 @@
                 (ngModelChange)="updateHeaderField('remark', $event)"
               />
             </div>
+          </div>
+
+          <div class="sir-form-column">
+            <div class="sir-field-row">
+              <label for="crushed-risen-doc-entry">Doc Entry of Product:</label>
+              <input
+                id="crushed-risen-doc-entry"
+                type="text"
+                [ngModel]="headerForm().productDocEntry"
+                (ngModelChange)="updateHeaderField('productDocEntry', $event)"
+              />
+            </div>
             <div class="sir-field-row">
               <label for="crushed-risen-item-name">Item Name From Production:</label>
               <input
@@ -62,54 +104,92 @@
               />
             </div>
             <div class="sir-field-row">
-              <label for="crushed-risen-document-number">Document Number of From Production:</label>
-              <input
-                id="crushed-risen-document-number"
-                type="text"
-                [ngModel]="headerForm().documentNumberFromProduction"
-                (ngModelChange)="updateHeaderField('documentNumberFromProduction', $event)"
-              />
-            </div>
-          </div>
-
-          <div class="sir-form-column">
-            <div class="sir-field-row">
-              <label for="crushed-risen-cancel">Cancel:</label>
-              <select
-                id="crushed-risen-cancel"
-                [ngModel]="headerForm().cancel"
-                (ngModelChange)="updateHeaderField('cancel', $event)"
-              >
-                <option value="">Select</option>
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-              </select>
-            </div>
-            <div class="sir-field-row">
               <label for="crushed-risen-status">Status:</label>
               <input id="crushed-risen-status" type="text" [ngModel]="headerForm().status" readonly />
             </div>
             <div class="sir-field-row">
-              <label for="crushed-risen-item-code">Item Code From Production:</label>
-              <input
-                id="crushed-risen-item-code"
-                type="text"
-                [ngModel]="headerForm().itemCodeFromProduction"
-                (ngModelChange)="updateHeaderField('itemCodeFromProduction', $event)"
-              />
+              <label for="crushed-risen-create-date">Create Date:</label>
+              <input id="crushed-risen-create-date" type="date" [ngModel]="headerForm().createDate" readonly />
             </div>
             <div class="sir-field-row">
-              <label for="crushed-risen-doc-entry">Doc Entry of Product:</label>
-              <input
-                id="crushed-risen-doc-entry"
-                type="text"
-                [ngModel]="headerForm().productDocEntry"
-                (ngModelChange)="updateHeaderField('productDocEntry', $event)"
-              />
+              <label for="crushed-risen-create-time">Create Time:</label>
+              <input id="crushed-risen-create-time" type="time" [ngModel]="headerForm().createTime" readonly />
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-update-date">Update Date:</label>
+              <input id="crushed-risen-update-date" type="date" [ngModel]="headerForm().updateDate" readonly />
+            </div>
+            <div class="sir-field-row">
+              <label for="crushed-risen-update-time">Update Time:</label>
+              <input id="crushed-risen-update-time" type="time" [ngModel]="headerForm().updateTime" readonly />
             </div>
           </div>
         </div>
       </section>
+
+      @if (productionOrderDialogOpen()) {
+        <div class="sir-modal-overlay" (click)="closeProductionOrderDialog()">
+          <div class="sir-modal sir-modal--wide" (click)="$event.stopPropagation()">
+            <div class="sir-modal-header">
+              <h2>Select Production Order</h2>
+              <button type="button" class="sir-modal-close" (click)="closeProductionOrderDialog()">×</button>
+            </div>
+            <div class="sir-modal-body">
+              <div class="sir-field-row">
+                <input
+                  type="search"
+                  class="sir-table-input"
+                  placeholder="Search production orders..."
+                  [ngModel]="productionOrderSearchText()"
+                  (ngModelChange)="productionOrderSearchText.set($event)"
+                />
+              </div>
+
+              @if (productionOrdersLoading()) {
+                <p class="sir-modal-status-text">Loading production orders…</p>
+              } @else if (productionOrdersError()) {
+                <p class="sir-modal-error-text">{{ productionOrdersError() }}</p>
+              } @else {
+                <div class="sir-data-table-wrapper">
+                  <table class="sir-modal-table">
+                    <thead>
+                      <tr>
+                        <th>DocEntry</th>
+                        <th>DocNum</th>
+                        <th>PO No.</th>
+                        <th>Post Date</th>
+                        <th>Due Date</th>
+                        <th>Warehouse</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (order of filteredProductionOrders(); track order.docEntry) {
+                        <tr class="sir-modal-row" (click)="chooseProductionOrder(order)">
+                          <td>{{ order.docEntry }}</td>
+                          <td>{{ order.docNum }}</td>
+                          <td>{{ order.docNum }}</td>
+                          <td>{{ order.postDate }}</td>
+                          <td>{{ order.dueDate }}</td>
+                          <td>{{ order.warehouse }}</td>
+                          <td>{{ order.status }}</td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td colspan="7" class="sir-modal-empty">No production orders found.</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+            <div class="sir-modal-footer">
+              <button type="button" class="sir-secondary-button" (click)="closeProductionOrderDialog()">Cancel</button>
+            </div>
+          </div>
+        </div>
+      }
 
       <section class="sir-form-section" id="row-level-info" aria-labelledby="row-level-title">
         <h2 class="sir-section-title" id="row-level-title">Row Level Information</h2>

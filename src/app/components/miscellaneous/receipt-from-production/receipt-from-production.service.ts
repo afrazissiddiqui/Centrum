@@ -604,24 +604,61 @@ export class ReceiptFromProductionService {
     }
 
     const root = response as Record<string, unknown>;
-    for (const key of wrapperKeys) {
+
+    if (this.isSingleProductionOrderLike(root)) {
+      return [root];
+    }
+
+    const wrappedCandidates = [...wrapperKeys, 'data', 'value', 'result', 'items'];
+    for (const key of wrappedCandidates) {
       const wrapper = root[key];
       if (Array.isArray(wrapper)) {
         return wrapper;
       }
-      if (wrapper && typeof wrapper === 'object') {
+      if (wrapper && typeof wrapper === 'object' && !Array.isArray(wrapper)) {
         const nested = wrapper as Record<string, unknown>;
+        if (this.isSingleProductionOrderLike(nested)) {
+          return [nested];
+        }
         if (Array.isArray(nested['data'])) {
           return nested['data'] as unknown[];
+        }
+        if (Array.isArray(nested['value'])) {
+          return nested['value'] as unknown[];
+        }
+        if (nested['value'] && typeof nested['value'] === 'object' && !Array.isArray(nested['value'])) {
+          const nestedValue = nested['value'] as Record<string, unknown>;
+          if (this.isSingleProductionOrderLike(nestedValue)) {
+            return [nestedValue];
+          }
         }
       }
     }
 
-    if (Array.isArray(root['data'])) {
-      return root['data'] as unknown[];
+    return [];
+  }
+
+  private isSingleProductionOrderLike(source: Record<string, unknown>): boolean {
+    if (!source || typeof source !== 'object') {
+      return false;
     }
 
-    return [];
+    const keys = Object.keys(source).map((key) => key.toLowerCase());
+    return keys.some((key) =>
+      [
+        'docentry',
+        'docnum',
+        'cardcode',
+        'itemcode',
+        'prodname',
+        'plannedqty',
+        'postdate',
+        'docdate',
+        'duedate',
+        'itemname',
+        'cardname',
+      ].includes(key),
+    );
   }
 
   private pickArray(source: Record<string, unknown>, keys: string[]): unknown[] {

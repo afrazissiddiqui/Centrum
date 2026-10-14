@@ -103,6 +103,36 @@ describe('ReceiptFromProductionService', () => {
     req.flush(response);
   });
 
+  it('accepts a single SAP object wrapped in value and exposes DocNum/DocEntry', () => {
+    const response = {
+      value: {
+        DocEntry: '880',
+        DocNum: '497',
+        CardCode: 'CC-000003',
+        CardName: 'Northern Bottling Company (Pvt) Limited',
+        ItemCode: 'FG-Own-P-00000017',
+        ProdName: 'Own Flint - Preform 19.5 Gram',
+        PlannedQty: '739968.000000',
+        CmpltQty: '739968.000000',
+        RjctQty: '0.000000',
+        PostDate: '2026-10-02 00:00:00.0000000',
+      },
+    };
+
+    service.listProductionOrders().subscribe((orders) => {
+      expect(orders.length).toBe(1);
+      expect(orders[0].docEntry).toBe('880');
+      expect(orders[0].docNum).toBe('497');
+      expect(orders[0].customerCode).toBe('CC-000003');
+      expect(orders[0].itemCode).toBe('FG-Own-P-00000017');
+      expect(orders[0].itemDescription).toBe('Own Flint - Preform 19.5 Gram');
+    });
+
+    const req = httpMock.expectOne((request) => request.url.includes('production_orders'));
+    expect(req.request.method).toBe('GET');
+    req.flush(response);
+  });
+
   it('maps receipt branch ids to friendly labels', () => {
     const response = {
       data: [
