@@ -364,10 +364,6 @@ export class AttendanceManagmentComponent implements OnInit {
 
   applyQuery(): void {
     this.currentPage = 1;
-    if (this.queryMode === 'dateRange' && !this.userId.trim()) {
-      this.clearDateRangeResults();
-      return;
-    }
     this.loadRecords();
   }
 
@@ -510,11 +506,6 @@ export class AttendanceManagmentComponent implements OnInit {
   }
 
   private loadRecords(): void {
-    if (this.queryMode === 'dateRange' && !this.userId.trim()) {
-      this.clearDateRangeResults();
-      return;
-    }
-
     this.loading.set(true);
     this.pageEnrichSub?.unsubscribe();
     this.enrichedEmployeeKeys.clear();

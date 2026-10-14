@@ -39,9 +39,13 @@ h1 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 22px;
 .month-control button { width: 30px; height: 30px; border: 0; background: transparent; color: #294668; font-size: 20px; cursor: pointer; }
 .month-control span { display: inline-flex; align-items: center; gap: 7px; border-inline: 1px solid #dce5f1; padding: 0 12px; font: 600 12px Georgia, 'Times New Roman', serif; white-space: nowrap; }
 .today-button { padding: 8px 12px; }
-.search-control { flex: 1; min-width: 180px; margin-left: auto; gap: 8px; padding: 0 10px; }
+.roster-search { display: flex; flex: 1; min-width: 280px; margin-left: auto; gap: 6px; }
+.search-control { flex: 1; min-width: 0; gap: 8px; padding: 0 10px; }
 .search-control ui5-icon { width: 15px; height: 15px; color: #55708f; }
 .search-control input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: #203754; font: 12px Georgia, 'Times New Roman', serif; padding: 8px 0; }
+.search-mode-button { flex: 0 0 auto; padding: 0 10px; border: 1px solid #c7d3e3; border-radius: 6px; background: #fff; color: #294668; font: 600 11px Georgia, 'Times New Roman', serif; cursor: pointer; }
+.search-mode-button--active { border-color: #294668; background: #294668; color: #fff; }
+.search-mode-button:focus-visible { outline: 2px solid #245a93; outline-offset: 2px; }
 .summary-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)) minmax(190px, 1.2fr); gap: 8px; padding: 4px 0 10px; }
 .summary-card, .legend-card { min-height: 70px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid #e4eaf3; background: #fff; }
 .summary-card { width: 100%; color: inherit; font: inherit; text-align: left; cursor: default; }
@@ -92,7 +96,7 @@ h1 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 22px;
 .branch-holiday-item { display: flex; align-items: center; gap: 11px; padding: 9px 11px; border: 1px solid #dce7e2; border-radius: 8px; background: #f1fbf6; color: #176746; }
 .branch-holiday-item__date { display: grid; flex: 0 0 34px; place-items: center; width: 34px; height: 34px; border-radius: 6px; background: #d8f2e4; color: #126443; font: 700 14px Georgia, 'Times New Roman', serif; }
 .branch-holiday-item strong, .branch-holiday-item small { display: block; }.branch-holiday-item strong { font: 700 13px Georgia, 'Times New Roman', serif; }.branch-holiday-item small { margin-top: 3px; color: #5b806e; font-size: 10px; }
-@media (max-width: 900px) { .roster-content { padding-inline: 10px; }.roster-header { flex-direction: column; }.header-actions { width: 100%; }.button { flex: 1; justify-content: center; }.roster-controls { flex-wrap: wrap; }.search-control { order: 5; flex-basis: 100%; margin-left: 0; }.summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.legend-card { grid-column: span 2; }.conflict-banner { align-items: flex-start; flex-wrap: wrap; }.resolve-button { margin-left: 39px; }.close-button { margin-left: auto; } }
+@media (max-width: 900px) { .roster-content { padding-inline: 10px; }.roster-header { flex-direction: column; }.header-actions { width: 100%; }.button { flex: 1; justify-content: center; }.roster-controls { flex-wrap: wrap; }.roster-search { order: 5; flex-basis: 100%; min-width: 0; margin-left: 0; }.summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.legend-card { grid-column: span 2; }.conflict-banner { align-items: flex-start; flex-wrap: wrap; }.resolve-button { margin-left: 39px; }.close-button { margin-left: auto; } }
 @media (max-width: 520px) { .summary-grid { grid-template-columns: 1fr; }.legend-card { grid-column: auto; }.roster-heading-row { gap: 8px; }.autosave { flex-basis: 100%; }.select-control { flex: 1; }.month-control { margin-left: 0; }.today-button { flex: 1; } }
 .employee-cell__identity { width: 100%; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; text-align: left; }
 .employee-cell__identity:hover .employee-name strong { text-decoration: underline; }

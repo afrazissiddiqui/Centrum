@@ -85,6 +85,45 @@ export function matchesRosterBranch(employeeBranch: string, selectedBranch: stri
     rosterBranchName(employeeBranch).toLowerCase() === rosterBranchName(selectedBranch).toLowerCase();
 }
 
+export function matchesRosterEmployeeSearch(
+  employee: ApplicationFormRecord,
+  searchText: string,
+  legacyCodeOnly = false,
+): boolean {
+  const query = searchText.trim().toLowerCase();
+  const searchableValues = legacyCodeOnly
+    ? [employee.ExtEmpNo, employee.detail?.loginDetails?.legacyCode]
+    : [
+    employee.EmployeeName,
+    employee.EmployeeCode,
+    employee.userId,
+    employee.ExtEmpNo,
+    employee.detail?.loginDetails?.legacyCode,
+    employee.Designation,
+    employee.Department,
+  ];
+  return !query || searchableValues.some((value) => String(value ?? '').toLowerCase().includes(query));
+}
+
+export function rosterApplicationRecord(
+  record: EmployeeRosterListRecord,
+  profile?: ApplicationFormRecord,
+): ApplicationFormRecord {
+  return {
+    ...profile,
+    EmployeeCode: profile?.EmployeeCode || record.employee_id,
+    EmployeeName: profile?.EmployeeName || record.employee_name || record.employee_id,
+    Department: profile?.Department || record.department,
+    EmployeeNature: profile?.EmployeeNature || '',
+    Designation: profile?.Designation || record.designation || record.role,
+    ReportingManager: profile?.ReportingManager || '',
+    EmploymentType: profile?.EmploymentType || '',
+    EmploymentStatus: record.employment_status,
+    EmploymentCategory: profile?.EmploymentCategory || '',
+    status: profile?.status || '',
+  };
+}
+
 const NO_DEPARTMENT_FILTER = '__no_department__';
 const ALL_BRANCHES_FILTER = 'All Branches';
 
@@ -250,8 +289,21 @@ export function rosterShiftInitial(shift: ShiftCode, workstations: WorkstationRe
       .some((value) => value.trim().toLowerCase() === lowerShift),
   );
   return workstationIndex >= 0
-    ? String(workstationIndex + 1)
+    ? rosterShiftLetter(workstationIndex)
     : normalizedShift;
+}
+
+function rosterShiftLetter(index: number): string {
+  let value = index + 1;
+  let label = '';
+
+  while (value > 0) {
+    value--;
+    label = String.fromCharCode(65 + (value % 26)) + label;
+    value = Math.floor(value / 26);
+  }
+
+  return label;
 }
 
 @Component({
@@ -283,6 +335,7 @@ export class EmployeeRosterComponent implements OnInit {
   private rosterRecords: EmployeeRosterListRecord[] = [];
   private originalRosterShifts = new Map<string, string[]>();
   readonly searchText = signal('');
+  readonly legacyCodeSearchOnly = signal(false);
   readonly selectedHub = signal('All Branches');
   readonly rosterBranchOptions = ['All Branches', ...ROSTER_BRANCH_OPTIONS];
   readonly selectedDepartment = signal('All Departments');
@@ -383,15 +436,15 @@ export class EmployeeRosterComponent implements OnInit {
   });
 
   readonly filteredEmployees = computed(() => {
-    const query = this.searchText().trim().toLowerCase();
     const department = this.selectedDepartment();
     return this.employees().filter((employee) => {
       const matchesBranch = matchesRosterBranch(employee.hub, this.selectedHub());
       const matchesDepartment = department === 'All Departments' || employee.Department === department;
-      const matchesSearch = !query || [employee.EmployeeName, employee.EmployeeCode, employee.Designation, employee.Department]
-        .join(' ')
-        .toLowerCase()
-        .includes(query);
+      const matchesSearch = matchesRosterEmployeeSearch(
+        employee,
+        this.searchText(),
+        this.legacyCodeSearchOnly(),
+      );
       return matchesBranch && matchesDepartment && matchesSearch;
     });
   });
@@ -1259,7 +1312,7 @@ export class EmployeeRosterComponent implements OnInit {
     return Array.from(grouped.values()).map((record, index) => {
       const employeeCode = this.normalizeRosterEmployeeCode(record.employee_id);
       const profile = profilesByCode.get(employeeCode);
-      const rosterEmployee = this.toRosterEmployee(this.toApplicationRecord(record, profile), index);
+      const rosterEmployee = this.toRosterEmployee(rosterApplicationRecord(record, profile), index);
       return {
         ...rosterEmployee,
         hub: rosterBranchName(
@@ -1278,24 +1331,5 @@ export class EmployeeRosterComponent implements OnInit {
     const numericCode = normalized.match(/^(?:emp[-\s]?)?(\d+)$/i)?.[1];
     return numericCode ? `emp-${numericCode.padStart(8, '0')}` : normalized.toLowerCase();
   }
-
-  private toApplicationRecord(
-    record: EmployeeRosterListRecord,
-    profile?: ApplicationFormRecord,
-  ): ApplicationFormRecord {
-    return {
-      EmployeeCode: profile?.EmployeeCode || record.employee_id,
-      EmployeeName: profile?.EmployeeName || record.employee_name || record.employee_id,
-      Department: profile?.Department || record.department,
-      EmployeeNature: '',
-      Designation: profile?.Designation || record.designation || record.role,
-      ReportingManager: '',
-      EmploymentType: '',
-      EmploymentStatus: record.employment_status,
-      EmploymentCategory: '',
-      status: '',
-    };
-  }
-
 
 }

@@ -19,7 +19,10 @@
       <div class="month-control"><button type="button" aria-label="Previous month" (click)="changeMonth(-1)">‹</button><span><ui5-icon name="calendar" aria-hidden="true"></ui5-icon> {{ monthLabel() }}</span><button type="button" aria-label="Next month" (click)="changeMonth(1)">›</button></div>
       <label class="select-control month-half-control"><ui5-icon name="time-entry-request" aria-hidden="true"></ui5-icon><select [ngModel]="selectedMonthHalf()" (ngModelChange)="onMonthHalfChange($event)"><option>First Half</option><option>Second Half</option></select><ui5-icon name="slim-arrow-down" aria-hidden="true"></ui5-icon></label>
       <button type="button" class="today-button" (click)="jumpToToday()">Jump to Today</button>
-      <label class="search-control"><ui5-icon name="search" aria-hidden="true"></ui5-icon><input type="search" placeholder="Search employee by name, ID, or role..." [ngModel]="searchText()" (ngModelChange)="searchText.set($event)" /></label>
+      <div class="roster-search">
+        <label class="search-control"><ui5-icon name="search" aria-hidden="true"></ui5-icon><input type="search" [attr.aria-label]="legacyCodeSearchOnly() ? 'Search employees by legacy code only' : 'Search employees by name, username, ID, or legacy code'" [placeholder]="legacyCodeSearchOnly() ? 'Search by legacy code...' : 'Search employee by name, username, ID, legacy code, or role...'" [ngModel]="searchText()" (ngModelChange)="searchText.set($event)" /></label>
+        <button type="button" class="search-mode-button" [class.search-mode-button--active]="legacyCodeSearchOnly()" [attr.aria-pressed]="legacyCodeSearchOnly()" (click)="legacyCodeSearchOnly.update((legacyOnly) => !legacyOnly)">Legacy Code Only</button>
+      </div>
     </section>
 
     <section class="summary-grid" aria-label="Roster summary">

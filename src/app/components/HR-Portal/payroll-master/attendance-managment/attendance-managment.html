@@ -84,7 +84,7 @@
         </ng-container>
 
         <div class="attendance-query-bar__group attendance-query-bar__group--employee">
-          <label for="attendance-user-id">User ID</label>
+          <label for="attendance-user-id">User ID (optional)</label>
           <input
             id="attendance-user-id"
             class="attendance-control"
@@ -99,7 +99,7 @@
           type="button"
           class="attendance-load-btn"
           (click)="applyQuery()"
-          [disabled]="loading() || (queryMode === 'dateRange' && !userId.trim())"
+          [disabled]="loading()"
         >
           <ui5-icon name="refresh" class="attendance-btn-icon" aria-hidden="true"></ui5-icon>
           {{ loading() ? 'Loading…' : 'Load Attendance' }}
@@ -315,6 +315,7 @@
               <ng-container *ngFor="let date of dateRangeDates">
                 <col class="attendance-table__date-range-punch">
                 <col class="attendance-table__date-range-punch">
+                <col class="attendance-table__date-range-punch">
               </ng-container>
               <col class="attendance-table__date-range-summary">
               <col class="attendance-table__date-range-summary">
@@ -324,13 +325,13 @@
               <tr class="attendance-table__group-row">
                 <th class="attendance-table__group attendance-table__group--identity attendance-table__date-range-identity" rowspan="3" scope="col">Employee Code</th>
                 <th class="attendance-table__group attendance-table__group--identity attendance-table__date-range-identity" rowspan="3" scope="col">Employee Name</th>
-                <th class="attendance-table__group attendance-table__group--time" [attr.colspan]="dateRangeDates.length * 2" scope="colgroup">Date</th>
+                <th class="attendance-table__group attendance-table__group--time" [attr.colspan]="dateRangeDates.length * 3" scope="colgroup">Date</th>
                 <th class="attendance-table__group attendance-table__group--time attendance-table__date-range-summary-header" rowspan="3" scope="col">Total Working Hours</th>
                 <th class="attendance-table__group attendance-table__group--time attendance-table__date-range-summary-header" rowspan="3" scope="col">Working Days</th>
                 <th class="attendance-table__actions-header attendance-table__date-range-view-header" rowspan="3" scope="col">View</th>
               </tr>
               <tr class="attendance-table__column-row">
-                <th *ngFor="let date of dateRangeDates" class="attendance-col--time attendance-table__date-header" colspan="2" scope="colgroup">
+                <th *ngFor="let date of dateRangeDates" class="attendance-col--time attendance-table__date-header" colspan="3" scope="colgroup">
                   {{ formatDateRangeHeader(date) }}
                 </th>
               </tr>
@@ -338,16 +339,17 @@
                 <ng-container *ngFor="let date of dateRangeDates">
                   <th class="attendance-col--time" scope="col">Punch IN</th>
                   <th class="attendance-col--time" scope="col">Punch Out</th>
+                  <th class="attendance-col--time" scope="col">Working Hours</th>
                 </ng-container>
               </tr>
             </thead>
             <tbody>
               <tr *ngIf="loading()" class="attendance-skeleton-row">
-                <td class="attendance-table__empty" [attr.colspan]="5 + dateRangeDates.length * 2">Loading attendance…</td>
+                <td class="attendance-table__empty" [attr.colspan]="5 + dateRangeDates.length * 3">Loading attendance…</td>
               </tr>
               <tr *ngIf="!loading() && dateRangeRows.length === 0">
-                <td class="attendance-table__empty" [attr.colspan]="5 + dateRangeDates.length * 2">
-                  Enter a User ID and load attendance to view this date range.
+                <td class="attendance-table__empty" [attr.colspan]="5 + dateRangeDates.length * 3">
+                  No attendance records found for the selected date range.
                 </td>
               </tr>
               <tr
@@ -356,13 +358,18 @@
                 [class.attendance-list-row--alt]="i % 2 === 1"
               >
                 <td class="attendance-col--identity attendance-table__date-range-employee-code"><span class="attendance-employee-chip">{{ row.employeeCode }}</span></td>
-                <td class="attendance-col--identity attendance-table__date-range-employee-name">{{ row.employeeName || '—' }}</td>
+                <td class="attendance-col--identity attendance-table__date-range-employee-name">
+                  <span [attr.title]="row.employeeName || null">{{ row.employeeName || '—' }}</span>
+                </td>
                 <ng-container *ngFor="let date of dateRangeDates">
                   <td class="attendance-col--time attendance-time-value--in">
                     {{ row.recordsByDate[date]?.punchIn ? formatAttendanceTime(row.recordsByDate[date].punchIn) : '—' }}
                   </td>
                   <td class="attendance-col--time attendance-time-value--out">
                     {{ row.recordsByDate[date]?.punchOut ? formatAttendanceTime(row.recordsByDate[date].punchOut) : '—' }}
+                  </td>
+                  <td class="attendance-col--time">
+                    {{ row.recordsByDate[date]?.workingHours || (row.recordsByDate[date] ? formatWorkingDuration(row.recordsByDate[date].workingMinutes) : '—') }}
                   </td>
                 </ng-container>
                 <td class="attendance-col--time attendance-table__date-range-summary-value">
@@ -476,7 +483,14 @@
           </div>
         </div>
         <div class="attendance-punch-log">
-          <table class="attendance-punch-log__table">
+          <table class="attendance-punch-log__table attendance-punch-log__table--daily">
+            <colgroup>
+              <col class="attendance-punch-log__date-column">
+              <col class="attendance-punch-log__punch-column">
+              <col class="attendance-punch-log__punch-column">
+              <col class="attendance-punch-log__hours-column">
+              <col class="attendance-punch-log__status-column">
+            </colgroup>
             <thead>
               <tr>
                 <th>Date</th>
@@ -489,11 +503,15 @@
             <tbody>
               <tr *ngFor="let date of dateRangeDates">
                 <td>{{ formatDateRangeHeader(date) }}</td>
-                <td class="attendance-time-value attendance-time-value--in">
-                  {{ getDateRangeDetailRecord(date)?.PunchIn ? formatAttendanceTime(getDateRangeDetailRecord(date)?.PunchIn ?? '') : '—' }}
+                <td>
+                  <span class="attendance-time-value attendance-time-value--in">
+                    {{ getDateRangeDetailRecord(date)?.PunchIn ? formatAttendanceTime(getDateRangeDetailRecord(date)?.PunchIn ?? '') : '—' }}
+                  </span>
                 </td>
-                <td class="attendance-time-value attendance-time-value--out">
-                  {{ getDateRangeDetailRecord(date)?.PunchOut ? formatAttendanceTime(getDateRangeDetailRecord(date)?.PunchOut ?? '') : '—' }}
+                <td>
+                  <span class="attendance-time-value attendance-time-value--out">
+                    {{ getDateRangeDetailRecord(date)?.PunchOut ? formatAttendanceTime(getDateRangeDetailRecord(date)?.PunchOut ?? '') : '—' }}
+                  </span>
                 </td>
                 <td>{{ getDateRangeDetailRecord(date)?.WorkingHours || (getDateRangeDetailRecord(date) ? formatWorkingDuration(getDateRangeDetailRecord(date)?.WorkingMinutes ?? 0) : '—') }}</td>
                 <td>{{ getDateRangeDetailRecord(date)?.AttendanceStatus || '—' }}</td>

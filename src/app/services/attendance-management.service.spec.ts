@@ -124,6 +124,42 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(record.WorkingMinutes).toBe(525);
   });
 
+  it('fetches all employees for a calculated date range when no user ID is provided', () => {
+    let loaded = false;
+    service.loadSession({
+      mode: 'dateRange',
+      fromDate: '2026-09-01',
+      toDate: '2026-10-31',
+    }).subscribe(() => (loaded = true));
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/rawpunch'));
+    expect(request.request.params.get('from_date')).toBe('2026-09-01');
+    expect(request.request.params.get('to_date')).toBe('2026-10-31');
+    expect(request.request.params.get('type')).toBe('calculated');
+    expect(request.request.params.has('card_no')).toBeFalse();
+    request.flush(JSON.stringify({
+      data: [
+        {
+          card_no: '00001161',
+          punch_in: '2026-09-01T09:06:48.000Z',
+          punch_out: '2026-09-01T17:37:31.000Z',
+          hours_worked: '8h 45m',
+        },
+        {
+          card_no: '00002345',
+          punch_in: '2026-09-01T08:00:00.000Z',
+          punch_out: '2026-09-01T16:30:00.000Z',
+          hours_worked: '8h 30m',
+        },
+      ],
+    }));
+
+    expect(loaded).toBeTrue();
+    expect(service.slots().map((slot) => slot.displayId)).toContain('00001161');
+    expect(service.slots().map((slot) => slot.displayId)).toContain('00002345');
+    expect(service.slots().every((slot) => slot.date === '2026-09-01')).toBeTrue();
+  });
+
   it('uses the calculated hours_worked value even when it differs from the punch-time difference', () => {
     service.loadSession({ mode: 'date', userId: '00000007', date: '2026-09-01' }).subscribe();
     const request = httpMock.expectOne((req) => req.url.endsWith('/rawpunch'));

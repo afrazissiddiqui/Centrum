@@ -1,30 +1,325 @@
 <div class="page">
-
-  <!-- ACTION BAR — mirrors HR shellbar dropdown navigable sections -->
-  <div class="action-bar">
-    @for (action of menuActions(); track action.value) {
+  <nav class="quick-nav" aria-label="Quick access">
+    @for (action of menuActions(); track action.value; let first = $first) {
       <button
         type="button"
-        class="action"
+        class="quick-nav__item"
+        [class.quick-nav__item--active]="first"
         [attr.aria-label]="'Open ' + action.label"
         [attr.title]="'Open ' + action.label"
+        [attr.aria-current]="first ? 'page' : null"
         (click)="openAction(action)"
       >
-        <ui5-icon [attr.name]="action.icon"></ui5-icon>
+        <ui5-icon [attr.name]="action.icon" aria-hidden="true"></ui5-icon>
         <span>{{ action.label }}</span>
       </button>
     }
-  </div>
+  </nav>
 
-  <!-- WELCOME -->
-  <div class="welcome">
-    <h2>Good evening</h2>
-
-    <div class="chips">
-      <button class="chip">Team Absence Calendar</button>
-      <button class="chip">My Team Positions</button>
-      <button class="chip">Pending Workflows</button>
+  <section class="welcome-banner" aria-labelledby="welcome-title">
+    <div class="welcome-copy">
+      <div class="welcome-heading">
+        <h1 id="welcome-title">{{ greeting }}, {{ employeeName() }}</h1>
+        <span class="service-badge">{{ employeeServiceLabel }}</span>
+      </div>
+      <p>Welcome to your personal employee workspace. Manage your time off, personal schedule, and benefits.</p>
     </div>
-  </div>
+    <div class="welcome-actions" aria-label="Employee self-service actions">
+      <button type="button" class="welcome-action welcome-action--primary" disabled title="Available when employee services are connected">
+        <ui5-icon name="add" aria-hidden="true"></ui5-icon>
+        New Absence Request
+      </button>
+      <button type="button" class="welcome-action" disabled title="Available when employee services are connected">
+        <ui5-icon name="history" aria-hidden="true"></ui5-icon>
+        Log Timesheet / Hours
+      </button>
+      <button type="button" class="welcome-action" disabled title="Available when employee services are connected">
+        <ui5-icon name="download" aria-hidden="true"></ui5-icon>
+        Download Payslip
+      </button>
+      <button type="button" class="welcome-action" disabled title="Available when employee services are connected">
+        <ui5-icon name="shield" aria-hidden="true"></ui5-icon>
+        My Benefits
+      </button>
+    </div>
+  </section>
 
+  <section class="summary-grid" aria-label="Employee summary">
+    <article class="summary-card">
+      <div class="summary-card__top">
+        <h2>Annual Leave Balance</h2>
+        <span class="summary-badge summary-badge--green">Active plan</span>
+      </div>
+      <p class="summary-value">— <span>Days available</span></p>
+      <div class="summary-card__foot">
+        <span>Leave balance will appear here</span>
+        <span>—</span>
+      </div>
+      <div class="summary-meter" aria-hidden="true"><span class="summary-meter__fill summary-meter__fill--blue"></span></div>
+    </article>
+
+    <article class="summary-card">
+      <div class="summary-card__top">
+        <h2>Sick &amp; Medical Leave</h2>
+        <span class="summary-badge summary-badge--blue">Current year</span>
+      </div>
+      <p class="summary-value">— <span>Days available</span></p>
+      <div class="summary-card__foot">
+        <span>Leave usage will appear here</span>
+        <span>—</span>
+      </div>
+      <div class="summary-meter" aria-hidden="true"><span class="summary-meter__fill summary-meter__fill--coral"></span></div>
+    </article>
+
+    <article class="summary-card">
+      <div class="summary-card__top">
+        <h2>Remote / WFH Allowance</h2>
+        <span class="summary-badge summary-badge--green">Policy</span>
+      </div>
+      <p class="summary-value">— <span>Days / week</span></p>
+      <div class="summary-card__foot">
+        <span>Remote-work allowance will appear here</span>
+        <span>—</span>
+      </div>
+      <div class="summary-meter" aria-hidden="true"><span class="summary-meter__fill summary-meter__fill--green"></span></div>
+    </article>
+
+    <article class="summary-card summary-card--upcoming">
+      <div class="summary-card__top">
+        <h2>Upcoming Time Off</h2>
+        <span class="summary-badge summary-badge--violet">Next leave</span>
+      </div>
+      @if (upcomingTimeOff(); as timeOff) {
+        <p class="summary-value summary-value--upcoming">
+          {{ eventDisplayDate(timeOff.date) | date:'MMM d' }} · {{ timeOff.title }}
+        </p>
+      } @else {
+        <p class="summary-value summary-value--upcoming">No upcoming leave</p>
+      }
+      <div class="summary-card__foot">
+        <span>Next approved absence</span>
+      </div>
+      <div class="summary-meter" aria-hidden="true"><span class="summary-meter__fill summary-meter__fill--violet"></span></div>
+    </article>
+  </section>
+
+  <section class="calendar-card" aria-labelledby="calendar-title">
+    <header class="calendar-toolbar">
+      <div class="calendar-title-group">
+        <ui5-icon class="calendar-title-icon" name="calendar" aria-hidden="true"></ui5-icon>
+        <h2 id="calendar-title">My Schedule &amp; Time-Off Calendar</h2>
+        <span class="privacy-badge">
+          <ui5-icon name="locked" aria-hidden="true"></ui5-icon>
+          Private view · Only you can see this
+        </span>
+      </div>
+
+      <div class="calendar-controls">
+        <div class="period-control" aria-label="Calendar period">
+          <button type="button" class="period-control__arrow" aria-label="Previous period" (click)="changeMonth(-1)">
+            <ui5-icon name="slim-arrow-left" aria-hidden="true"></ui5-icon>
+          </button>
+          <h3 aria-live="polite">{{ calendarTitle() }}</h3>
+          <button type="button" class="period-control__arrow" aria-label="Next period" (click)="changeMonth(1)">
+            <ui5-icon name="slim-arrow-right" aria-hidden="true"></ui5-icon>
+          </button>
+        </div>
+        <button type="button" class="today-button" (click)="goToToday()">Today</button>
+        <div class="view-switch" role="group" aria-label="Calendar view">
+          <button
+            type="button"
+            [class.is-active]="activeView() === 'month'"
+            [attr.aria-pressed]="activeView() === 'month'"
+            (click)="activeView.set('month')"
+          >Month View</button>
+          <button
+            type="button"
+            [class.is-active]="activeView() === 'week'"
+            [attr.aria-pressed]="activeView() === 'week'"
+            (click)="activeView.set('week')"
+          >Week View</button>
+          <button
+            type="button"
+            [class.is-active]="activeView() === 'day'"
+            [attr.aria-pressed]="activeView() === 'day'"
+            (click)="activeView.set('day')"
+          >Day View</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="calendar-legend" aria-label="Calendar legend">
+      <span class="calendar-legend__title">Calendar Legend:</span>
+      <span class="legend-item"><i class="legend-swatch legend-swatch--approved"></i>My Approved Absence</span>
+      <span class="legend-item"><i class="legend-swatch legend-swatch--pending"></i>My Pending Request</span>
+      <span class="legend-item"><i class="legend-swatch legend-swatch--remote"></i>My Remote / WFH Day</span>
+      <span class="legend-item"><i class="legend-swatch legend-swatch--holiday"></i>Statutory Holiday</span>
+      <span class="legend-item"><i class="legend-swatch legend-swatch--office"></i>In-Office Shift</span>
+    </div>
+
+    <div class="calendar-grid" [class.calendar-grid--week]="activeView() === 'week'" [class.calendar-grid--day]="activeView() === 'day'" role="grid" [attr.aria-label]="calendarTitle()">
+      <div class="weekday-row" role="row">
+        @for (weekday of visibleWeekdays(); track weekday) {
+          <div class="weekday" role="columnheader">{{ weekday }}</div>
+        }
+      </div>
+      @for (week of calendarWeeks(); track $index) {
+        <div class="week-row" role="row">
+          @for (day of week; track day.date.getTime()) {
+            <div
+              class="day-cell"
+              role="gridcell"
+              [attr.aria-selected]="day.isSelected"
+              [class.day-cell--outside]="!day.isCurrentMonth && activeView() === 'month'"
+              [class.day-cell--weekend]="day.isWeekend"
+              [class.day-cell--today]="day.isToday"
+              [class.day-cell--selected]="day.isSelected"
+            >
+              <button
+                type="button"
+                class="day-button"
+                [attr.aria-label]="(day.date | date:'EEEE, MMMM d, y') + (day.isToday ? ', today' : '') + (day.events.length ? ', ' + day.events.length + ' events' : '')"
+                [attr.aria-pressed]="day.isSelected"
+                (click)="selectDate(day.date)"
+              >
+                <span class="day-number">{{ day.date | date:'d' }}</span>
+                @if (day.isToday) {
+                  <span class="today-mark">Today</span>
+                }
+              </button>
+              @if (day.events.length) {
+                <div class="day-events">
+                  @for (event of day.events; track event.id) {
+                    <article
+                      [class]="'calendar-event calendar-event--' + event.category"
+                      [attr.aria-label]="eventCategoryLabel(event.category) + ': ' + event.title"
+                    >
+                      <strong>{{ event.title }}</strong>
+                      @if (event.time) {
+                        <span>{{ event.time }}</span>
+                      }
+                    </article>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+    <footer class="calendar-footer">
+      <span class="calendar-footer__indicator" aria-hidden="true"></span>
+      <span>Private employee schedule</span>
+      <span class="calendar-footer__divider" aria-hidden="true"></span>
+      <span>Schedule details will appear here once employee calendar data is connected.</span>
+    </footer>
+  </section>
+
+  <section class="dashboard-followup-grid" aria-label="Requests and milestones">
+    <section class="followup-card requests-card" aria-labelledby="requests-title">
+      <header class="followup-card__header">
+        <div>
+          <h2 id="requests-title">My Submitted Requests &amp; Status</h2>
+          <p>Track approvals and workflow stages for your applications</p>
+        </div>
+        <span class="request-count">{{ activeRequestCount() }} Active {{ activeRequestCount() === 1 ? 'Request' : 'Requests' }}</span>
+      </header>
+
+      @if (submittedRequests().length) {
+        <div class="request-list">
+          @for (request of submittedRequests(); track request.id) {
+            <article class="request-row">
+              <span [class]="'request-status-icon request-status-icon--' + request.statusType" aria-hidden="true">
+                <ui5-icon [attr.name]="request.statusType === 'pending' || request.statusType === 'review' ? 'history' : request.statusType === 'withdrawn' ? 'decline' : 'accept'"></ui5-icon>
+              </span>
+              <div class="request-row__content">
+                <div class="request-row__title">
+                  <h3>{{ request.title }}</h3>
+                  <span [class]="'request-status-label request-status-label--' + request.statusType">{{ request.status }}</span>
+                </div>
+                <p>{{ request.dateLabel }} <span aria-hidden="true">•</span> {{ request.summary }}</p>
+              </div>
+              <button type="button" class="request-details-button" disabled>View Details</button>
+            </article>
+          }
+        </div>
+        <p class="followup-card__note">Request actions will be available when employee services are connected.</p>
+      } @else {
+        <div class="followup-empty followup-empty--requests">
+          <span class="followup-empty__icon"><ui5-icon name="activity-items" aria-hidden="true"></ui5-icon></span>
+          <div>
+            <h3>No submitted requests yet</h3>
+            <p>When you submit a leave or employee request, its approval status and next steps will appear here.</p>
+          </div>
+        </div>
+      }
+
+      <footer class="followup-card__footer">
+        <span>Your requests are visible only to you</span>
+      </footer>
+    </section>
+
+    <aside class="followup-card milestones-card" aria-labelledby="milestones-title">
+      <header class="followup-card__header">
+        <div>
+          <h2 id="milestones-title">My Milestones &amp; Action Items</h2>
+          <p>Important dates and things to take care of</p>
+        </div>
+        <span class="milestone-count">{{ milestones().length }}</span>
+      </header>
+
+      @if (milestones().length) {
+        <div class="milestone-list">
+          @for (milestone of milestones(); track milestone.id) {
+            <article class="milestone-row">
+              <time class="milestone-date" [attr.datetime]="milestone.date">
+                <span>{{ eventDisplayDate(milestone.date) | date:'MMM' }}</span>
+                <strong>{{ eventDisplayDate(milestone.date) | date:'dd' }}</strong>
+              </time>
+              <div class="milestone-row__content">
+                <h3>{{ milestone.title }}</h3>
+                <p>{{ milestone.description }}</p>
+                @if (milestone.detail) {
+                  <span class="milestone-row__detail">{{ milestone.detail }}</span>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      } @else {
+        <div class="followup-empty followup-empty--milestones">
+          <span class="followup-empty__icon"><ui5-icon name="calendar" aria-hidden="true"></ui5-icon></span>
+          <div>
+            <h3>You’re all caught up</h3>
+            <p>There are no upcoming milestones or action items to show right now.</p>
+          </div>
+        </div>
+      }
+
+      <footer class="account-summary">
+        @if (portalUserId(); as userId) {
+          <div>
+            <span>Portal account</span>
+            <strong>#{{ userId }} · {{ accountType() }}</strong>
+          </div>
+        }
+        @if (accountEmail(); as email) {
+          <div>
+            <span>Signed in as</span>
+            <strong>{{ email }}</strong>
+          </div>
+        }
+      </footer>
+    </aside>
+  </section>
+
+  <footer class="dashboard-footer">
+    <span>AHCP HR Portal · Employee Self-Service</span>
+    <span class="dashboard-footer__separator" aria-hidden="true">•</span>
+    @if (accountEmail(); as email) {
+      <span>Signed in as {{ email }}</span>
+    } @else {
+      <span>Your personal workspace</span>
+    }
+  </footer>
 </div>

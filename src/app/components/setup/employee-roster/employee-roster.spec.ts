@@ -5,8 +5,10 @@ import {
   filterUnassignedEmployees,
   findUnassignedEmployees,
   matchesRosterBranch,
+  matchesRosterEmployeeSearch,
   rosterDayIndexForMonth,
   rosterBranchName,
+  rosterApplicationRecord,
   rosterPeriodForDate,
   rosterShiftInitial,
   rosterShiftsForEmployeeMonth,
@@ -28,6 +30,75 @@ describe('matchesRosterBranch', () => {
     expect(matchesRosterBranch('1', 'AHCP_Peshawar')).toBe(true);
     expect(matchesRosterBranch('AHCP_Faisalabad', 'AHCP_Peshawar')).toBe(false);
     expect(matchesRosterBranch('2', 'All Branches')).toBe(true);
+  });
+});
+
+describe('matchesRosterEmployeeSearch', () => {
+  const employee = {
+    EmployeeCode: 'E002',
+    EmployeeName: 'Sara Ahmed',
+    userId: 'sara.ahmed',
+    ExtEmpNo: '00002222',
+    Department: 'Finance',
+    Designation: 'Officer',
+    detail: { loginDetails: { legacyCode: 'LEG-0022' } },
+  } as ApplicationFormRecord;
+
+  it('matches employee username, ID, and legacy codes', () => {
+    expect(matchesRosterEmployeeSearch(employee, 'sara.ahmed')).toBe(true);
+    expect(matchesRosterEmployeeSearch(employee, 'E002')).toBe(true);
+    expect(matchesRosterEmployeeSearch(employee, 'LEG-0022')).toBe(true);
+    expect(matchesRosterEmployeeSearch(employee, '00002222')).toBe(true);
+  });
+
+  it('matches legacy codes without case sensitivity or surrounding whitespace', () => {
+    expect(matchesRosterEmployeeSearch(employee, '  leg-0022 ')).toBe(true);
+  });
+
+  it('can limit search results to legacy codes only', () => {
+    expect(matchesRosterEmployeeSearch(employee, 'LEG-0022', true)).toBe(true);
+    expect(matchesRosterEmployeeSearch(employee, '00002222', true)).toBe(true);
+    expect(matchesRosterEmployeeSearch(employee, 'Sara Ahmed', true)).toBe(false);
+    expect(matchesRosterEmployeeSearch(employee, 'E002', true)).toBe(false);
+    expect(matchesRosterEmployeeSearch(employee, 'sara.ahmed', true)).toBe(false);
+  });
+});
+
+describe('rosterApplicationRecord', () => {
+  it('preserves profile legacy code data when adapting a roster record', () => {
+    const rosterRecord: EmployeeRosterListRecord = {
+      employee_id: 'E002',
+      employee_name: 'Sara Ahmed',
+      department: 'Finance',
+      designation: 'Officer',
+      employment_status: 'Active',
+      shift_date: '2026-10-01',
+      shift: 'M',
+      role: 'Officer',
+      hub: '',
+      note: null,
+    };
+    const profile = {
+      EmployeeCode: 'E002',
+      EmployeeName: 'Sara Ahmed',
+      ExtEmpNo: '00002222',
+      Department: 'Finance',
+      EmployeeNature: '',
+      Designation: 'Officer',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: 'Active',
+      EmploymentCategory: '',
+      status: '',
+      userId: 'sara.ahmed',
+      detail: { loginDetails: { legacyCode: 'LEG-0022' } },
+    } as ApplicationFormRecord;
+
+    const employee = rosterApplicationRecord(rosterRecord, profile);
+
+    expect(employee.ExtEmpNo).toBe('00002222');
+    expect(employee.detail?.loginDetails.legacyCode).toBe('LEG-0022');
+    expect(matchesRosterEmployeeSearch(employee, 'LEG-0022', true)).toBe(true);
   });
 });
 
@@ -116,14 +187,36 @@ describe('rosterShiftInitial', () => {
   const workstations: WorkstationRecord[] = [
     { id: 1, name: 'Morning East', code: 'ME', officeInTime: '', officeOutTime: '', inGraceMinutes: 0, outGraceMinutes: 0, shift: 'M', description: '', status: 1 },
     { id: 2, name: 'Evening West', code: 'EW', officeInTime: '', officeOutTime: '', inGraceMinutes: 0, outGraceMinutes: 0, shift: 'E', description: '', status: 1 },
+    { id: 3, name: 'Night South', code: 'NS', officeInTime: '', officeOutTime: '', inGraceMinutes: 0, outGraceMinutes: 0, shift: 'N', description: '', status: 1 },
   ];
 
-  it('shows the workstation number and preserves special roster values', () => {
-    expect(rosterShiftInitial('ME', workstations)).toBe('1');
-    expect(rosterShiftInitial('EW', workstations)).toBe('2');
-    expect(rosterShiftInitial('E', workstations)).toBe('2');
+  it('shows an alphabetic label in workstation order and preserves special roster values', () => {
+    expect(rosterShiftInitial('ME', workstations)).toBe('A');
+    expect(rosterShiftInitial('EW', workstations)).toBe('B');
+    expect(rosterShiftInitial('E', workstations)).toBe('B');
+    expect(rosterShiftInitial('NS', workstations)).toBe('C');
+    expect(rosterShiftInitial('N', workstations)).toBe('C');
     expect(rosterShiftInitial('OFF', workstations)).toBe('OFF');
     expect(rosterShiftInitial('HOL', workstations)).toBe('HOL');
+  });
+
+  it('continues alphabetically past Z for larger workstation lists', () => {
+    const manyWorkstations: WorkstationRecord[] = Array.from({ length: 28 }, (_, index) => ({
+      id: index + 1,
+      name: `Shift ${index + 1}`,
+      code: `S${index + 1}`,
+      officeInTime: '',
+      officeOutTime: '',
+      inGraceMinutes: 0,
+      outGraceMinutes: 0,
+      shift: `Shift ${index + 1}`,
+      description: '',
+      status: 1,
+    }));
+
+    expect(rosterShiftInitial('S26', manyWorkstations)).toBe('Z');
+    expect(rosterShiftInitial('S27', manyWorkstations)).toBe('AA');
+    expect(rosterShiftInitial('S28', manyWorkstations)).toBe('AB');
   });
 });
 

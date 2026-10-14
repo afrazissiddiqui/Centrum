@@ -99,11 +99,40 @@
   font-size: 0.875rem;
 }
 
+.attendance-punch-log__table--daily {
+  min-width: 720px;
+  table-layout: fixed;
+}
+
+.attendance-punch-log__date-column {
+  width: 16%;
+}
+
+.attendance-punch-log__punch-column {
+  width: 21%;
+}
+
+.attendance-punch-log__hours-column {
+  width: 22%;
+}
+
+.attendance-punch-log__status-column {
+  width: 20%;
+}
+
 .attendance-punch-log__table th,
 .attendance-punch-log__table td {
   padding: 8px 10px;
   border-bottom: 1px solid #e2e8f0;
   text-align: left;
+}
+
+.attendance-punch-log__table--daily th,
+.attendance-punch-log__table--daily td {
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .attendance-punch-log__table th {
@@ -532,37 +561,51 @@
 .attendance-table--date-range .attendance-table__date-range-employee-code,
 .attendance-table--date-range .attendance-table__date-range-employee-name {
   position: sticky;
-  z-index: 6;
+  z-index: 2;
+  background: #eff6ff !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .attendance-table--date-range .attendance-table__date-range-identity:first-child,
 .attendance-table--date-range .attendance-table__date-range-employee-code {
-  left: 0;
+  left: auto;
+  z-index: 4;
 }
 
 .attendance-table--date-range .attendance-table__date-range-identity:nth-child(2),
 .attendance-table--date-range .attendance-table__date-range-employee-name {
-  left: var(--attendance-date-range-code-width);
+  left: auto;
+  z-index: 3;
+}
+
+.attendance-table--date-range tbody .attendance-table__date-range-employee-code,
+.attendance-table--date-range tbody .attendance-table__date-range-employee-name {
+  position: relative;
+  left: auto;
+  z-index: 1;
 }
 
 .attendance-table--date-range .attendance-table__date-range-employee-code,
 .attendance-table--date-range .attendance-table__date-range-employee-name {
-  background: #eff6ff !important;
   box-shadow: 1px 0 0 #e2e8f0;
 }
 
 .attendance-table--date-range .attendance-table__date-range-employee-name {
-  overflow: hidden;
   text-align: left;
-  text-overflow: ellipsis;
 }
 
-.attendance-table--date-range .attendance-table__date-range-identity:first-child {
-  z-index: 9;
+.attendance-table--date-range .attendance-table__date-range-employee-name > span {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .attendance-table--date-range .attendance-table__date-range-identity:nth-child(2) {
-  z-index: 9;
   box-shadow: 1px 0 0 #dbeafe;
 }
 
