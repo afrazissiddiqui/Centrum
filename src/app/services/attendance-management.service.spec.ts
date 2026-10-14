@@ -1,6 +1,7 @@
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { ApplicationFormService } from './application-form.service';
+import { of } from 'rxjs';
+import { ApplicationFormRecord, ApplicationFormService } from './application-form.service';
 import {
   AttendanceManagementService,
   formatPunchTime,
@@ -9,13 +10,21 @@ import {
 describe('AttendanceManagementService calculated working hours', () => {
   let service: AttendanceManagementService;
   let httpMock: HttpTestingController;
+  let employeeRecords: ApplicationFormRecord[];
 
   beforeEach(() => {
+    employeeRecords = [];
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
       providers: [
         AttendanceManagementService,
-        { provide: ApplicationFormService, useValue: {} },
+        {
+          provide: ApplicationFormService,
+          useValue: {
+            getApplicationRecords: () => employeeRecords,
+            fetchEmployeeProfiles: () => of([]),
+          },
+        },
       ],
     });
     service = TestBed.inject(AttendanceManagementService);
@@ -25,11 +34,11 @@ describe('AttendanceManagementService calculated working hours', () => {
   afterEach(() => httpMock.verify());
 
   it('fetches the employee by padded card number and returns hours_worked', () => {
-    let hours: string | null = null;
+    const result: { hours: string | null } = { hours: null };
     service.fetchCalculatedWorkingHours(
       { mode: 'date', date: '2026-09-29' },
       '4023',
-    ).subscribe((value) => (hours = value));
+    ).subscribe((value) => (result.hours = value));
 
     const request = httpMock.expectOne((req) => req.urlWithParams.includes('card_no=00004023'));
     expect(request.request.params.get('from_date')).toBe('2026-09-29');
@@ -37,7 +46,7 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(request.request.headers.has('X-API-Key')).toBeTrue();
     request.flush(JSON.stringify({ data: [{ hours_worked: '6h 16m' }] }));
 
-    expect(hours).toBe('6h 16m');
+    expect(result.hours).toBe('6h 16m');
   });
 
   it('fetches daily working hours for a date range with the employee legacy code', () => {
@@ -62,6 +71,54 @@ describe('AttendanceManagementService calculated working hours', () => {
       { date: '2026-09-01', hoursWorked: '8h 30m' },
       { date: '2026-09-02', hoursWorked: '9' },
     ]);
+  });
+
+  it('resolves the user ID to the padded legacy card number for calculated range punches', () => {
+    let loaded = false;
+    employeeRecords = [{
+      EmployeeCode: '00000007',
+      EmployeeName: 'Test Employee',
+      ExtEmpNo: '00001161',
+      Department: '',
+      EmployeeNature: '',
+      Designation: '',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: 'Active',
+      userId: '00000007',
+    }];
+    service.loadSession({
+      mode: 'dateRange',
+      userId: '00000007',
+      fromDate: '2026-09-01',
+      toDate: '2026-10-30',
+    }).subscribe(() => (loaded = true));
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/rawpunch'));
+    expect(request.request.params.get('from_date')).toBe('2026-09-01');
+    expect(request.request.params.get('to_date')).toBe('2026-10-30');
+    expect(request.request.params.get('type')).toBe('calculated');
+    expect(request.request.params.get('card_no')).toBe('00001161');
+    request.flush(JSON.stringify({
+      data: [
+        {
+          card_no: '00001161',
+          punch_in: '2026-09-01T09:06:48.000Z',
+          punch_out: '2026-09-01T17:37:31.000Z',
+          hours_worked: '8h 45m',
+        },
+      ],
+    }));
+
+    const [slot] = service.slots();
+    const [record] = service.materializeSlots([slot]);
+    expect(loaded).toBeTrue();
+    expect(slot.date).toBe('2026-09-01');
+    expect(record.PunchIn).toBe('2026-09-01T09:06:48.000Z');
+    expect(record.PunchOut).toBe('2026-09-01T17:37:31.000Z');
+    expect(record.PunchCount).toBe(2);
   });
 
   it('formats punch times in 12-hour clock with AM/PM', () => {

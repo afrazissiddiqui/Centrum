@@ -475,6 +475,128 @@
   border-spacing: 0;
 }
 
+.attendance-table--date-range {
+  --attendance-date-range-code-width: 150px;
+  --attendance-date-range-name-width: 150px;
+  --attendance-date-range-punch-width: 112px;
+  --attendance-date-range-view-width: var(--attendance-date-range-punch-width);
+  table-layout: fixed;
+  width: max-content;
+  min-width: 100%;
+}
+
+.attendance-table--date-range th,
+.attendance-table--date-range td {
+  box-sizing: border-box;
+  min-width: 112px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.attendance-table__date-range-employee-code,
+.attendance-table__date-range-identity:first-child {
+  width: var(--attendance-date-range-code-width) !important;
+  min-width: var(--attendance-date-range-code-width) !important;
+  max-width: var(--attendance-date-range-code-width) !important;
+}
+
+.attendance-table__date-range-employee-name,
+.attendance-table__date-range-identity:nth-child(2) {
+  width: var(--attendance-date-range-name-width) !important;
+  min-width: var(--attendance-date-range-name-width) !important;
+  max-width: var(--attendance-date-range-name-width) !important;
+}
+
+.attendance-table__date-range-punch {
+  width: var(--attendance-date-range-punch-width) !important;
+  min-width: var(--attendance-date-range-punch-width) !important;
+  max-width: var(--attendance-date-range-punch-width) !important;
+}
+
+.attendance-table--date-range .attendance-table__date-range-view,
+.attendance-table--date-range .attendance-table__date-range-view-header {
+  width: var(--attendance-date-range-view-width) !important;
+  min-width: var(--attendance-date-range-view-width) !important;
+  max-width: var(--attendance-date-range-view-width) !important;
+}
+
+.attendance-table--date-range .attendance-table__date-range-identity,
+.attendance-table--date-range .attendance-table__date-range-employee-code,
+.attendance-table--date-range .attendance-table__date-range-employee-name {
+  position: sticky;
+  z-index: 6;
+}
+
+.attendance-table--date-range .attendance-table__date-range-identity:first-child,
+.attendance-table--date-range .attendance-table__date-range-employee-code {
+  left: 0;
+}
+
+.attendance-table--date-range .attendance-table__date-range-identity:nth-child(2),
+.attendance-table--date-range .attendance-table__date-range-employee-name {
+  left: var(--attendance-date-range-code-width);
+}
+
+.attendance-table--date-range .attendance-table__date-range-employee-code,
+.attendance-table--date-range .attendance-table__date-range-employee-name {
+  background: #eff6ff !important;
+  box-shadow: 1px 0 0 #e2e8f0;
+}
+
+.attendance-table--date-range .attendance-table__date-range-employee-name {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+.attendance-table--date-range .attendance-table__date-range-identity:first-child {
+  z-index: 9;
+}
+
+.attendance-table--date-range .attendance-table__date-range-identity:nth-child(2) {
+  z-index: 9;
+  box-shadow: 1px 0 0 #dbeafe;
+}
+
+.attendance-table--date-range .attendance-table__date-range-view-header {
+  position: sticky;
+  right: 0;
+  z-index: 8;
+  background: #f8fafc;
+  box-shadow: -4px 0 12px rgba(15, 23, 42, 0.08);
+}
+
+.attendance-table--date-range .attendance-table__date-range-view {
+  position: sticky;
+  right: 0;
+  z-index: 7;
+  background: #fff !important;
+  box-shadow: -4px 0 12px rgba(15, 23, 42, 0.06);
+}
+
+.attendance-table--date-range .attendance-list-row:hover .attendance-table__date-range-employee-code,
+.attendance-table--date-range .attendance-list-row:hover .attendance-table__date-range-employee-name {
+  background: #eff6ff !important;
+}
+
+.attendance-table--date-range .attendance-list-row:hover .attendance-table__date-range-view {
+  background: #fff !important;
+}
+
+.attendance-table--date-range .attendance-list-row--alt .attendance-table__date-range-employee-code,
+.attendance-table--date-range .attendance-list-row--alt .attendance-table__date-range-employee-name {
+  background: #eff6ff !important;
+}
+
+.attendance-table--date-range .attendance-table__date-punch-row th {
+  top: 78px;
+  z-index: 5;
+}
+
+.attendance-table__date-header {
+  white-space: nowrap;
+}
+
 .attendance-table__group-row th {
   position: sticky;
   top: 0;

@@ -47,6 +47,13 @@ type AttendanceColumnKey =
   | 'PunchCount'
   | 'AttendanceStatus';
 
+interface DateRangeAttendanceRow {
+  employeeKey: string;
+  employeeCode: string;
+  employeeName: string;
+  recordsByDate: Record<string, AttendanceSlotRef>;
+}
+
 @Component({
   selector: 'app-attendance-managment',
   standalone: true,
@@ -66,11 +73,13 @@ export class AttendanceManagmentComponent implements OnInit {
   readonly loadingPage = signal(false);
   readonly showViewDialog = signal(false);
   readonly selectedRecord = signal<AttendanceDailyRecord | null>(null);
+  readonly selectedDateRangeRecords = signal<AttendanceDailyRecord[]>([]);
   readonly pageRecords = signal<AttendanceDailyRecord[]>([]);
 
   @ViewChild('tableScroll') private tableScroll?: ElementRef<HTMLDivElement>;
 
   private pageEnrichSub?: Subscription;
+  private querySub?: Subscription;
   private pageEnrichGeneration = 0;
   private readonly enrichedEmployeeKeys = new Set<string>();
 
@@ -118,7 +127,10 @@ export class AttendanceManagmentComponent implements OnInit {
       onSearchChange: () => this.onSearchChange(),
     });
 
-    this.destroyRef.onDestroy(() => this.pageEnrichSub?.unsubscribe());
+    this.destroyRef.onDestroy(() => {
+      this.pageEnrichSub?.unsubscribe();
+      this.querySub?.unsubscribe();
+    });
     this.loadRecords();
   }
 
@@ -191,7 +203,52 @@ export class AttendanceManagmentComponent implements OnInit {
   }
 
   get totalPages(): number {
-    return Math.max(1, Math.ceil(this.filteredSlots.length / this.pageSize));
+    const itemCount = this.queryMode === 'dateRange' ? this.dateRangeRows.length : this.filteredSlots.length;
+    return Math.max(1, Math.ceil(itemCount / this.pageSize));
+  }
+
+  get dateRangeDates(): string[] {
+    const [start, end] = this.fromDate <= this.toDate
+      ? [this.fromDate, this.toDate]
+      : [this.toDate, this.fromDate];
+    const cursor = new Date(`${start}T00:00:00`);
+    const lastDate = new Date(`${end}T00:00:00`);
+    if (!Number.isFinite(cursor.getTime()) || !Number.isFinite(lastDate.getTime())) {
+      return [];
+    }
+
+    const dates: string[] = [];
+    while (cursor.getTime() <= lastDate.getTime()) {
+      dates.push(formatIsoDate(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return dates;
+  }
+
+  get dateRangeRows(): DateRangeAttendanceRow[] {
+    const rowsByEmployee = new Map<string, DateRangeAttendanceRow>();
+    for (const slot of this.filteredSlots) {
+      let row = rowsByEmployee.get(slot.employeeKey);
+      if (!row) {
+        row = {
+          employeeKey: slot.employeeKey,
+          employeeCode: slot.displayId,
+          employeeName: slot.employeeName,
+          recordsByDate: {},
+        };
+        rowsByEmployee.set(slot.employeeKey, row);
+      }
+      row.recordsByDate[slot.date] = slot;
+    }
+
+    return [...rowsByEmployee.values()].sort((left, right) =>
+      left.employeeCode.localeCompare(right.employeeCode, undefined, { numeric: true }),
+    );
+  }
+
+  get paginatedDateRangeRows(): DateRangeAttendanceRow[] {
+    const start = (this.currentPage - 1) * this.pageSize;
+    return this.dateRangeRows.slice(start, start + this.pageSize);
   }
 
   get paginationFooterItems(): PaginationFooterItem[] {
@@ -286,11 +343,23 @@ export class AttendanceManagmentComponent implements OnInit {
   onQueryModeChange(): void {
     if (this.queryMode === 'today') {
       this.loadRecords();
+    } else if (this.queryMode === 'dateRange') {
+      this.clearDateRangeResults();
+    }
+  }
+
+  onDateRangeCriteriaChange(): void {
+    if (this.queryMode === 'dateRange') {
+      this.clearDateRangeResults();
     }
   }
 
   applyQuery(): void {
     this.currentPage = 1;
+    if (this.queryMode === 'dateRange' && !this.userId.trim()) {
+      this.clearDateRangeResults();
+      return;
+    }
     this.loadRecords();
   }
 
@@ -362,6 +431,17 @@ export class AttendanceManagmentComponent implements OnInit {
   formatAttendanceTime = formatPunchTime;
   formatWorkingDuration = formatWorkingDuration;
 
+  formatDateRangeHeader(date: string): string {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      return date;
+    }
+    const month = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'][
+      Number(match[2]) - 1
+    ];
+    return month ? `${Number(match[3])}/${month}/${match[1].slice(-2)}` : date;
+  }
+
   getStatusClass(status: string): string {
     const normalized = status.trim().toLowerCase();
     if (normalized === 'present') {
@@ -389,16 +469,36 @@ export class AttendanceManagmentComponent implements OnInit {
   }
 
   viewRecord(record: AttendanceDailyRecord): void {
+    this.selectedDateRangeRecords.set([]);
     this.showViewDialog.set(true);
     this.selectedRecord.set(record);
+  }
+
+  viewDateRangeRecord(row: DateRangeAttendanceRow): void {
+    const slots = this.attendanceService.slots().filter(
+      (slot) => slot.employeeKey === row.employeeKey && this.dateRangeDates.includes(slot.date),
+    );
+    this.selectedRecord.set(null);
+    this.selectedDateRangeRecords.set(this.attendanceService.materializeSlots(slots));
+    this.showViewDialog.set(true);
+  }
+
+  getDateRangeDetailRecord(date: string): AttendanceDailyRecord | undefined {
+    return this.selectedDateRangeRecords().find((record) => record.AttendanceDate === date);
   }
 
   closeViewDialog(): void {
     this.showViewDialog.set(false);
     this.selectedRecord.set(null);
+    this.selectedDateRangeRecords.set([]);
   }
 
   private loadRecords(): void {
+    if (this.queryMode === 'dateRange' && !this.userId.trim()) {
+      this.clearDateRangeResults();
+      return;
+    }
+
     this.loading.set(true);
     this.pageEnrichSub?.unsubscribe();
     this.enrichedEmployeeKeys.clear();
@@ -411,7 +511,8 @@ export class AttendanceManagmentComponent implements OnInit {
       toDate: this.toDate,
     };
 
-    this.attendanceService.loadSession(query).subscribe({
+    this.querySub?.unsubscribe();
+    this.querySub = this.attendanceService.loadSession(query).subscribe({
       next: () => {
         this.loading.set(false);
         this.renderCurrentPage();
@@ -425,6 +526,20 @@ export class AttendanceManagmentComponent implements OnInit {
         );
       },
     });
+  }
+
+  private clearDateRangeResults(): void {
+    this.querySub?.unsubscribe();
+    this.loading.set(false);
+    this.pageEnrichSub?.unsubscribe();
+    this.pageEnrichGeneration += 1;
+    this.loadingPage.set(false);
+    this.enrichedEmployeeKeys.clear();
+    this.attendanceService.clearSession();
+    this.pageRecords.set([]);
+    this.closeViewDialog();
+    this.currentPage = 1;
+    this.resetTableScroll();
   }
 
   private renderCurrentPage(): void {

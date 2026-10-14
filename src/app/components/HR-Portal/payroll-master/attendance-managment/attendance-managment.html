@@ -75,11 +75,11 @@
         <ng-container *ngIf="queryMode === 'dateRange'">
           <div class="attendance-query-bar__group">
             <label for="attendance-from-date">From</label>
-            <input id="attendance-from-date" class="attendance-control" type="date" [(ngModel)]="fromDate" />
+            <input id="attendance-from-date" class="attendance-control" type="date" [(ngModel)]="fromDate" (ngModelChange)="onDateRangeCriteriaChange()" />
           </div>
           <div class="attendance-query-bar__group">
             <label for="attendance-to-date">To</label>
-            <input id="attendance-to-date" class="attendance-control" type="date" [(ngModel)]="toDate" />
+            <input id="attendance-to-date" class="attendance-control" type="date" [(ngModel)]="toDate" (ngModelChange)="onDateRangeCriteriaChange()" />
           </div>
         </ng-container>
 
@@ -91,6 +91,7 @@
             type="text"
             [(ngModel)]="userId"
             placeholder="e.g. 00000003"
+            (ngModelChange)="onDateRangeCriteriaChange()"
           />
         </div>
 
@@ -98,7 +99,7 @@
           type="button"
           class="attendance-load-btn"
           (click)="applyQuery()"
-          [disabled]="loading()"
+          [disabled]="loading() || (queryMode === 'dateRange' && !userId.trim())"
         >
           <ui5-icon name="refresh" class="attendance-btn-icon" aria-hidden="true"></ui5-icon>
           {{ loading() ? 'Loading…' : 'Load Attendance' }}
@@ -180,7 +181,7 @@
             Daily Attendance
           </h2>
           <p class="attendance-module__subtitle">
-            {{ filteredSlotCount }} record(s)
+            {{ queryMode === 'dateRange' ? dateRangeRows.length : filteredSlotCount }} {{ queryMode === 'dateRange' ? 'employee(s)' : 'record(s)' }}
             <ng-container *ngIf="hasActiveListFilters()"> · filtered from {{ totalSlotCount }}</ng-container>
             · First punch = In, second visit = Out
           </p>
@@ -194,7 +195,7 @@
 
       <div class="attendance-table-panel">
         <div class="attendance-table-scroll" #tableScroll>
-          <table class="attendance-table" [attr.aria-busy]="loading()">
+          <table *ngIf="queryMode !== 'dateRange'" class="attendance-table" [attr.aria-busy]="loading()">
             <thead>
               <tr class="attendance-table__group-row">
                 <th class="attendance-table__group attendance-table__group--select" scope="colgroup">
@@ -307,12 +308,80 @@
               </tr>
             </tbody>
           </table>
+          <table *ngIf="queryMode === 'dateRange'" class="attendance-table attendance-table--date-range" [attr.aria-busy]="loading()">
+            <colgroup>
+              <col class="attendance-table__date-range-employee-code">
+              <col class="attendance-table__date-range-employee-name">
+              <ng-container *ngFor="let date of dateRangeDates">
+                <col class="attendance-table__date-range-punch">
+                <col class="attendance-table__date-range-punch">
+              </ng-container>
+              <col class="attendance-table__date-range-view">
+            </colgroup>
+            <thead>
+              <tr class="attendance-table__group-row">
+                <th class="attendance-table__group attendance-table__group--identity attendance-table__date-range-identity" rowspan="3" scope="col">Employee Code</th>
+                <th class="attendance-table__group attendance-table__group--identity attendance-table__date-range-identity" rowspan="3" scope="col">Employee Name</th>
+                <th class="attendance-table__group attendance-table__group--time" [attr.colspan]="dateRangeDates.length * 2" scope="colgroup">Date</th>
+                <th class="attendance-table__actions-header attendance-table__date-range-view-header" rowspan="3" scope="col">View</th>
+              </tr>
+              <tr class="attendance-table__column-row">
+                <th *ngFor="let date of dateRangeDates" class="attendance-col--time attendance-table__date-header" colspan="2" scope="colgroup">
+                  {{ formatDateRangeHeader(date) }}
+                </th>
+              </tr>
+              <tr class="attendance-table__column-row attendance-table__date-punch-row">
+                <ng-container *ngFor="let date of dateRangeDates">
+                  <th class="attendance-col--time" scope="col">Punch IN</th>
+                  <th class="attendance-col--time" scope="col">Punch Out</th>
+                </ng-container>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngIf="loading()" class="attendance-skeleton-row">
+                <td class="attendance-table__empty" [attr.colspan]="3 + dateRangeDates.length * 2">Loading attendance…</td>
+              </tr>
+              <tr *ngIf="!loading() && dateRangeRows.length === 0">
+                <td class="attendance-table__empty" [attr.colspan]="3 + dateRangeDates.length * 2">
+                  Enter a User ID and load attendance to view this date range.
+                </td>
+              </tr>
+              <tr
+                *ngFor="let row of paginatedDateRangeRows; let i = index"
+                class="attendance-list-row"
+                [class.attendance-list-row--alt]="i % 2 === 1"
+              >
+                <td class="attendance-col--identity attendance-table__date-range-employee-code"><span class="attendance-employee-chip">{{ row.employeeCode }}</span></td>
+                <td class="attendance-col--identity attendance-table__date-range-employee-name">{{ row.employeeName || '—' }}</td>
+                <ng-container *ngFor="let date of dateRangeDates">
+                  <td class="attendance-col--time attendance-time-value--in">
+                    {{ row.recordsByDate[date]?.punchIn ? formatAttendanceTime(row.recordsByDate[date].punchIn) : '—' }}
+                  </td>
+                  <td class="attendance-col--time attendance-time-value--out">
+                    {{ row.recordsByDate[date]?.punchOut ? formatAttendanceTime(row.recordsByDate[date].punchOut) : '—' }}
+                  </td>
+                </ng-container>
+                <td class="attendance-table__actions attendance-table__date-range-view">
+                  <button type="button" class="attendance-view-btn" (click)="viewDateRangeRecord(row)" title="View attendance for each date">
+                    <ui5-icon name="detail-view" class="attendance-btn-icon" aria-hidden="true"></ui5-icon>
+                    View
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         <div class="attendance-pagination table-pagination">
           <div class="pagination-info">
-            Showing {{ filteredSlotCount ? (currentPage - 1) * pageSize + 1 : 0 }} to
-            {{ Math.min(currentPage * pageSize, filteredSlotCount) }} of {{ filteredSlotCount }} entries
+            <ng-container *ngIf="queryMode === 'dateRange'; else dailyPaginationInfo">
+              Showing {{ dateRangeRows.length ? (currentPage - 1) * pageSize + 1 : 0 }} to
+              {{ Math.min(currentPage * pageSize, dateRangeRows.length) }} of {{ dateRangeRows.length }} employees
+            </ng-container>
+            <ng-template #dailyPaginationInfo>
+              Showing {{ filteredSlotCount ? (currentPage - 1) * pageSize + 1 : 0 }} to
+              {{ Math.min(currentPage * pageSize, filteredSlotCount) }} of {{ filteredSlotCount }} entries
+            </ng-template>
           </div>
 
           <div class="attendance-pagination__bottom">
@@ -370,6 +439,11 @@
     <div class="attendance-detail-modal__header js-modal-header">
       <h2>
         Attendance Detail
+        <ng-container *ngIf="selectedDateRangeRecords().length > 0">
+          — {{ selectedDateRangeRecords()[0].EmployeeId }}
+          <ng-container *ngIf="selectedDateRangeRecords()[0].EmployeeName"> ({{ selectedDateRangeRecords()[0].EmployeeName }})</ng-container>
+          · {{ formatDateRangeHeader(fromDate) }} – {{ formatDateRangeHeader(toDate) }}
+        </ng-container>
         <ng-container *ngIf="selectedRecord() as record">
           — {{ record.EmployeeId }}
           <ng-container *ngIf="record.EmployeeName"> ({{ record.EmployeeName }})</ng-container>
@@ -381,6 +455,33 @@
       </button>
     </div>
     <div class="js-modal-body">
+      <div class="attendance-detail-section attendance-detail-section--time" *ngIf="selectedDateRangeRecords().length > 0">
+        <h3>Punch In / Out by Date</h3>
+        <div class="attendance-punch-log">
+          <table class="attendance-punch-log__table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Punch In</th>
+                <th>Punch Out</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let date of dateRangeDates">
+                <td>{{ formatDateRangeHeader(date) }}</td>
+                <td class="attendance-time-value attendance-time-value--in">
+                  {{ getDateRangeDetailRecord(date)?.PunchIn ? formatAttendanceTime(getDateRangeDetailRecord(date)?.PunchIn ?? '') : '—' }}
+                </td>
+                <td class="attendance-time-value attendance-time-value--out">
+                  {{ getDateRangeDetailRecord(date)?.PunchOut ? formatAttendanceTime(getDateRangeDetailRecord(date)?.PunchOut ?? '') : '—' }}
+                </td>
+                <td>{{ getDateRangeDetailRecord(date)?.AttendanceStatus || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
       <ng-container *ngIf="selectedRecord() as record">
         <div class="attendance-detail-section attendance-detail-section--identity">
           <h3>Summary</h3>

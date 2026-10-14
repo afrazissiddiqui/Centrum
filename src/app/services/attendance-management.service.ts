@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, catchError, forkJoin, last, map, of, throwError } from 'rxjs';
+import { Observable, catchError, last, map, of, switchMap, throwError } from 'rxjs';
 import { BIOMETRICS_API_BASE_URL, BIOMETRICS_API_KEY } from '../config/api.config';
 import { ApplicationFormRecord, ApplicationFormService } from './application-form.service';
 
@@ -106,18 +106,23 @@ export class AttendanceManagementService {
   readonly totalSlotCount = computed(() => this.slots().length);
 
   loadSession(query: AttendanceQuery): Observable<number> {
-    this.lastQuery = this.normalizeQuery(query);
+    const normalizedQuery = this.normalizeQuery(query);
+    this.lastQuery = normalizedQuery;
     const cachedEmployees = this.applicationFormService.getApplicationRecords();
+    const employees$ = cachedEmployees.length
+      ? of(cachedEmployees)
+      : this.applicationFormService.fetchEmployeeProfiles();
 
-    return forkJoin({
-      employees: cachedEmployees.length ? of(cachedEmployees) : this.applicationFormService.fetchEmployeeProfiles(),
-      punches: this.fetchPunches(this.lastQuery),
-    }).pipe(
-      map(({ punches, employees }) => {
-        const session = this.createSession(punches, employees, this.lastQuery);
-        this.sessionState.set(session);
-        return session.slots.length;
-      }),
+    return employees$.pipe(
+      switchMap((employees) =>
+        this.fetchPunches(normalizedQuery, employees).pipe(
+          map((punches) => {
+            const session = this.createSession(punches, employees, normalizedQuery);
+            this.sessionState.set(session);
+            return session.slots.length;
+          }),
+        ),
+      ),
     );
   }
 
@@ -473,14 +478,18 @@ export class AttendanceManagementService {
       );
   }
 
-  private fetchPunches(query: AttendanceQuery): Observable<AttendancePunchRecord[]> {
+  private fetchPunches(
+    query: AttendanceQuery,
+    employees: ApplicationFormRecord[],
+  ): Observable<AttendancePunchRecord[]> {
     const normalized = this.normalizeQuery(query);
     const requestedCardNo = normalized.userId?.trim();
     if (!requestedCardNo) {
       return this.loadPunchUrl(this.buildQueryUrl(normalized));
     }
 
-    return this.loadPunchUrl(this.buildQueryUrl(normalized, requestedCardNo));
+    const legacyCode = resolveEmployeeLegacyCode(normalized.userId ?? '', employees);
+    return this.loadPunchUrl(this.buildQueryUrl(normalized, legacyCode || requestedCardNo));
   }
 
   private loadPunchUrl(url: string): Observable<AttendancePunchRecord[]> {
@@ -518,12 +527,27 @@ export class AttendanceManagementService {
             return throwError(
               () =>
                 new Error(
-                  'Biometrics API blocked by browser CORS. Requests must go through /biometrics-api on the same host.',
+                  'Biometrics API is unreachable. Check the network connection and confirm pioneerattendance.com:3002 is available through /biometrics-api.',
                 ),
             );
           }
 
-          return of<AttendancePunchRecord[]>([]);
+          if (status === 502 || status === 504) {
+            return throwError(
+              () =>
+                new Error(
+                  `Biometrics API proxy could not reach pioneerattendance.com:3002 (HTTP ${status}). Verify that the attendance API server is running and reachable.`,
+                ),
+            );
+          }
+
+          const statusText = (error as { statusText?: string })?.statusText;
+          return throwError(
+            () =>
+              new Error(
+                `Biometrics API request failed${status ? ` (HTTP ${status})` : ''}${statusText ? `: ${statusText}` : '.'}`,
+              ),
+          );
         }),
       );
 
@@ -548,6 +572,18 @@ export class AttendanceManagementService {
     const record = item as Record<string, unknown>;
     const punchIn = String(item.punch_in ?? '').trim();
     const punchOut = String(item.punch_out ?? '').trim();
+    const dateValue = pickFirstNonEmptyString(
+      item.date,
+      item.Date,
+      item.attendance_date,
+      item.AttendanceDate,
+      item.attendanceDate,
+      item.punch_date,
+      item.PunchDate,
+      item.punchDate,
+      punchIn,
+      punchOut,
+    );
     const punchDatetime = String(
       item.PunchDatetime ??
         item.punchDatetime ??
@@ -580,8 +616,8 @@ export class AttendanceManagementService {
 
     if (punchIn || punchOut) {
       return [
-        ...(punchIn ? [{ No: no, PunchDatetime: punchIn }] : []),
-        ...(punchOut ? [{ No: no + 1, PunchDatetime: punchOut }] : []),
+        ...(punchIn ? [{ No: no, PunchDatetime: joinPunchDateAndTime(dateValue, punchIn) }] : []),
+        ...(punchOut ? [{ No: no + 1, PunchDatetime: joinPunchDateAndTime(dateValue, punchOut) }] : []),
       ].map((punch) => ({
         ...punch,
         EmployeeId: normalizedEmployeeId,
@@ -640,6 +676,9 @@ export class AttendanceManagementService {
       root['Employee ID'] ||
       root['EmployeeId'] ||
       root['employeeId'] ||
+      root['card_no'] ||
+      root['punch_in'] !== undefined ||
+      root['punch_out'] !== undefined ||
       root['hours_worked'] !== undefined ||
       root['PunchDatetime'] ||
       root['punchDatetime']
@@ -687,6 +726,28 @@ export function resolveAttendanceUserId(employee: ApplicationFormRecord): string
   }
 
   return '';
+}
+
+function resolveEmployeeLegacyCode(userId: string, employees: ApplicationFormRecord[]): string {
+  const requestedUserKey = canonicalAttendanceKey(extractAttendanceUserId(userId));
+  if (!requestedUserKey) {
+    return '';
+  }
+
+  const employee = employees.find((record) =>
+    [
+      resolveAttendanceUserId(record),
+      record.userId,
+      record.EmployeeCode,
+      record.detail?.loginDetails.userId,
+      record.detail?.loginDetails.employeeCode,
+    ].some((candidate) =>
+      !!candidate &&
+      canonicalAttendanceKey(extractAttendanceUserId(candidate)) === requestedUserKey,
+    ),
+  );
+
+  return employee?.ExtEmpNo?.trim() || employee?.detail?.loginDetails.legacyCode?.trim() || '';
 }
 
 /** Normalizes biometric / login ids to a shared comparable key (8-digit numeric when possible). */
@@ -1007,6 +1068,19 @@ function ensurePunchOnlyEmployee(
   for (const variant of attendanceKeyVariants(rawEmployeeId)) {
     index.aliasToCanonical.set(variant, canonical);
   }
+}
+
+function joinPunchDateAndTime(dateValue: string, punchValue: string): string {
+  if (!punchValue || /^\d{4}-\d{2}-\d{2}[T\s]/.test(punchValue)) {
+    return punchValue;
+  }
+
+  const date = extractIsoDate(dateValue);
+  if (date && /^\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:\s*[AP]M)?$/i.test(punchValue)) {
+    return `${date}T${punchValue}`;
+  }
+
+  return punchValue;
 }
 
 function sortPunchesChronologically(punches: AttendancePunchRecord[]): AttendancePunchRecord[] {
