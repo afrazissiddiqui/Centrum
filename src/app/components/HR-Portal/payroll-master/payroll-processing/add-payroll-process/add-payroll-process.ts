@@ -40,8 +40,8 @@ import {
   computeGratuity,
   computeGrossSalary,
   computeGrossSalaryBreakdown,
+  computeGrossSalaryPayable,
   computeMedicalAllowance,
-  computeNetPayable,
   computeOvertimeAmount,
   computeOvertimeRate,
   computeProvidentFund,
@@ -624,21 +624,20 @@ export class AddPayrollProcessComponent implements OnInit {
   }
 
   grossPayableForRow(row: PayrollProcessRow): number {
-    return computeNetPayable({
-      basicSalary: row.grossSalary,
-      medicalAllowance: row.medicalAllowance,
+    return computeGrossSalaryPayable({
+      grossSalaryInBank: row.grossSalaryInBank,
       fuelAllowance: row.fuelAllowance,
       mobileAllowance: row.mobileAllowance,
       carAllowance: row.carAllowance,
       otherAllowances: row.otherAllowances,
-      overtime: row.overtime,
       bonus: row.bonus,
+      overtime: row.overtime,
       arrears: row.arrears,
       providentFund: row.providentFund,
-      gratuity: row.gratuity,
-      eobi: row.eobiEmployee,
-      loanInstallment: row.loanAdjustment,
-      otherDeductions: row.loanAdvForm + row.lateAttendDeduction,
+      eobiEmployee: row.eobiEmployee,
+      loanDeduction: row.loanAdjustment,
+      advanceDeduction: row.loanAdvForm,
+      lateAttendanceDeduction: row.lateAttendDeduction,
     });
   }
 
@@ -1112,7 +1111,7 @@ export class AddPayrollProcessComponent implements OnInit {
         costToCompany: row.costToCompany,
         taxDeduction: row.taxDeduction,
         totalEarnings: this.totalEarningsForRow(row),
-        netPayable: this.netPayableAfterTaxForRow(row),
+        netPayable: this.grossPayableForRow(row),
         netPayableAfterTax: this.netPayableAfterTaxForRow(row),
         finalGrossSalary: row.grossSalary,
         approved: row.approved,

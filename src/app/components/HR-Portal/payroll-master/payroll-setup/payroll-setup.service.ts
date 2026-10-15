@@ -98,6 +98,41 @@ export function computeNetPayable(amounts: PayrollSetupAmounts): number {
   return Math.max(0, earnings - deductions + amounts.gratuity);
 }
 
+export interface GrossSalaryPayableAmounts {
+  grossSalaryInBank: number;
+  fuelAllowance: number;
+  mobileAllowance: number;
+  carAllowance: number;
+  otherAllowances: number;
+  bonus: number;
+  overtime: number;
+  arrears: number;
+  providentFund: number;
+  eobiEmployee: number;
+  loanDeduction: number;
+  advanceDeduction: number;
+  lateAttendanceDeduction: number;
+}
+
+export function computeGrossSalaryPayable(amounts: GrossSalaryPayableAmounts): number {
+  const earnings =
+    amounts.grossSalaryInBank +
+    amounts.fuelAllowance +
+    amounts.mobileAllowance +
+    amounts.carAllowance +
+    amounts.otherAllowances +
+    amounts.bonus +
+    amounts.overtime +
+    amounts.arrears;
+  const deductions =
+    amounts.providentFund +
+    amounts.eobiEmployee +
+    amounts.loanDeduction +
+    amounts.advanceDeduction +
+    amounts.lateAttendanceDeduction;
+  return Math.max(0, roundPayrollAmount(earnings - deductions));
+}
+
 export function roundPayrollAmount(value: number): number {
   return Math.round(value * 100) / 100;
 }

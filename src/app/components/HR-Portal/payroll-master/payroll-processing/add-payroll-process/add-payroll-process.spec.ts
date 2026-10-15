@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeBasicSalary,
   computeGratuity,
+  computeGrossSalaryPayable,
   computeGrossSalaryBreakdown,
   computeMedicalAllowance,
   computeNetPayable,
@@ -178,5 +179,47 @@ describe('computeNetPayable', () => {
         otherDeductions: 1500,
       }),
     ).toBe(117000);
+  });
+});
+
+describe('computeGrossSalaryPayable', () => {
+  it('adds the requested earnings and deducts employee contributions and adjustments', () => {
+    expect(
+      computeGrossSalaryPayable({
+        grossSalaryInBank: 100000,
+        fuelAllowance: 5000,
+        mobileAllowance: 2000,
+        carAllowance: 3000,
+        otherAllowances: 1000,
+        bonus: 4000,
+        overtime: 6000,
+        arrears: 7000,
+        providentFund: 8000,
+        eobiEmployee: 1000,
+        loanDeduction: 3000,
+        advanceDeduction: 1500,
+        lateAttendanceDeduction: 500,
+      }),
+    ).toBe(114000);
+  });
+
+  it('rounds to two decimals and does not return a negative payable', () => {
+    const amounts = {
+      grossSalaryInBank: 100.127,
+      fuelAllowance: 0,
+      mobileAllowance: 0,
+      carAllowance: 0,
+      otherAllowances: 0,
+      bonus: 0,
+      overtime: 0,
+      arrears: 0,
+      providentFund: 0,
+      eobiEmployee: 0,
+      loanDeduction: 0,
+      advanceDeduction: 0,
+      lateAttendanceDeduction: 0,
+    };
+    expect(computeGrossSalaryPayable(amounts)).toBe(100.13);
+    expect(computeGrossSalaryPayable({ ...amounts, providentFund: 200 })).toBe(0);
   });
 });
