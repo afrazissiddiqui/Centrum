@@ -1150,6 +1150,18 @@
   margin-top: 8px;
 }
 
+.cjr-leave-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cjr-leave-totals .cjr-row {
+  flex: 1 1 320px;
+  max-width: 320px;
+}
+
 .cjr-leave-table {
   width: 100%;
   border-collapse: separate;

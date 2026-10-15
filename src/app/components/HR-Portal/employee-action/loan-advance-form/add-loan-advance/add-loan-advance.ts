@@ -204,6 +204,9 @@ export class AddLoanAdvanceComponent implements OnInit {
     this.applicationFormService.fetchEmployeeProfiles().subscribe({
       next: () => {
         this.employeeOptions.set(this.buildEmployeeOptions());
+        if (this.editingId) {
+          this.populateLoanEligibleFromProfile();
+        }
         this.cdr.markForCheck();
       },
       error: (error: unknown) => {
@@ -377,6 +380,8 @@ export class AddLoanAdvanceComponent implements OnInit {
 
   private toEmployeeOption(record: ApplicationFormRecord): LoanEmployeeOption {
     const emptyIfDash = (value: string): string => (value === '—' ? '' : value);
+    const remuneration = record.detail?.remuneration;
+    const loanAmountAllowed = remuneration?.loanAmountAllowed;
 
     return {
       code: this.resolveEmployeeCode(record),
@@ -390,7 +395,9 @@ export class AddLoanAdvanceComponent implements OnInit {
       dateOfJoining: formatDateForInput(
         emptyIfDash(record.detail?.remuneration?.dateOfJoining ?? ''),
       ),
-      eligibleAmount: emptyIfDash(record.detail?.remuneration?.maximumLoanCapacity ?? ''),
+      eligibleAmount: emptyIfDash(
+        loanAmountAllowed?.trim() ? loanAmountAllowed : remuneration?.maximumLoanCapacity ?? '',
+      ),
       advanceEligibleAmount: emptyIfDash(
         record.detail?.remuneration
           ? this.applicationFormService.resolveMaximumAdvanceCapacity(record.detail.remuneration)
@@ -600,6 +607,7 @@ export class AddLoanAdvanceComponent implements OnInit {
       ),
     );
     this.repaymentRemarks.set(record.RepaymentSchedule.remarks?.trim() ?? '');
+    this.populateLoanEligibleFromProfile();
   }
 
   private pickRecordValue(...values: Array<string | undefined>): string {
@@ -840,6 +848,24 @@ export class AddLoanAdvanceComponent implements OnInit {
 
     if (employee) {
       this.newAdvanceAmountEligible.set(employee.advanceEligibleAmount);
+    }
+  }
+
+  private populateLoanEligibleFromProfile(): void {
+    const code = this.headerEmployeeID().trim().toLowerCase();
+    const name = this.headerEmployeeName().trim().toLowerCase();
+    if (!code && !name) {
+      return;
+    }
+
+    const employee = this.employeeOptions().find((option) => {
+      const optionCode = option.code.trim().toLowerCase();
+      const optionName = option.name.trim().toLowerCase();
+      return (code && optionCode === code) || (!code && name && optionName === name);
+    });
+
+    if (employee) {
+      this.eligibleAmount.set(employee.eligibleAmount);
     }
   }
 

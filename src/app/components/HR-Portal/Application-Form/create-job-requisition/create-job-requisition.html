@@ -1034,16 +1034,22 @@
         </div>
 
         <div class="cjr-leave-table-wrap">
-          <div class="cjr-row" style="margin-bottom: 12px; max-width: 320px;">
-            <label>Total Remaining Leave:</label>
-            <input
-              type="text"
-              class="cjr-leave-table__input cjr-leave-table__input--readonly"
-              [ngModel]="totalRemainingLeaves()"
-              readonly
-              tabindex="-1"
-              placeholder="0"
-            />
+          <div class="cjr-leave-totals">
+            <div class="cjr-row">
+              <label>Total Remaining Leave:</label>
+              <input
+                type="text"
+                class="cjr-leave-table__input cjr-leave-table__input--readonly"
+                [ngModel]="totalRemainingLeaves()"
+                readonly
+                tabindex="-1"
+                placeholder="0"
+              />
+            </div>
+            <div class="cjr-row">
+              <label for="additional-leave-field">Additional Field:</label>
+              <input id="additional-leave-field" type="text" class="cjr-leave-table__input" />
+            </div>
           </div>
 
           <table class="cjr-leave-table">
