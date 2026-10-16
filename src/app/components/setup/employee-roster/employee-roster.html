@@ -50,16 +50,110 @@
     <section class="roster-table-panel" aria-label="Employee shift roster">
       <div class="table-scroll">
         <table class="roster-table">
-          <thead><tr><th class="employee-column"><label><input type="checkbox" [checked]="allVisibleSelected()" (change)="toggleAllVisible($event)" /> Staff Member ({{ activeCount() }})</label></th><th class="role-column">Role / Hub</th><th class="menu-column"></th><th *ngFor="let day of visibleDays()" [class.today-column]="day.isToday" [class.weekend-column]="day.isHoliday"><span>{{ day.weekday }}</span><strong>{{ day.date | number:'2.0-0' }}</strong></th></tr></thead>
+          <thead><tr><th class="employee-column"><label><input type="checkbox" [checked]="allVisibleSelected()" (change)="toggleAllVisible($event)" /> Staff Member ({{ activeCount() }})</label></th><th class="role-column">Role / Hub</th><th class="days-off-column"><span>Days Off</span><strong>{{ monthLabel() }}</strong></th><th class="menu-column"></th><th *ngFor="let day of visibleDays()" [class.today-column]="day.isToday" [class.weekend-column]="day.isHoliday"><span>{{ day.weekday }}</span><strong>{{ day.date | number:'2.0-0' }}</strong></th></tr></thead>
           <tbody>
-            @if (loading()) { <tr><td class="empty-state" [attr.colspan]="visibleDays().length + 3">Loading employees...</td></tr> }
-            @else if (!filteredEmployees().length) { <tr><td class="empty-state" [attr.colspan]="visibleDays().length + 3">No employees found for this search.</td></tr> }
-            @else { @for (employee of filteredEmployees(); track employee.EmployeeCode; let employeeIndex = $index) { <tr><td class="employee-cell"><button type="button" class="employee-cell__identity" [attr.aria-label]="'Update shifts for ' + employee.EmployeeName" (click)="openEmployeeCalendar(employee)"><span class="avatar">{{ (employee.EmployeeName || 'EM').slice(0, 2).toUpperCase() }}</span><span class="employee-name"><strong>{{ employee.EmployeeName || 'Employee ' + (employeeIndex + 1) }}</strong><small>{{ employee.EmployeeCode || 'EMP-' + (employeeIndex + 1) }} · {{ employeeIndex % 2 ? '160h' : '168h' }}</small></span></button></td><td class="role-cell"><span>{{ employee.role }}</span></td><td class="row-menu">⋮</td>@for (day of visibleDays(); track day.date; let dayIndex = $index) { @let shift = shiftFor(employee, dayIndex); <td [class.today-column]="day.isToday" [class.weekend-column]="day.isHoliday" (click)="selectCell(employee, dayIndex)"><button type="button" [class]="shiftClass(shift)" [style.background]="shiftBackground(shiftDescription(shift))" [style.color]="shiftForeground(shiftDescription(shift))" [class.roster-shift--selected]="selectedCell()?.employeeCode === employee.EmployeeCode && selectedCell()?.day === dayIndex" [title]="shiftName(shift)" (click)="openShiftDialog(employee, dayIndex, $event); $event.stopPropagation()">{{ shiftInitial(shift) }}</button></td> }</tr> } }
+            @if (loading()) { <tr><td class="empty-state" [attr.colspan]="visibleDays().length + 4">Loading employees...</td></tr> }
+            @else if (!filteredEmployees().length) { <tr><td class="empty-state" [attr.colspan]="visibleDays().length + 4">No employees found for this search.</td></tr> }
+            @else { @for (employee of filteredEmployees(); track employee.EmployeeCode; let employeeIndex = $index) { <tr><td class="employee-cell"><button type="button" class="employee-cell__identity" [attr.aria-label]="'View unannounced leave for ' + employee.EmployeeName" (click)="openEmployeeSummary(employee)"><span class="avatar">{{ (employee.EmployeeName || 'EM').slice(0, 2).toUpperCase() }}</span><span class="employee-name"><strong>{{ employee.EmployeeName || 'Employee ' + (employeeIndex + 1) }}</strong><small>{{ employee.EmployeeCode || 'EMP-' + (employeeIndex + 1) }} · {{ employeeIndex % 2 ? '160h' : '168h' }}</small></span></button></td><td class="role-cell"><span>{{ employee.role }}</span></td><td class="days-off-cell" [attr.aria-label]="'Scheduled days off in ' + monthLabel()">{{ employeeDaysOff().get(employee.EmployeeCode) ?? 0 }}</td><td class="row-menu">⋮</td>@for (day of visibleDays(); track day.date; let dayIndex = $index) { @let shift = shiftFor(employee, dayIndex); @let absent = isRosterDayAbsent(employee, day.date, shift); <td [class.today-column]="day.isToday" [class.weekend-column]="day.isHoliday" (click)="selectCell(employee, dayIndex)"><button type="button" [class]="shiftClass(shift)" [class.roster-shift--absent]="absent" [style.background]="shiftBackground(shiftDescription(shift))" [style.color]="shiftForeground(shiftDescription(shift))" [class.roster-shift--selected]="selectedCell()?.employeeCode === employee.EmployeeCode && selectedCell()?.day === dayIndex" [attr.aria-label]="employee.EmployeeName + ', ' + monthDayLabel(day.date) + ': ' + shiftName(shift) + (absent ? ', Absent' : '')" [title]="shiftName(shift) + (absent ? ' — Absent' : '')" (click)="openShiftDialog(employee, dayIndex, $event); $event.stopPropagation()">{{ shiftInitial(shift) }}@if (absent) { <span class="roster-shift__absence-mark" aria-hidden="true">!</span> }</button></td> }</tr> } }
           </tbody>
         </table>
       </div>
     </section>
   </main>
+
+  @if (employeeSummaryDialog(); as employee) {
+    <div class="dialog-backdrop" (click)="closeEmployeeSummary()"></div>
+    <section class="employee-leave-dialog" role="dialog" aria-modal="true" aria-labelledby="employee-leave-title" (click)="$event.stopPropagation()">
+      <header class="shift-dialog__header">
+        <div>
+          <h2 id="employee-leave-title">{{ employee.EmployeeName }} · Unannounced Leave</h2>
+          <p>{{ employee.EmployeeCode }} · {{ monthLabel() }}</p>
+        </div>
+        <button type="button" class="dialog-close" aria-label="Close employee leave summary" (click)="closeEmployeeSummary()">×</button>
+      </header>
+      <div class="employee-leave-summary">
+        @if (rosterAttendanceLoading()) {
+          <p class="shift-options__status">Loading attendance for {{ monthLabel() }}...</p>
+        } @else if (!rosterAttendanceLoaded()) {
+          <p class="employee-leave-error" role="alert">Attendance data could not be loaded for this month.</p>
+        } @else {
+          <div class="employee-leave-total">
+            <strong>{{ employeeUnannouncedLeaveDates().length }}</strong>
+            <span>unannounced leave day(s)</span>
+          </div>
+          @if (syncingUnannouncedLeaveProfile()) {
+            <p>Syncing the employee profile with posted leave applications...</p>
+          }
+          <p>{{ pendingUnannouncedLeaveDates().length }} day(s) not yet posted.</p>
+          <p>Counted from assigned workdays marked absent due to missing punch-in and punch-out. Scheduled days off, unassigned shifts, and future dates are excluded.</p>
+          @if (employeeUnannouncedLeaveDates().length) {
+            <ul aria-label="Unannounced leave dates">
+              @for (date of employeeUnannouncedLeaveDates(); track date) {
+                <li>{{ date }}</li>
+              }
+            </ul>
+          }
+        }
+      </div>
+      <footer class="shift-dialog__footer">
+        <button type="button" class="dialog-button dialog-button--cancel" (click)="closeEmployeeSummary()">Close</button>
+        <button type="button" class="dialog-button dialog-button--apply" (click)="updateShiftsFromEmployeeSummary()">Update Shifts</button>
+        <button type="button" class="dialog-button dialog-button--apply" [disabled]="postingUnannouncedLeave() || !pendingUnannouncedLeaveDates().length || rosterAttendanceLoading()" (click)="postEmployeeUnannouncedLeave()">
+          {{ postingUnannouncedLeave() ? 'Posting…' : 'Post Unannounced Leave' }}
+        </button>
+      </footer>
+    </section>
+  }
+
+  @if (shiftDetailDialog(); as detail) {
+    <div class="dialog-backdrop" (click)="closeShiftDetailDialog()"></div>
+    <section
+      class="shift-dialog shift-detail-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shift-detail-title"
+      [style.top.px]="shiftDialogPosition().top"
+      [style.left.px]="shiftDialogPosition().left"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="shift-dialog__header">
+        <div>
+          <h2 id="shift-detail-title">Shift Details</h2>
+          <p>{{ detail.employee.EmployeeName }} · {{ monthDayLabel(detail.dayDate) }}, {{ monthLabel() }}</p>
+        </div>
+        <button type="button" class="dialog-close" aria-label="Close shift details" (click)="closeShiftDetailDialog()">×</button>
+      </header>
+      <div class="shift-detail-content">
+        <div class="shift-punch-summary" aria-label="Punch in and punch out">
+          <div>
+            <span>Punch In</span>
+            <strong>{{ detail.loading ? 'Loading…' : formatPunchTime(detail.attendance?.PunchIn) }}</strong>
+          </div>
+          <div>
+            <span>Punch Out</span>
+            <strong>{{ detail.loading ? 'Loading…' : formatPunchTime(detail.attendance?.PunchOut) }}</strong>
+          </div>
+        </div>
+        @if (detail.error) {
+          <p class="shift-detail-error" role="alert">{{ detail.error }}</p>
+        }
+        <dl class="shift-detail-list">
+          <div><dt>Assigned Shift</dt><dd>{{ shiftName(detail.shift) }}</dd></div>
+          <div><dt>Attendance</dt><dd [class.shift-detail-status--absent]="shiftDetailIsAbsent(detail)">{{ shiftDetailAttendanceStatus(detail) }}</dd></div>
+          <div><dt>Working Hours</dt><dd>{{ detail.attendance?.WorkingHours || '—' }}</dd></div>
+          <div><dt>Punch In Device</dt><dd>{{ detail.attendance?.PunchInDevice || '—' }}</dd></div>
+          <div><dt>Punch Out Device</dt><dd>{{ detail.attendance?.PunchOutDevice || '—' }}</dd></div>
+        </dl>
+      </div>
+      <footer class="shift-dialog__footer">
+        <span>{{ detail.employee.EmployeeCode }}</span>
+        <div>
+          <button type="button" class="dialog-button dialog-button--cancel" (click)="closeShiftDetailDialog()">Close</button>
+          <button type="button" class="dialog-button dialog-button--apply" (click)="openShiftUpdateDialog()">Update Shift</button>
+        </div>
+      </footer>
+    </section>
+  }
 
   @if (shiftDialog(); as dialog) {
     <div class="dialog-backdrop" (click)="closeShiftDialog()"></div>
@@ -190,7 +284,7 @@
         @if (workstationLoading()) {
           <p class="shift-options__status">Loading workstation shifts...</p>
         } @else {
-          @if (shiftOptions().length === 2) {
+          @if (shiftOptions().length === 1) {
             <p class="shift-options__status">No workstation shifts found.</p>
           }
           @for (option of shiftOptions(); track option.code) {

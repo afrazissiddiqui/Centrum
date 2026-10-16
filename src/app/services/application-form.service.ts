@@ -172,6 +172,7 @@ export interface ApplicationFormDetail {
   education: ApplicationFormEducationRow[];
   pastExperience: ApplicationFormPastExperienceRow[];
   remuneration: ApplicationFormRemuneration;
+  unannouncedLeaves?: string;
   leaveManagement: ApplicationFormLeaveRow[];
   hrSettings: ApplicationFormHrSettings;
   loginDetails: ApplicationFormLoginDetails;
@@ -422,6 +423,7 @@ export interface EmployeeProfileAddPayload {
   leavesAvailed: number | string;
   remainingLeaves: number | string;
   totalLeaves: number | string;
+  unanouncedLeaves: number | string;
   assetAllocated: string | null;
   allocationStatus: string | null;
   allocationDateType: string | null;
@@ -835,6 +837,9 @@ export class ApplicationFormService {
       leavesAvailed: '',
       remainingLeave: '',
     };
+    const unannouncedLeaveRow = detail.leaveManagement.find(
+      (row) => row.leaveType.trim().toLowerCase().replace(/[^a-z]/g, '') === 'unannouncedleave',
+    );
 
     const toApiNumber = (value: string): number | string => {
       const trimmed = value.trim();
@@ -972,6 +977,11 @@ export class ApplicationFormService {
       leavesAvailed: toApiNumber(leavesAvailed),
       remainingLeaves: toApiNumber(remainingLeaves),
       totalLeaves: toApiNumber(leaveDays || remuneration.totalLeaves),
+      unanouncedLeaves: toApiNumber(
+        unannouncedLeaveRow?.leavesAvailed.trim()
+          ? unannouncedLeaveRow.leavesAvailed
+          : detail.unannouncedLeaves ?? '0',
+      ),
       leaveEligibilityCriteria: toNullableString(remuneration.leaveEligibilityCriteria),
       medicalAllowances: toApiNumber(remuneration.medicalAllowances),
       fuelAllowances: toNullableApiNumber(remuneration.fuelAllowances),
@@ -1222,15 +1232,28 @@ export class ApplicationFormService {
   ): Record<string, unknown> {
     const educationSections = payload.educationSections ?? [];
     const pastExperienceSections = payload.pastExperienceSections ?? [];
-    const leaveManagementRows = payload.leaveManagementRows ?? [];
+    const leaveManagementRows = this.mapLeaveManagementRowsForApi(payload.leaveManagementRows ?? []);
+    const unannouncedLeaves = payload.unanouncedLeaves;
 
     return {
       ...payload,
+      unannouncedLeaves,
+      unanouncedLeaves: unannouncedLeaves,
+      unanounced_leaves: unannouncedLeaves,
+      unannounced_leaves: unannouncedLeaves,
       fuel_limit: payload.fuelLimit,
-      remuneration: this.buildApiRemunerationObject(payload),
+      remuneration: {
+        ...this.buildApiRemunerationObject(payload),
+        unanouncedLeaves: unannouncedLeaves,
+        unannouncedLeaves,
+        unanounced_leaves: unannouncedLeaves,
+        unannounced_leaves: unannouncedLeaves,
+      },
       assets: this.buildApiAssetsObject(payload),
       loginDetail: this.buildApiLoginDetailObject(payload),
-      leaveManagement: this.mapLeaveManagementRowsForApi(leaveManagementRows),
+      leaveManagementRows,
+      leaveManagement: leaveManagementRows,
+      leave_management: leaveManagementRows,
       educationSections,
       education_sections: this.mapEducationSectionsSnakeCase(educationSections),
       education: educationSections,
@@ -2169,6 +2192,24 @@ export class ApplicationFormService {
     const salaryStructure = pick('salaryStructure', 'salary_structure') || roleSalary;
     const jobSpecificationId = pick('jobSpecificationId', 'job_specification_id');
 
+    const leaveManagement = this.mapLeaveManagementRows(item, {
+      leaveType: pickRem('leaveType', 'leave_type'),
+      leaveDays: asNumberString(pickRem('leaveDays', 'leave_days')),
+      leavesAvailed: asNumberString(pickRem('leavesAvailed', 'leaves_availed')),
+      remainingLeaves: asNumberString(pickRem('remainingLeaves', 'remaining_leaves')),
+    });
+    const unannouncedLeaveRow = leaveManagement.find(
+      (row) => row.leaveType.trim().toLowerCase().replace(/[^a-z]/g, '') === 'unannouncedleave',
+    );
+    const unannouncedLeaves =
+      unannouncedLeaveRow?.leavesAvailed.trim() ||
+      ([
+        pick('unanouncedLeaves', 'unanounced_leaves'),
+        pick('unannouncedLeaves', 'unannounced_leaves'),
+        pickRem('unanouncedLeaves', 'unanounced_leaves'),
+        pickRem('unannouncedLeaves', 'unannounced_leaves'),
+      ].find((value) => value.trim()) ?? '0');
+
     const detail: ApplicationFormDetail = {
       personalInfo: {
         personName: pick('personName', 'person_name'),
@@ -2273,12 +2314,8 @@ export class ApplicationFormService {
         gratuityBalance: asNumberString(pickRem('grauity', 'grauity') || pickRem('gratuityBalance', 'gratuity_balance')),
         leaveEligibilityCriteria: pickRem('leaveEligibilityCriteria', 'leave_eligibility_criteria'),
       },
-      leaveManagement: this.mapLeaveManagementRows(item, {
-        leaveType: pickRem('leaveType', 'leave_type'),
-        leaveDays: asNumberString(pickRem('leaveDays', 'leave_days')),
-        leavesAvailed: asNumberString(pickRem('leavesAvailed', 'leaves_availed')),
-        remainingLeaves: asNumberString(pickRem('remainingLeaves', 'remaining_leaves')),
-      }),
+      unannouncedLeaves: asNumberString(unannouncedLeaves),
+      leaveManagement,
       hrSettings: {
         employeeMaster: asNumberString(item['employeeMaster'] ?? item['employee_master']),
         salaryStructure,
@@ -2622,7 +2659,11 @@ export class ApplicationFormService {
       remainingLeaves: string;
     },
   ): ApplicationFormLeaveRow[] {
-    const raw = item['leaveManagement'] ?? item['leave_management'];
+    const raw =
+      item['leaveManagement'] ??
+      item['leave_management'] ??
+      item['leaveManagementRows'] ??
+      item['leave_management_rows'];
     if (Array.isArray(raw) && raw.length) {
       return raw
         .filter((entry) => entry && typeof entry === 'object')

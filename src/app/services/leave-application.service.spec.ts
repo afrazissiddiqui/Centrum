@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { LeaveApplicationService } from './leave-application.service';
+import { LeaveApplicationAddPayload, LeaveApplicationService } from './leave-application.service';
 
 describe('LeaveApplicationService', () => {
   let service: LeaveApplicationService;
@@ -18,6 +18,45 @@ describe('LeaveApplicationService', () => {
 
   afterEach(() => {
     httpMock.verify();
+  });
+
+  it('posts an Unannounced Leave application with the leave application API payload shape', () => {
+    const payload: LeaveApplicationAddPayload = {
+      headerInfo: {
+        formNumber: 'LR-2026-0015',
+        employeeId: 'EMP-1001',
+        employeeName: 'Muhammad Umer',
+        employeeCategory: 'Permanent',
+        employmentNature: 'Full Time',
+        employmentType: 'Monthly',
+        workGradeLevel: 'G7',
+        department: 'Information Technology',
+        jobTitle: 'Software Developer',
+        location: 'Lahore',
+      },
+      leaveRequest: {
+        requestDate: '2026-05-25',
+        leaveType: 'Unannounced Leave',
+        causeOfLeave: 'Unannounced absence',
+        fromDate: '2026-06-01',
+        toDate: '2026-06-05',
+        totalLeaveDaysRequested: 5,
+        requestStatus: 'Submitted',
+        remarks: 'Automatically generated from unannounced absence recorded in Employee Roster.',
+      },
+      leaveBalanceInformation: {
+        totalLeaves: 30,
+        leavesAvailed: 12,
+        remainingLeaves: 18,
+      },
+    };
+
+    service.addLeaveApplication(payload).subscribe();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/leave-application-add'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual(payload);
+    request.flush({ status: true });
   });
 
   it('maps the wrapped detail response data envelope for the modal view', () => {

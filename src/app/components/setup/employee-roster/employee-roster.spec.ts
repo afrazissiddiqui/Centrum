@@ -1,6 +1,6 @@
 import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
-import { ApplicationFormRecord, EmployeeRosterListRecord } from '../../../services/application-form.service';
+import { ApplicationFormDetail, ApplicationFormRecord, EmployeeRosterListRecord } from '../../../services/application-form.service';
 import {
   filterUnassignedEmployees,
   findUnassignedEmployees,
@@ -9,12 +9,25 @@ import {
   rosterDayIndexForMonth,
   rosterBranchName,
   rosterApplicationRecord,
+  rosterDaysOffCount,
+  indexRosterShifts,
+  isRosterDateInFuture,
+  isScheduledShiftAbsent,
+  applyRosterUnannouncedLeaveCount,
+  rosterConsecutiveDateRanges,
+  reconcileRosterUnannouncedLeaveCount,
+  rosterUnannouncedAbsenceDatesForYear,
+  rosterUnannouncedLeaveDaysForYear,
+  rosterUnannouncedLeaveBalance,
+  rosterUnannouncedLeaveDates,
   rosterPeriodForDate,
   rosterShiftInitial,
   rosterShiftsForEmployeeMonth,
   rosterShiftOptions,
 } from './employee-roster';
 import { WorkstationRecord } from '../../../services/workstation.service';
+import { AttendanceDailyRecord } from '../../../services/attendance-management.service';
+import { LeaveApplicationRecord } from '../../../services/leave-application.service';
 
 describe('rosterBranchName', () => {
   it('normalizes branch codes and legacy head office labels', () => {
@@ -155,6 +168,15 @@ describe('filterUnassignedEmployees', () => {
 });
 
 describe('rosterShiftOptions', () => {
+  it('omits Holiday and keeps Scheduled Day Off available without workstations', () => {
+    const options = rosterShiftOptions([]);
+
+    expect(options).toEqual([
+      { code: 'OFF', title: 'Scheduled Day Off', className: 'off' },
+    ]);
+    expect(options.some((option) => option.title === 'Holiday')).toBe(false);
+  });
+
   it('keeps distinct workstations when their shift labels are the same', () => {
     const workstations: WorkstationRecord[] = [
       { id: 1, name: 'Morning East', code: 'ME', officeInTime: '', officeOutTime: '', inGraceMinutes: 0, outGraceMinutes: 0, shift: 'M', description: '', status: 1 },
@@ -281,6 +303,245 @@ describe('rosterShiftsForEmployeeMonth', () => {
 
     expect(rosterShiftsForEmployeeMonth(duplicateRecords, 'EMP-00000002', 'October 2026')[4])
       .toBe('new');
+  });
+
+  it('indexes employee shifts by month for constant-time month and employee lookup', () => {
+    const shiftIndex = indexRosterShifts([
+      ...records,
+      { id: '24', employee_id: 'Emp-00000002', shift_date: '2026-10-05', shift: 'new' },
+      { id: '12', employee_id: 'Emp-00000002', shift_date: '2026-10-05', shift: 'old' },
+    ] as EmployeeRosterListRecord[]);
+
+    expect(shiftIndex.get('2026-10')?.get('emp-00000002')?.[4]).toBe('new');
+    expect(shiftIndex.get('2026-11')?.get('emp-00000002')?.[4]).toBe('2');
+    expect(shiftIndex.get('2026-10')?.get('emp-00000003')).toBeUndefined();
+  });
+
+  it('counts each scheduled day off for the selected month without including other shifts', () => {
+    const monthRecords = [
+      ...records,
+      { employee_id: 'Emp-00000002', shift_date: '2026-10-06', shift: 'OFF' },
+      { employee_id: 'Emp-00000002', shift_date: '2026-10-07', shift: 'OFF' },
+      { employee_id: 'Emp-00000002', shift_date: '2026-11-06', shift: 'OFF' },
+    ] as EmployeeRosterListRecord[];
+    const octoberShifts = rosterShiftsForEmployeeMonth(monthRecords, 'EMP-00000002', 'October 2026');
+    const novemberShifts = rosterShiftsForEmployeeMonth(monthRecords, 'EMP-00000002', 'November 2026');
+
+    expect(rosterDaysOffCount(['OFF', 'M', 'OFF', 'HOL', '+'])).toBe(2);
+    expect(rosterDaysOffCount(octoberShifts)).toBe(2);
+    expect(rosterDaysOffCount(novemberShifts)).toBe(1);
+  });
+});
+
+describe('rosterDaysOffCount', () => {
+  it('counts workstation assignments identified as a scheduled day off', () => {
+    const workstations: WorkstationRecord[] = [
+      { id: 1, name: 'Day Off', code: 'DO', officeInTime: '', officeOutTime: '', inGraceMinutes: 0, outGraceMinutes: 0, shift: 'D', description: 'Scheduled Day Off', status: 1 },
+      { id: 2, name: 'Morning', code: 'M', officeInTime: '', officeOutTime: '', inGraceMinutes: 0, outGraceMinutes: 0, shift: 'M', description: '', status: 1 },
+    ];
+
+    expect(rosterDaysOffCount(['DO', 'D', 'M'], workstations)).toBe(2);
+  });
+});
+
+describe('isScheduledShiftAbsent', () => {
+  const today = new Date(2026, 9, 16);
+
+  it('marks past and current non-day-off shifts without punches absent, but not future dates', () => {
+    expect(isScheduledShiftAbsent('M', null, '2026-10-15', [], today)).toBe(true);
+    expect(isScheduledShiftAbsent('M', null, '2026-10-16', [], today)).toBe(true);
+    expect(isScheduledShiftAbsent('M', null, '2026-10-17', [], today)).toBe(false);
+    expect(isScheduledShiftAbsent('+', null, '2026-10-15', [], today)).toBe(false);
+    expect(isScheduledShiftAbsent('', null, '2026-10-15', [], today)).toBe(false);
+    expect(isScheduledShiftAbsent('M', {
+      PunchIn: '2026-10-16T09:00:00',
+      PunchOut: '',
+    } as AttendanceDailyRecord, '2026-10-16', [], today)).toBe(false);
+    expect(isScheduledShiftAbsent('OFF', null, '2026-10-16', [], today)).toBe(false);
+  });
+
+  it('recognizes future dates relative to today rather than treating them as absence', () => {
+    expect(isRosterDateInFuture('2026-10-17', today)).toBe(true);
+    expect(isRosterDateInFuture('2026-10-16', today)).toBe(false);
+  });
+});
+
+describe('rosterUnannouncedLeaveDates', () => {
+  it('counts only past and current absent days with assigned working shifts', () => {
+    const attendance = new Map<string, AttendanceDailyRecord>([
+      ['emp-00000002|2026-10-14', { PunchIn: '', PunchOut: '' } as AttendanceDailyRecord],
+      ['emp-00000002|2026-10-15', { PunchIn: '2026-10-15T09:00:00', PunchOut: '' } as AttendanceDailyRecord],
+    ]);
+
+    expect(rosterUnannouncedLeaveDates(
+      'EMP-00000002',
+      ['M', '+', 'OFF', 'M', 'M'],
+      ['2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18'],
+      attendance,
+      [],
+      new Date(2026, 9, 16),
+    )).toEqual(['2026-10-14']);
+  });
+});
+
+describe('unannounced leave posting helpers', () => {
+  it('groups only consecutive dates into leave applications', () => {
+    expect(rosterConsecutiveDateRanges([
+      '2026-10-08',
+      '2026-10-06',
+      '2026-10-07',
+      '2026-10-12',
+      '2026-10-12',
+    ])).toEqual([
+      ['2026-10-06', '2026-10-07', '2026-10-08'],
+      ['2026-10-12'],
+    ]);
+  });
+
+  it('tracks the leave balance and permits negative remaining leave', () => {
+    const detail = {
+      unannouncedLeaves: '2',
+      leaveManagement: [{
+        leaveType: 'Unannounced Leave',
+        leavesAllocated: '3',
+        leavesAvailed: '3',
+        remainingLeave: '0',
+      }],
+    } as ApplicationFormDetail;
+
+    expect(rosterUnannouncedLeaveBalance(detail, 2)).toEqual({
+      totalLeaves: 3,
+      leavesAvailed: 5,
+      remainingLeaves: -2,
+    });
+    expect(applyRosterUnannouncedLeaveCount(detail, 2)).toMatchObject({
+      unannouncedLeaves: '4',
+      leaveManagement: [{
+        leaveType: 'Unannounced Leave',
+        leavesAllocated: '3',
+        leavesAvailed: '5',
+        remainingLeave: '-2',
+      }],
+    });
+  });
+
+  it('creates a zero-allocation leave balance row when none exists', () => {
+    const detail = { unannouncedLeaves: '0', leaveManagement: [] } as ApplicationFormDetail;
+    expect(applyRosterUnannouncedLeaveCount(detail, 1).leaveManagement).toContainEqual({
+      leaveType: 'Unannounced Leave',
+      leavesAllocated: '0',
+      leavesAvailed: '1',
+      remainingLeave: '-1',
+    });
+  });
+
+  it('reconciles the profile count to the leave applications for the selected calendar year', () => {
+    const detail = {
+      unannouncedLeaves: '0',
+      leaveManagement: [{
+        leaveType: 'Unannounced Leave',
+        leavesAllocated: '1',
+        leavesAvailed: '0',
+        remainingLeave: '1',
+      }],
+    } as ApplicationFormDetail;
+
+    expect(reconcileRosterUnannouncedLeaveCount(detail, 2)).toMatchObject({
+      unannouncedLeaves: '2',
+      leaveManagement: [{
+        leaveType: 'Unannounced Leave',
+        leavesAllocated: '1',
+        leavesAvailed: '2',
+        remainingLeave: '-1',
+      }],
+    });
+    expect(reconcileRosterUnannouncedLeaveCount(
+      { ...detail, unannouncedLeaves: '3' },
+      2,
+    ).unannouncedLeaves).toBe('2');
+    expect(reconcileRosterUnannouncedLeaveCount(
+      { ...detail, unannouncedLeaves: '2' },
+      0,
+    )).toMatchObject({
+      unannouncedLeaves: '0',
+      leaveManagement: [{
+        leaveType: 'Unannounced Leave',
+        leavesAvailed: '0',
+        remainingLeave: '1',
+      }],
+    });
+  });
+
+  it('sums active Unannounced Leave days across every month of the year only', () => {
+    const applications = [
+      { EmployeeId: 'EMP-1001', LeaveType: 'Unannounced Leave', RequestStatus: 'Submitted', RequestDate: '2026-01-10', FromDate: '2026-01-10', ToDate: '2026-01-11', TotalLeaveDaysRequested: '2' },
+      { EmployeeId: 'EMP-1001', LeaveType: 'Unannounced Leave', RequestStatus: 'Approved', RequestDate: '2026-07-04', FromDate: '2026-07-04', ToDate: '2026-07-04', TotalLeaveDaysRequested: '1' },
+      { EmployeeId: 'EMP-1001', LeaveType: 'Unannounced Leave', RequestStatus: 'Cancelled', RequestDate: '2026-08-01', FromDate: '2026-08-01', ToDate: '2026-08-03', TotalLeaveDaysRequested: '3' },
+      { EmployeeId: 'EMP-1001', LeaveType: 'Annual Leave', RequestStatus: 'Approved', RequestDate: '2026-09-01', FromDate: '2026-09-01', ToDate: '2026-09-05', TotalLeaveDaysRequested: '5' },
+      { EmployeeId: 'EMP-1001', LeaveType: 'Unannounced Leave', RequestStatus: 'Approved', RequestDate: '2025-12-31', FromDate: '2025-12-31', ToDate: '2025-12-31', TotalLeaveDaysRequested: '1' },
+    ] as LeaveApplicationRecord[];
+
+    expect(rosterUnannouncedLeaveDaysForYear(applications, 'EMP-1001', 2026)).toBe(3);
+  });
+
+  it('counts only the portion of a cross-year leave range that falls in the year', () => {
+    const application = {
+      EmployeeId: 'EMP-1001',
+      LeaveType: 'Unannounced Leave',
+      RequestStatus: 'Submitted',
+      RequestDate: '2026-12-31',
+      FromDate: '2026-12-31',
+      ToDate: '2027-01-02',
+      TotalLeaveDaysRequested: '3',
+    } as LeaveApplicationRecord;
+
+    expect(rosterUnannouncedLeaveDaysForYear(
+      [application],
+      'EMP-1001',
+      2026,
+      new Date(2027, 0, 3),
+    )).toBe(1);
+    expect(rosterUnannouncedLeaveDaysForYear(
+      [application],
+      'EMP-1001',
+      2027,
+      new Date(2027, 0, 3),
+    )).toBe(2);
+  });
+
+  it('does not include leave dates after today in the annual total', () => {
+    const applications = [
+      { EmployeeId: 'EMP-1001', LeaveType: 'Unannounced Leave', RequestStatus: 'Approved', RequestDate: '2026-10-16', FromDate: '2026-10-15', ToDate: '2026-10-17', TotalLeaveDaysRequested: '3' },
+      { EmployeeId: 'EMP-1001', LeaveType: 'Unannounced Leave', RequestStatus: 'Approved', RequestDate: '2026-10-20', FromDate: '2026-10-20', ToDate: '2026-10-21', TotalLeaveDaysRequested: '2' },
+    ] as LeaveApplicationRecord[];
+
+    expect(rosterUnannouncedLeaveDaysForYear(
+      applications,
+      'EMP-1001',
+      2026,
+      new Date(2026, 9, 16),
+    )).toBe(2);
+  });
+
+  it('adds past unposted absences from earlier roster months through today', () => {
+    const today = new Date(2026, 9, 16);
+    const roster = [
+      { employee_id: 'EMP-1001', shift_date: '2026-01-02', shift: 'M' },
+      { employee_id: 'EMP-1001', shift_date: '2026-06-01', shift: 'M' },
+      { employee_id: 'EMP-1001', shift_date: '2026-10-16', shift: 'M' },
+      { employee_id: 'EMP-1001', shift_date: '2026-10-17', shift: 'M' },
+    ] as EmployeeRosterListRecord[];
+    const attendance = new Map<string, AttendanceDailyRecord>([
+      ['emp-1001|2026-01-02', { PunchIn: '2026-01-02T09:00:00', PunchOut: '' } as AttendanceDailyRecord],
+    ]);
+
+    expect(rosterUnannouncedAbsenceDatesForYear(
+      'EMP-1001',
+      indexRosterShifts(roster),
+      attendance,
+      [],
+      today,
+    )).toEqual(['2026-06-01', '2026-10-16']);
   });
 });
 

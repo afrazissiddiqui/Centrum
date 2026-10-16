@@ -65,6 +65,65 @@ describe('ApplicationFormService', () => {
     expect(nestedFlags.detail.remuneration.overTimeApplicable).toBe('Yes');
   });
 
+  it('includes zero unannounced leaves in the employee profile payload by default', () => {
+    const record = (service as any).mapApiItemToFullRecord({});
+    const payload = service.buildFlatEmployeeProfilePayload(record.detail);
+
+    expect(payload.unanouncedLeaves).toBe(0);
+    expect((service as any).serializeEmployeeProfilePayload(payload).unanouncedLeaves).toBe(0);
+  });
+
+  it('loads and preserves the unannounced leave count in employee profile updates', () => {
+    const record = (service as any).mapApiItemToFullRecord({ unanouncedLeaves: 4 });
+    const payload = service.buildFlatEmployeeProfilePayload(record.detail);
+    const serializedPayload = (service as any).serializeEmployeeProfilePayload(payload);
+
+    expect(record.detail.unannouncedLeaves).toBe('4');
+    expect(payload.unanouncedLeaves).toBe(4);
+    expect(serializedPayload.unanouncedLeaves).toBe(4);
+    expect(serializedPayload.unanounced_leaves).toBe(4);
+    expect(serializedPayload.remuneration.unannouncedLeaves).toBe(4);
+  });
+
+  it('loads unannounced leaves from supported profile field spellings and remuneration', () => {
+    const snakeCaseRecord = (service as any).mapApiItemToFullRecord({
+      unannounced_leaves: 5,
+    });
+    const remunerationRecord = (service as any).mapApiItemToFullRecord({
+      remuneration: { unannounced_leaves: 6 },
+    });
+
+    expect(snakeCaseRecord.detail.unannouncedLeaves).toBe('5');
+    expect(remunerationRecord.detail.unannouncedLeaves).toBe('6');
+  });
+
+  it('loads the Unannounced Leave count from the Leave Management row and serializes that row for profile updates', () => {
+    const record = (service as any).mapApiItemToFullRecord({
+      unannouncedLeaves: '1',
+      leaveManagementRows: [{
+        leave_type: 'Unannounced Leave',
+        leaves_allocated: '0',
+        leaves_availed: '3',
+        remaining_leave: '-3',
+      }],
+    });
+    const payload = service.buildFlatEmployeeProfilePayload(record.detail);
+    const serializedPayload = (service as any).serializeEmployeeProfilePayload(payload);
+
+    expect(record.detail.unannouncedLeaves).toBe('3');
+    expect(payload.unanouncedLeaves).toBe(3);
+    expect(serializedPayload.leaveManagement).toContainEqual(expect.objectContaining({
+      leaveType: 'Unannounced Leave',
+      leave_type: 'Unannounced Leave',
+      leavesAvailed: '3',
+      leaves_availed: '3',
+      remainingLeave: '-3',
+      remaining_leave: '-3',
+    }));
+    expect(serializedPayload.leaveManagementRows).toEqual(serializedPayload.leaveManagement);
+    expect(serializedPayload.leave_management).toEqual(serializedPayload.leaveManagement);
+  });
+
   it('includes a null Cost Center in the employee profile update body', () => {
     service.updateEmployeeProfile(7, { costCenter: null } as any).subscribe();
 

@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, CUSTOM_ELEMENTS_
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ViewportScroller } from '@angular/common';
-import { finalize } from 'rxjs';
+import { finalize, forkJoin } from 'rxjs';
 import { AlertService } from '../../../../services/alert.service';
 import {
   ApplicationFormDetail,
@@ -22,6 +22,9 @@ import {
   JobSpecificationService,
 } from '../../../../services/job-specification.service';
 import { LeaveTypeRecord, LeaveTypeService } from '../../../../services/leave-type.service';
+import { LeaveApplicationService } from '../../../../services/leave-application.service';
+import { AttendanceManagementService } from '../../../../services/attendance-management.service';
+import { WorkstationService } from '../../../../services/workstation.service';
 import { DepartmentsPrService, DepartmentPr } from '../../../../services/departments-pr.service';
 import {
   GatePassItemMaster,
@@ -40,6 +43,10 @@ import {
   formatCountryDisplay,
   matchCountryOption,
 } from '../../country-options.util';
+import {
+  countUnannouncedLeaveDaysForYear,
+  countUnannouncedLeaveDaysIncludingRosterAbsences,
+} from '../../../../utils/unannounced-leave-count.util';
 
 interface AttachmentRow {
   type: string;
@@ -268,6 +275,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
   protected readonly socialSecurityApplicable = signal<'Yes' | 'No' | ''>('No');
   protected readonly fuelLimit = signal('');
   protected readonly gratuityBalance = signal('');
+  protected readonly unannouncedLeaves = signal('0');
   protected readonly leaveManagementRows = signal<LeaveManagementRow[]>([
     { leaveType: '', leavesAllocated: '', leavesAvailed: '' },
   ]);
@@ -473,8 +481,29 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     ]);
   }
 
-  protected removeLeaveManagementRow(index: number): void {
+  protected isUnannouncedLeaveRow(row: LeaveManagementRow): boolean {
+    return row.leaveType.trim().toLowerCase().replace(/[^a-z]/g, '') === 'unannouncedleave';
+  }
+
+  protected async removeLeaveManagementRow(index: number): Promise<void> {
+    const rowToRemove = this.leaveManagementRows()[index];
+    if (!rowToRemove || this.isUnannouncedLeaveRow(rowToRemove)) {
+      return;
+    }
+
+    const confirmed = await this.alertService.confirmWarning(
+      'Remove leave row?',
+      'Are you sure you want to remove this leave row?',
+      'Remove',
+    );
+    if (!confirmed) {
+      return;
+    }
+
     this.leaveManagementRows.update((rows) => {
+      if (!rows[index] || this.isUnannouncedLeaveRow(rows[index])) {
+        return rows;
+      }
       if (rows.length <= 1) {
         return [{ leaveType: '', leavesAllocated: '', leavesAvailed: '' }];
       }
@@ -487,6 +516,11 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     field: keyof LeaveManagementRow,
     value: string,
   ): void {
+    const currentRow = this.leaveManagementRows()[index];
+    if (!currentRow || this.isUnannouncedLeaveRow(currentRow)) {
+      return;
+    }
+
     const sanitized =
       field === 'leavesAllocated' || field === 'leavesAvailed'
         ? this.sanitizeIntegerValue(value)
@@ -1292,6 +1326,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
           return;
         }
         this.populateFromRecord(record);
+        this.refreshUnannouncedLeaveCount(record);
         this.cdr.markForCheck();
       },
       error: (error: unknown) => {
@@ -1313,6 +1348,9 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     private readonly route: ActivatedRoute,
     private readonly viewportScroller: ViewportScroller,
     private readonly applicationFormService: ApplicationFormService,
+    private readonly leaveApplicationService: LeaveApplicationService,
+    private readonly attendanceService: AttendanceManagementService,
+    private readonly workstationService: WorkstationService,
     private readonly jobSpecificationService: JobSpecificationService,
     private readonly leaveTypeService: LeaveTypeService,
     private readonly itemMasterService: GatePassItemMasterService,
@@ -1622,6 +1660,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
       education: this.educationSections().map((row) => ({ ...row })),
       pastExperience: this.pastExperienceSections().map((row) => ({ ...row })),
       remuneration: this.buildRemunerationPayload(),
+      unannouncedLeaves: this.unannouncedLeaves(),
       leaveManagement: this.buildLeaveManagementPayload(),
       hrSettings: this.buildHrSettingsPayload(),
       loginDetails: {
@@ -1749,12 +1788,108 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     return '1';
   }
 
+  private refreshUnannouncedLeaveCount(record: ApplicationFormRecord): void {
+    const employeeId = (record.EmployeeCode || record.detail?.loginDetails.employeeCode || '').trim();
+    if (!employeeId) {
+      return;
+    }
+
+    const today = new Date();
+    this.leaveApplicationService.fetchLeaveApplications().subscribe({
+      next: (applications) => {
+        this.setUnannouncedLeaveCount(countUnannouncedLeaveDaysForYear(
+          applications,
+          employeeId,
+          today.getFullYear(),
+          today,
+        ));
+        const yearStart = `${today.getFullYear()}-01-01`;
+        const todayString = [
+          today.getFullYear(),
+          String(today.getMonth() + 1).padStart(2, '0'),
+          String(today.getDate()).padStart(2, '0'),
+        ].join('-');
+        forkJoin({
+          roster: this.applicationFormService.fetchEmployeeRosterList(),
+          attendance: this.attendanceService.fetchEmployeeRosterAttendance(record, yearStart, todayString),
+          workstations: this.workstationService.fetchWorkstations(),
+        }).subscribe({
+          next: ({ roster, attendance, workstations }) => {
+            const annualCount = countUnannouncedLeaveDaysIncludingRosterAbsences(
+              applications,
+              roster,
+              attendance,
+              workstations,
+              employeeId,
+              today.getFullYear(),
+              today,
+            );
+            this.setUnannouncedLeaveCount(annualCount);
+            this.cdr.markForCheck();
+          },
+          error: (error: unknown) => {
+            const message = error instanceof Error ? error.message : 'Could not load roster history for Unannounced Leave.';
+            this.alertService.error('Unannounced Leave History Load Failed', message);
+          },
+        });
+      },
+      error: (error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Could not refresh Unannounced Leave count.';
+        this.alertService.error('Unannounced Leave Load Failed', message);
+      },
+    });
+  }
+
+  private setUnannouncedLeaveCount(count: number): void {
+    const value = String(count);
+    this.unannouncedLeaves.set(value);
+    if (count > 0) {
+      this.leaveTypeOptions.update((options) =>
+        options.some(
+          (option) => option.name.trim().toLowerCase().replace(/[^a-z]/g, '') === 'unannouncedleave',
+        )
+          ? options
+          : [
+              ...options,
+              {
+                id: 'unannounced-leave',
+                name: 'Unannounced Leave',
+                code: 'Unannounced Leave',
+                description: 'Unannounced Leave',
+                status: 1,
+              },
+            ],
+      );
+    }
+    this.leaveManagementRows.update((rows) => {
+      const rowIndex = rows.findIndex(
+        (row) => row.leaveType.trim().toLowerCase().replace(/[^a-z]/g, '') === 'unannouncedleave',
+      );
+      if (rowIndex >= 0) {
+        const updatedRows = [...rows];
+        updatedRows[rowIndex] = { ...updatedRows[rowIndex], leavesAvailed: value };
+        return updatedRows;
+      }
+      if (count <= 0) {
+        return rows;
+      }
+      return [
+        ...rows.filter((row) => row.leaveType.trim() || row.leavesAllocated.trim() || row.leavesAvailed.trim()),
+        { leaveType: 'Unannounced Leave', leavesAllocated: '0', leavesAvailed: value },
+      ];
+    });
+  }
+
   private populateFromRecord(record: ApplicationFormRecord): void {
     const detail = record.detail;
     if (!detail) {
       return;
     }
 
+    const unannouncedLeaveRow = detail.leaveManagement.find(
+      (row) => row.leaveType.trim().toLowerCase().replace(/[^a-z]/g, '') === 'unannouncedleave',
+    );
+    this.unannouncedLeaves.set(unannouncedLeaveRow?.leavesAvailed || detail.unannouncedLeaves || '0');
     this.personName.set(detail.personalInfo.personName);
     this.firstName.set(detail.personalInfo.firstName);
     this.middleName.set(detail.personalInfo.middleName);

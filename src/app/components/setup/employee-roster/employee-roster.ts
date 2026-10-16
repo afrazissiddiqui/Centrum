@@ -1,10 +1,22 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { finalize, forkJoin } from 'rxjs';
-import { ApplicationFormRecord, ApplicationFormService, canonicalizeEmployeeCodeValue, EmployeeRosterAddPayload, EmployeeRosterListRecord } from '../../../services/application-form.service';
+import { catchError, concatMap, finalize, forkJoin, from, map, Observable, of, Subscription, switchMap, toArray } from 'rxjs';
+import { ApplicationFormDetail, ApplicationFormRecord, ApplicationFormService, canonicalizeEmployeeCodeValue, EmployeeRosterAddPayload, EmployeeRosterListRecord } from '../../../services/application-form.service';
 import { AlertService } from '../../../services/alert.service';
+import {
+  AttendanceDailyRecord,
+  AttendanceManagementService,
+  formatPunchTime as formatAttendancePunchTime,
+} from '../../../services/attendance-management.service';
+import {
+  LeaveApplicationAddPayload,
+  LeaveApplicationRecord,
+  LeaveApplicationService,
+} from '../../../services/leave-application.service';
+import { LeaveTypeService } from '../../../services/leave-type.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
+import { countUnannouncedLeaveDaysForYear } from '../../../utils/unannounced-leave-count.util';
 import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
 import { GatePassDepartmentService } from '../../gate-pass/gate-pass-department.service';
 import { WorkstationRecord, WorkstationService } from '../../../services/workstation.service';
@@ -12,6 +24,8 @@ import { glAccountBranchLabel, resolveBranchCode } from '../gl-account-determina
 
 type ShiftCode = string;
 type MonthHalf = 'First Half' | 'Second Half';
+const UNANNOUNCED_LEAVE_TYPE = 'Unannounced Leave';
+const UNANNOUNCED_LEAVE_DESCRIPTION = 'Unannounced-Leave For (S.A.Y)';
 const ROSTER_BRANCH_OPTIONS = ['AHCP_Peshawar', 'AHCP_HO', 'AHCP_Faisalabad'];
 
 interface RosterDay {
@@ -31,6 +45,32 @@ interface RosterEmployee extends ApplicationFormRecord {
   hub: string;
   role: string;
   shifts: ShiftCode[];
+}
+
+interface ShiftDetailDialog {
+  employee: RosterEmployee;
+  dayIndex: number;
+  dayDate: number;
+  shift: ShiftCode;
+  attendance: AttendanceDailyRecord | null;
+  loading: boolean;
+  error: string | null;
+}
+
+interface UnannouncedLeavePostResult {
+  results: Array<{ dateRange: string[]; error: unknown | null }>;
+  successfulDates: string[];
+}
+
+interface UnannouncedLeaveProfileUpdateResult {
+  profileUpdated: boolean;
+  profileError: unknown | null;
+}
+
+interface UnannouncedLeaveProfileSyncResult {
+  updatedEmployee: RosterEmployee | null;
+  postResult: UnannouncedLeavePostResult;
+  profileError: unknown | null;
 }
 
 export function findUnassignedEmployees(
@@ -163,20 +203,96 @@ function isAssignedRosterShift(shift: string): boolean {
   return normalized !== '' && normalized !== '+' && normalized !== 'null' && normalized !== 'undefined';
 }
 
-export function rosterDayIndexForMonth(shiftDate: string, monthLabel: string): number | null {
-  const [monthName, yearText] = monthLabel.split(' ');
-  const targetYear = Number(yearText);
-  const targetMonth = new Date(`${monthName} 1, ${targetYear}`).getMonth();
+interface RosterDateParts {
+  year: number;
+  monthIndex: number;
+  dayIndex: number;
+}
+
+function rosterDateParts(shiftDate: string): RosterDateParts | null {
   const isoDate = shiftDate.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
   const date = isoDate
     ? new Date(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3]))
     : new Date(shiftDate);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return {
+    year: date.getFullYear(),
+    monthIndex: date.getMonth(),
+    dayIndex: date.getDate() - 1,
+  };
+}
 
-  if (Number.isNaN(date.getTime()) || date.getFullYear() !== targetYear || date.getMonth() !== targetMonth) {
+function rosterMonthKey(monthLabel: string): string {
+  const [monthName, yearText] = monthLabel.split(' ');
+  const year = Number(yearText);
+  const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
+  return `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+}
+
+function rosterMonthDayCount(monthKey: string): number {
+  const [year, month] = monthKey.split('-').map(Number);
+  return new Date(year, month, 0).getDate();
+}
+
+export function rosterDayIndexForMonth(shiftDate: string, monthLabel: string): number | null {
+  const [monthName, yearText] = monthLabel.split(' ');
+  const targetYear = Number(yearText);
+  const targetMonth = new Date(`${monthName} 1, ${targetYear}`).getMonth();
+  const date = rosterDateParts(shiftDate);
+  if (!date || date.year !== targetYear || date.monthIndex !== targetMonth) {
     return null;
   }
 
-  return date.getDate() - 1;
+  return date.dayIndex;
+}
+
+export function indexRosterShifts(
+  records: EmployeeRosterListRecord[],
+): Map<string, Map<string, ShiftCode[]>> {
+  const recordsByMonth = new Map<string, Map<string, Map<number, EmployeeRosterListRecord>>>();
+  for (const record of records) {
+    if (!isAssignedRosterShift(record.shift)) {
+      continue;
+    }
+    const date = rosterDateParts(record.shift_date);
+    if (!date) {
+      continue;
+    }
+    const monthKey = `${date.year}-${String(date.monthIndex + 1).padStart(2, '0')}`;
+    const employeeCode = normalizeEmployeeCodeForRoster(record.employee_id);
+    let employeesByDay = recordsByMonth.get(monthKey);
+    if (!employeesByDay) {
+      employeesByDay = new Map();
+      recordsByMonth.set(monthKey, employeesByDay);
+    }
+    let latestRecordByDay = employeesByDay.get(employeeCode);
+    if (!latestRecordByDay) {
+      latestRecordByDay = new Map();
+      employeesByDay.set(employeeCode, latestRecordByDay);
+    }
+    const current = latestRecordByDay.get(date.dayIndex);
+    if (!current || compareRosterRecordVersion(current, record) <= 0) {
+      latestRecordByDay.set(date.dayIndex, record);
+    }
+  }
+
+  const shiftIndex = new Map<string, Map<string, ShiftCode[]>>();
+  for (const [monthKey, employeesByDay] of recordsByMonth) {
+    const monthShifts = new Map<string, ShiftCode[]>();
+    const daysInMonth = rosterMonthDayCount(monthKey);
+    for (const [employeeCode, latestRecordByDay] of employeesByDay) {
+      const shifts = Array.from({ length: daysInMonth }, () => '+');
+      for (const [dayIndex, record] of latestRecordByDay) {
+        shifts[dayIndex] = record.shift;
+      }
+      monthShifts.set(employeeCode, shifts);
+    }
+    shiftIndex.set(monthKey, monthShifts);
+  }
+
+  return shiftIndex;
 }
 
 export function rosterShiftsForEmployeeMonth(
@@ -184,36 +300,11 @@ export function rosterShiftsForEmployeeMonth(
   employeeCode: string,
   monthLabel: string,
 ): ShiftCode[] {
-  const [monthName, yearText] = monthLabel.split(' ');
-  const year = Number(yearText);
-  const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const shifts = Array.from({ length: daysInMonth }, () => '+');
-  const normalizedEmployeeCode = normalizeEmployeeCodeForRoster(employeeCode);
-  const latestRecordByDay = new Map<number, EmployeeRosterListRecord>();
-
-  for (const record of records) {
-    if (
-      normalizeEmployeeCodeForRoster(record.employee_id) !== normalizedEmployeeCode ||
-      !isAssignedRosterShift(record.shift)
-    ) {
-      continue;
-    }
-    const dayIndex = rosterDayIndexForMonth(record.shift_date, monthLabel);
-    if (dayIndex === null) {
-      continue;
-    }
-    const current = latestRecordByDay.get(dayIndex);
-    if (!current || compareRosterRecordVersion(current, record) <= 0) {
-      latestRecordByDay.set(dayIndex, record);
-    }
-  }
-
-  for (const [dayIndex, record] of latestRecordByDay) {
-    shifts[dayIndex] = record.shift;
-  }
-
-  return shifts;
+  const monthKey = rosterMonthKey(monthLabel);
+  const shifts = indexRosterShifts(records)
+    .get(monthKey)
+    ?.get(normalizeEmployeeCodeForRoster(employeeCode));
+  return shifts ? [...shifts] : Array.from({ length: rosterMonthDayCount(monthKey) }, () => '+');
 }
 
 function compareRosterRecordVersion(
@@ -242,6 +333,249 @@ export function rosterPeriodForDate(date: Date): { monthLabel: string; monthHalf
   };
 }
 
+export function rosterDaysOffCount(
+  shifts: ShiftCode[],
+  workstations: WorkstationRecord[] = [],
+): number {
+  const dayOffLabels = new Set(['off', 'day off', 'scheduled day off']);
+  const workstationDayOff = new Map<string, boolean>();
+  for (const workstation of workstations) {
+    const isDayOff = [workstation.shift, workstation.name, workstation.description]
+      .some((value) => dayOffLabels.has(value.trim().toLowerCase()));
+    for (const value of [workstation.code, String(workstation.id), workstation.shift, workstation.name, workstation.description]) {
+      const key = value.trim().toLowerCase();
+      if (key && !workstationDayOff.has(key)) {
+        workstationDayOff.set(key, isDayOff);
+      }
+    }
+  }
+
+  return shifts.filter((shift) => {
+    const normalizedShift = shift.trim().toLowerCase();
+    return dayOffLabels.has(normalizedShift) || workstationDayOff.get(normalizedShift) === true;
+  }).length;
+}
+
+export function isRosterDateInFuture(date: string, today = new Date()): boolean {
+  const dateParts = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!dateParts) {
+    return false;
+  }
+  const rosterDate = new Date(Number(dateParts[1]), Number(dateParts[2]) - 1, Number(dateParts[3]));
+  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return rosterDate > todayDate;
+}
+
+export function isScheduledShiftAbsent(
+  shift: ShiftCode,
+  attendance: AttendanceDailyRecord | null | undefined,
+  date: string,
+  workstations: WorkstationRecord[] = [],
+  today = new Date(),
+): boolean {
+  return isAssignedRosterShift(shift) &&
+    !isRosterDateInFuture(date, today) &&
+    rosterDaysOffCount([shift], workstations) === 0 &&
+    !attendance?.PunchIn &&
+    !attendance?.PunchOut;
+}
+
+export function rosterUnannouncedLeaveDates(
+  employeeCode: string,
+  shifts: ShiftCode[],
+  dates: string[],
+  attendance: ReadonlyMap<string, AttendanceDailyRecord>,
+  workstations: WorkstationRecord[] = [],
+  today = new Date(),
+): string[] {
+  const normalizedEmployeeCode = employeeCode.toLowerCase();
+  return dates.filter((date, index) => isScheduledShiftAbsent(
+    shifts[index] ?? '+',
+    attendance.get(`${normalizedEmployeeCode}|${date}`),
+    date,
+    workstations,
+    today,
+  ));
+}
+
+export function rosterConsecutiveDateRanges(dates: string[]): string[][] {
+  const sortedDates = [...new Set(dates)].sort();
+  const ranges: string[][] = [];
+  for (const date of sortedDates) {
+    const currentRange = ranges[ranges.length - 1];
+    const previousDate = currentRange?.[currentRange.length - 1];
+    if (!previousDate || rosterDateDistance(previousDate, date) !== 1) {
+      ranges.push([date]);
+    } else {
+      currentRange.push(date);
+    }
+  }
+  return ranges;
+}
+
+export function rosterUnannouncedLeaveBalance(
+  detail: ApplicationFormDetail | undefined,
+  additionalDays = 0,
+): { totalLeaves: number; leavesAvailed: number; remainingLeaves: number } {
+  const normalizedType = normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE);
+  const leaveRow = detail?.leaveManagement.find(
+    (row) => normalizeLeaveType(row.leaveType) === normalizedType,
+  );
+  const remunerationMatchesType =
+    normalizeLeaveType(detail?.remuneration?.leaveType) === normalizedType;
+  const totalLeaves = parseLeaveBalanceValue(
+    leaveRow?.leavesAllocated ?? (remunerationMatchesType ? detail?.remuneration?.leaveDays : undefined),
+  );
+  const leavesAvailed = parseLeaveBalanceValue(
+    leaveRow?.leavesAvailed ?? (remunerationMatchesType ? detail?.remuneration?.leavesAvailed : undefined),
+  ) + additionalDays;
+  return {
+    totalLeaves,
+    leavesAvailed,
+    remainingLeaves: totalLeaves - leavesAvailed,
+  };
+}
+
+export function applyRosterUnannouncedLeaveCount(
+  detail: ApplicationFormDetail,
+  additionalDays: number,
+): ApplicationFormDetail {
+  if (additionalDays <= 0) {
+    return detail;
+  }
+  const balance = rosterUnannouncedLeaveBalance(detail, additionalDays);
+  const leaveManagement = [...detail.leaveManagement];
+  const existingIndex = leaveManagement.findIndex(
+    (row) => normalizeLeaveType(row.leaveType) === normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE),
+  );
+  const updatedRow = {
+    leaveType: UNANNOUNCED_LEAVE_TYPE,
+    leavesAllocated: String(balance.totalLeaves),
+    leavesAvailed: String(balance.leavesAvailed),
+    remainingLeave: String(balance.remainingLeaves),
+  };
+  if (existingIndex < 0) {
+    leaveManagement.push(updatedRow);
+  } else {
+    leaveManagement[existingIndex] = updatedRow;
+  }
+  return {
+    ...detail,
+    unannouncedLeaves: String(
+      parseLeaveBalanceValue(detail.unannouncedLeaves) + additionalDays,
+    ),
+    leaveManagement,
+  };
+}
+
+export function reconcileRosterUnannouncedLeaveCount(
+  detail: ApplicationFormDetail,
+  recordedDays: number,
+): ApplicationFormDetail {
+  const currentCount = parseLeaveBalanceValue(detail.unannouncedLeaves);
+  const targetCount = Math.max(0, recordedDays);
+  const leaveManagement = [...detail.leaveManagement];
+  const existingIndex = leaveManagement.findIndex(
+    (row) => normalizeLeaveType(row.leaveType) === normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE),
+  );
+  const existingRow = existingIndex >= 0 ? leaveManagement[existingIndex] : undefined;
+  const remunerationMatchesType =
+    normalizeLeaveType(detail.remuneration?.leaveType) === normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE);
+  const totalLeaves = parseLeaveBalanceValue(
+    existingRow?.leavesAllocated ??
+      (remunerationMatchesType ? detail.remuneration?.leaveDays : undefined),
+  );
+  const leavesAvailed = targetCount;
+  const remainingLeave = totalLeaves - leavesAvailed;
+  if (
+    targetCount === currentCount &&
+    existingRow &&
+    parseLeaveBalanceValue(existingRow.leavesAvailed) === leavesAvailed &&
+    parseLeaveBalanceValue(existingRow.remainingLeave) === remainingLeave
+  ) {
+    return detail;
+  }
+
+  const updatedRow = {
+    leaveType: UNANNOUNCED_LEAVE_TYPE,
+    leavesAllocated: String(totalLeaves),
+    leavesAvailed: String(leavesAvailed),
+    remainingLeave: String(remainingLeave),
+  };
+  if (existingIndex < 0) {
+    leaveManagement.push(updatedRow);
+  } else {
+    leaveManagement[existingIndex] = updatedRow;
+  }
+  return {
+    ...detail,
+    unannouncedLeaves: String(targetCount),
+    leaveManagement,
+  };
+}
+
+export function rosterUnannouncedLeaveDaysForYear(
+  applications: LeaveApplicationRecord[],
+  employeeCode: string,
+  year: number,
+  today = new Date(),
+): number {
+  return countUnannouncedLeaveDaysForYear(applications, employeeCode, year, today);
+}
+
+export function rosterUnannouncedAbsenceDatesForYear(
+  employeeCode: string,
+  shiftsByMonth: ReadonlyMap<string, ReadonlyMap<string, ShiftCode[]>>,
+  attendance: ReadonlyMap<string, AttendanceDailyRecord>,
+  workstations: WorkstationRecord[],
+  today = new Date(),
+): string[] {
+  const employeeKey = normalizeEmployeeCodeForRoster(employeeCode);
+  const attendanceKey = employeeCode.toLowerCase();
+  const year = today.getFullYear();
+  const dates: string[] = [];
+  const cursor = new Date(year, 0, 1);
+  const todayDate = new Date(year, today.getMonth(), today.getDate());
+
+  while (cursor <= todayDate) {
+    const date = `${year}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+    const monthKey = date.slice(0, 7);
+    const shifts = shiftsByMonth.get(monthKey)?.get(employeeKey);
+    const shift = shifts?.[cursor.getDate() - 1] ?? '+';
+    if (isScheduledShiftAbsent(
+      shift,
+      attendance.get(`${attendanceKey}|${date}`),
+      date,
+      workstations,
+      today,
+    )) {
+      dates.push(date);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dates;
+}
+
+function normalizeLeaveType(value: string | undefined): string {
+  return String(value ?? '').toLowerCase().replace(/[^a-z]/g, '');
+}
+
+function parseLeaveBalanceValue(value: string | number | undefined): number {
+  const parsed = Number.parseFloat(String(value ?? '').replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function rosterDateDistance(fromDate: string, toDate: string): number {
+  const parseDate = (value: string): number => {
+    const parts = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return parts
+      ? Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]))
+      : Number.NaN;
+  };
+  return (parseDate(toDate) - parseDate(fromDate)) / 86_400_000;
+}
+
 export function rosterShiftOptions(workstations: WorkstationRecord[]) {
   const options = workstations
     .map((workstation) => {
@@ -260,7 +594,6 @@ export function rosterShiftOptions(workstations: WorkstationRecord[]) {
 
   return [
     ...uniqueOptions,
-    { code: 'HOL', title: 'Holiday', className: 'holiday' },
     { code: 'OFF', title: 'Scheduled Day Off', className: 'off' },
   ];
 }
@@ -316,10 +649,13 @@ function rosterShiftLetter(index: number): string {
 })
 export class EmployeeRosterComponent implements OnInit {
   private readonly employeeService = inject(ApplicationFormService);
+  private readonly attendanceService = inject(AttendanceManagementService);
   private readonly alertService = inject(AlertService);
   private readonly departmentService = inject(GatePassDepartmentService);
   private readonly initialCalendarPeriod = rosterPeriodForDate(new Date());
   readonly workstationService = inject(WorkstationService);
+  private readonly leaveApplicationService = inject(LeaveApplicationService);
+  private readonly leaveTypeService = inject(LeaveTypeService);
 
   readonly loading = signal(false);
   readonly saving = signal(false);
@@ -333,6 +669,7 @@ export class EmployeeRosterComponent implements OnInit {
   readonly editingRosterCalendar = signal(false);
   private calendarOriginalShifts: ShiftCode[] = [];
   private rosterRecords: EmployeeRosterListRecord[] = [];
+  private rosterShiftIndex = new Map<string, Map<string, ShiftCode[]>>();
   private originalRosterShifts = new Map<string, string[]>();
   readonly searchText = signal('');
   readonly legacyCodeSearchOnly = signal(false);
@@ -344,10 +681,46 @@ export class EmployeeRosterComponent implements OnInit {
   readonly monthLabel = signal(this.initialCalendarPeriod.monthLabel);
   readonly selectedMonthHalf = signal<MonthHalf>(this.initialCalendarPeriod.monthHalf);
   readonly selectedCell = signal<{ employeeCode: string; day: number } | null>(null);
+  readonly shiftDetailDialog = signal<ShiftDetailDialog | null>(null);
+  readonly employeeSummaryDialog = signal<RosterEmployee | null>(null);
+  readonly syncingUnannouncedLeaveProfile = signal(false);
+  readonly postingUnannouncedLeave = signal(false);
+  readonly postedUnannouncedLeaveDateKeys = signal(new Set<string>());
+  readonly employeeUnannouncedLeaveDates = computed(() => {
+    const employee = this.employeeSummaryDialog();
+    if (!employee || !this.rosterAttendanceLoaded()) {
+      return [];
+    }
+    return rosterUnannouncedLeaveDates(
+      employee.EmployeeCode,
+      this.monthlyShifts(employee),
+      this.fullMonthDays().map((day) => this.rosterDate(day.date)),
+      this.rosterAttendance(),
+      this.workstationService.workstations(),
+    );
+  });
+  readonly pendingUnannouncedLeaveDates = computed(() => {
+    const employee = this.employeeSummaryDialog();
+    if (!employee) {
+      return [];
+    }
+    const postedDates = this.postedUnannouncedLeaveDateKeys();
+    const keyPrefix = `${employee.EmployeeCode.toLowerCase()}|`;
+    return this.employeeUnannouncedLeaveDates().filter(
+      (date) => !postedDates.has(`${keyPrefix}${date}`),
+    );
+  });
   readonly shiftDialog = signal<{ employee: RosterEmployee; dayIndex: number; dayDate: number; shift: ShiftCode } | null>(null);
   readonly shiftDialogPosition = signal({ top: 0, left: 0 });
   readonly shiftDialogDragging = signal(false);
   private shiftDialogDrag: { pointerId: number; startX: number; startY: number; startTop: number; startLeft: number } | null = null;
+  private shiftDetailRequestId = 0;
+  private unannouncedLeaveSyncRequestId = 0;
+  private rosterAttendanceRequestId = 0;
+  private rosterAttendanceRequest?: Subscription;
+  readonly rosterAttendance = signal(new Map<string, AttendanceDailyRecord>());
+  readonly rosterAttendanceLoading = signal(false);
+  readonly rosterAttendanceLoaded = signal(false);
   readonly hasChanges = signal(false);
   readonly selectedEmployees = signal(new Set<string>());
   readonly conflictsVisible = signal(true);
@@ -464,6 +837,15 @@ export class EmployeeRosterComponent implements OnInit {
   readonly nightCount = computed(() => this.employees().filter((employee) => employee.shifts.some((shift) => this.shiftName(shift) === 'Night')).length);
   readonly unassignedCount = computed(() => this.unassignedEmployees().length);
   readonly activeCount = computed(() => this.filteredEmployees().length);
+  readonly employeeDaysOff = computed(() => {
+    const workstations = this.workstationService.workstations();
+    return new Map(
+      this.employees().map((employee) => [
+        employee.EmployeeCode,
+        rosterDaysOffCount(employee.shifts, workstations),
+      ]),
+    );
+  });
 
   readonly allVisibleSelected = computed(() => {
     const visible = this.filteredEmployees();
@@ -521,12 +903,14 @@ export class EmployeeRosterComponent implements OnInit {
       .subscribe({
         next: ({ roster, profiles }: { roster: EmployeeRosterListRecord[]; profiles: ApplicationFormRecord[] }) => {
           this.rosterRecords = roster;
+          this.rosterShiftIndex = indexRosterShifts(roster);
           const rosterEmployees = this.toRosterEmployees(roster, profiles);
           this.employees.set(rosterEmployees);
           this.originalRosterShifts = new Map(
             rosterEmployees.map((employee) => [employee.EmployeeCode, [...employee.shifts]]),
           );
           this.unassignedEmployees.set(findUnassignedEmployees(profiles, roster));
+          this.loadRosterAttendance();
         },
         error: (error) => {
           this.alertService.error(
@@ -549,6 +933,190 @@ export class EmployeeRosterComponent implements OnInit {
     this.unassignedSearchText.set('');
     this.unassignedDepartmentFilter.set('');
     this.unassignedBranchFilter.set(ALL_BRANCHES_FILTER);
+  }
+
+  openEmployeeSummary(employee: RosterEmployee): void {
+    this.employeeSummaryDialog.set(employee);
+    this.syncEmployeeProfileFromPostedUnannouncedLeave(employee);
+  }
+
+  closeEmployeeSummary(): void {
+    this.employeeSummaryDialog.set(null);
+  }
+
+  updateShiftsFromEmployeeSummary(): void {
+    const employee = this.employeeSummaryDialog();
+    if (!employee) {
+      return;
+    }
+    this.closeEmployeeSummary();
+    this.openEmployeeCalendar(employee);
+  }
+
+  postEmployeeUnannouncedLeave(): void {
+    const employee = this.employeeSummaryDialog();
+    if (!employee) {
+      return;
+    }
+    if (this.syncingUnannouncedLeaveProfile()) {
+      this.alertService.warning(
+        'Unannounced Leave Sync In Progress',
+        'Wait for the year-to-date leave count to finish syncing before posting additional leave.',
+      );
+      return;
+    }
+    if (!this.rosterAttendanceLoaded()) {
+      this.alertService.warning('Attendance Not Ready', 'Wait for the selected month attendance to load before posting leave.');
+      return;
+    }
+    const dates = this.pendingUnannouncedLeaveDates();
+    if (!dates.length) {
+      this.alertService.warning('No New Leave Dates', 'There are no unposted unannounced leave dates for this employee in the selected month.');
+      return;
+    }
+    if (!employee.apiId?.trim() || !employee.detail) {
+      this.alertService.error('Employee Profile Missing', 'Could not update the employee leave balance because profile details are unavailable.');
+      return;
+    }
+
+    this.postingUnannouncedLeave.set(true);
+    this.submitUnannouncedLeaveDates(employee, dates).pipe(
+      switchMap((postResult) =>
+        this.updateProfileAfterPostedUnannouncedLeave(employee, postResult.successfulDates).pipe(
+          map((profileResult) => ({ ...postResult, ...profileResult })),
+        ),
+      ),
+      finalize(() => this.postingUnannouncedLeave.set(false)),
+    ).subscribe({
+      next: ({ results, successfulDates, profileUpdated, profileError }) => {
+        const failedRanges = results.filter((result) => result.error !== null);
+        if (!successfulDates.length) {
+          const firstError = failedRanges[0]?.error;
+          this.alertService.error(
+            'Leave Posting Failed',
+            formatApiErrorMessage(firstError, 'No unannounced leave applications could be posted.'),
+          );
+          return;
+        }
+        if (!profileUpdated) {
+          this.alertService.error(
+            'Leave Balance Update Failed',
+            `The leave application(s) for ${successfulDates.length} day(s) were posted, but the employee profile could not be updated. ${formatApiErrorMessage(profileError, 'Retry the profile update before posting more leave.')}`,
+          );
+          return;
+        }
+        if (failedRanges.length) {
+          const failedRangeLabels = failedRanges
+            .map(({ dateRange }) => `${dateRange[0]} to ${dateRange[dateRange.length - 1]}`)
+            .join(', ');
+          this.alertService.error(
+            'Some Leave Dates Were Not Posted',
+            `${successfulDates.length} day(s) were posted and recorded. Failed date range(s): ${failedRangeLabels}.`,
+          );
+          return;
+        }
+        this.alertService.success(
+          'Unannounced Leave Posted',
+          `${successfulDates.length} day(s) were posted and recorded for ${employee.EmployeeName}.`,
+        );
+      },
+      error: (error: unknown) => {
+        this.alertService.error(
+          'Unannounced Leave Setup Failed',
+          formatApiErrorMessage(error, 'Could not load or create the Unannounced Leave type.'),
+        );
+      },
+    });
+  }
+
+  private ensureUnannouncedLeaveType(): Observable<string> {
+    return this.leaveTypeService.fetchLeaveTypes().pipe(
+      switchMap((leaveTypes) => {
+        const leaveTypeExists = leaveTypes.some((leaveType) =>
+          [leaveType.name, leaveType.code]
+            .some((value) => normalizeLeaveType(value) === normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE)),
+        );
+        return leaveTypeExists
+          ? of(UNANNOUNCED_LEAVE_TYPE)
+          : this.leaveTypeService.addLeaveType({
+              name: UNANNOUNCED_LEAVE_TYPE,
+              code: UNANNOUNCED_LEAVE_TYPE,
+              description: UNANNOUNCED_LEAVE_DESCRIPTION,
+              status: 1,
+            }).pipe(map(() => UNANNOUNCED_LEAVE_TYPE));
+      }),
+    );
+  }
+
+  private submitUnannouncedLeaveDates(
+    employee: RosterEmployee,
+    dates: string[],
+  ): Observable<UnannouncedLeavePostResult> {
+    const dateRanges = rosterConsecutiveDateRanges(dates);
+    const suffix = Number(String(Date.now()).slice(-4));
+    let successfulDays = 0;
+    return this.ensureUnannouncedLeaveType().pipe(
+      switchMap((leaveType) => from(dateRanges).pipe(
+        concatMap((dateRange, rangeIndex) => {
+          const payload = this.buildUnannouncedLeavePayload(
+            employee,
+            leaveType,
+            dateRange,
+            suffix + rangeIndex,
+            successfulDays,
+          );
+          return this.leaveApplicationService.addLeaveApplication(payload).pipe(
+            map(() => {
+              successfulDays += dateRange.length;
+              return { dateRange, error: null };
+            }),
+            catchError((error: unknown) => of({ dateRange, error })),
+          );
+        }),
+        toArray(),
+        map((results) => {
+          const successfulDates = results
+            .filter((result) => result.error === null)
+            .flatMap((result) => result.dateRange);
+          this.postedUnannouncedLeaveDateKeys.update((current) => {
+            const next = new Set(current);
+            for (const date of successfulDates) {
+              next.add(`${employee.EmployeeCode.toLowerCase()}|${date}`);
+            }
+            return next;
+          });
+          return { results, successfulDates };
+        }),
+      )),
+    );
+  }
+
+  private updateProfileAfterPostedUnannouncedLeave(
+    employee: RosterEmployee,
+    successfulDates: string[],
+  ): Observable<UnannouncedLeaveProfileUpdateResult> {
+    if (!successfulDates.length) {
+      return of({ profileUpdated: false, profileError: null });
+    }
+    const updatedDetail = applyRosterUnannouncedLeaveCount(employee.detail!, successfulDates.length);
+    const updatedEmployee = { ...employee, detail: updatedDetail };
+    const profilePayload = this.employeeService.buildFlatEmployeeProfilePayload(updatedDetail);
+    return this.employeeService.updateEmployeeProfile(employee.apiId!, profilePayload).pipe(
+      map(() => {
+        this.employeeService.upsertApplicationRecord(updatedEmployee);
+        this.employees.update((employees) =>
+          employees.map((item) =>
+            item.EmployeeCode === employee.EmployeeCode ? updatedEmployee : item,
+          ),
+        );
+        this.employeeSummaryDialog.set(updatedEmployee);
+        return { profileUpdated: true, profileError: null };
+      }),
+      catchError((profileError: unknown) => of({
+        profileUpdated: false,
+        profileError,
+      })),
+    );
   }
 
   openUnassignedCalendar(employee: ApplicationFormRecord): void {
@@ -741,7 +1309,330 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   private rosterShiftsForMonth(employeeCode: string): ShiftCode[] {
-    return rosterShiftsForEmployeeMonth(this.rosterRecords, employeeCode, this.monthLabel());
+    const monthKey = rosterMonthKey(this.monthLabel());
+    const shifts = this.rosterShiftIndex
+      .get(monthKey)
+      ?.get(normalizeEmployeeCodeForRoster(employeeCode));
+    return shifts ? [...shifts] : Array.from({ length: rosterMonthDayCount(monthKey) }, () => '+');
+  }
+
+  private loadRosterAttendance(): void {
+    this.rosterAttendanceRequest?.unsubscribe();
+    const requestId = ++this.rosterAttendanceRequestId;
+    const employees = this.employees();
+    if (!employees.length) {
+      this.rosterAttendance.set(new Map());
+      this.rosterAttendanceLoaded.set(true);
+      this.rosterAttendanceLoading.set(false);
+      return;
+    }
+
+    const monthKey = rosterMonthKey(this.monthLabel());
+    const lastDay = rosterMonthDayCount(monthKey);
+    this.rosterAttendance.set(new Map());
+    this.rosterAttendanceLoaded.set(false);
+    this.rosterAttendanceLoading.set(true);
+    this.rosterAttendanceRequest = this.attendanceService
+      .fetchRosterAttendance(employees, `${monthKey}-01`, `${monthKey}-${String(lastDay).padStart(2, '0')}`)
+      .pipe(finalize(() => {
+        if (requestId === this.rosterAttendanceRequestId) {
+          this.rosterAttendanceLoading.set(false);
+        }
+      }))
+      .subscribe({
+        next: (attendance) => {
+          if (requestId !== this.rosterAttendanceRequestId) {
+            return;
+          }
+          this.rosterAttendance.set(attendance);
+          this.rosterAttendanceLoaded.set(true);
+        },
+        error: (error: unknown) => {
+          if (requestId === this.rosterAttendanceRequestId) {
+            this.alertService.error(
+              'Attendance Load Failed',
+              formatApiErrorMessage(error, 'Could not load attendance for the selected month.'),
+            );
+          }
+        },
+      });
+  }
+
+  isRosterDayAbsent(employee: RosterEmployee, dayDate: number, shift: ShiftCode): boolean {
+    if (!this.rosterAttendanceLoaded()) {
+      return false;
+    }
+    const date = this.rosterDate(dayDate);
+    const attendance = this.rosterAttendance().get(`${employee.EmployeeCode.toLowerCase()}|${date}`);
+    return isScheduledShiftAbsent(shift, attendance, date, this.workstationService.workstations());
+  }
+
+  shiftDetailAttendanceStatus(detail: ShiftDetailDialog): string {
+    if (detail.loading) {
+      return 'Loading…';
+    }
+    if (detail.error) {
+      return 'Unavailable';
+    }
+    if (rosterDaysOffCount([detail.shift], this.workstationService.workstations()) > 0) {
+      return 'Scheduled Day Off';
+    }
+    if (!isAssignedRosterShift(detail.shift)) {
+      return 'Unassigned';
+    }
+    const date = this.rosterDate(detail.dayDate);
+    if (isScheduledShiftAbsent(detail.shift, detail.attendance, date, this.workstationService.workstations())) {
+      return 'Absent';
+    }
+    if (isRosterDateInFuture(date) &&
+      !detail.attendance?.PunchIn && !detail.attendance?.PunchOut) {
+      return 'Scheduled';
+    }
+    return detail.attendance?.AttendanceStatus ?? 'Present';
+  }
+
+  shiftDetailIsAbsent(detail: ShiftDetailDialog): boolean {
+    return !detail.loading &&
+      !detail.error &&
+      isScheduledShiftAbsent(
+        detail.shift,
+        detail.attendance,
+        this.rosterDate(detail.dayDate),
+        this.workstationService.workstations(),
+      );
+  }
+
+  private buildUnannouncedLeavePayload(
+    employee: RosterEmployee,
+    leaveType: string,
+    dateRange: string[],
+    sequence: number,
+    previouslyPostedDays: number,
+  ): LeaveApplicationAddPayload {
+    const detail = employee.detail!;
+    const personalInfo = detail.personalInfo;
+    const requestDate = this.localDateString(new Date());
+    const suffix = ((sequence % 10_000) + 10_000) % 10_000;
+    const balance = rosterUnannouncedLeaveBalance(detail, previouslyPostedDays);
+    const firstDate = dateRange[0];
+    const lastDate = dateRange[dateRange.length - 1];
+    return {
+      headerInfo: {
+        formNumber: `LR-${requestDate.slice(0, 4)}-${String(suffix).padStart(4, '0')}`,
+        employeeId: employee.EmployeeCode,
+        employeeName: employee.EmployeeName,
+        employeeCategory: personalInfo.employmentCategory || employee.EmploymentCategory,
+        employmentNature: personalInfo.employmentNature || employee.EmployeeNature,
+        employmentType: employee.EmploymentType,
+        workGradeLevel: personalInfo.workGradeLevel || personalInfo.roleSalary,
+        department: employee.Department || personalInfo.departmentInAhcp,
+        jobTitle: personalInfo.designation || employee.Designation,
+        location: personalInfo.branchLocation || detail.requisition.location || employee.hub,
+      },
+      leaveRequest: {
+        requestDate,
+        leaveType,
+        causeOfLeave: 'Unannounced absence',
+        fromDate: firstDate,
+        toDate: lastDate,
+        totalLeaveDaysRequested: dateRange.length,
+        requestStatus: 'Submitted',
+        remarks: 'Automatically generated from unannounced absence recorded in Employee Roster.',
+      },
+      leaveBalanceInformation: balance,
+    };
+  }
+
+  private localDateString(date: Date): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  private syncEmployeeProfileFromPostedUnannouncedLeave(employee: RosterEmployee): void {
+    if (this.syncingUnannouncedLeaveProfile() || this.postingUnannouncedLeave()) {
+      return;
+    }
+    const requestId = ++this.unannouncedLeaveSyncRequestId;
+    this.syncingUnannouncedLeaveProfile.set(true);
+    const today = new Date();
+    const todayDate = this.localDateString(today);
+    const yearStart = `${today.getFullYear()}-01-01`;
+    forkJoin({
+      applications: this.leaveApplicationService.fetchLeaveApplications(),
+      attendance: this.attendanceService.fetchEmployeeRosterAttendance(employee, yearStart, todayDate),
+    }).pipe(
+      map(({ applications, attendance }) => {
+        const employeeCode = normalizeEmployeeCodeForRoster(employee.EmployeeCode);
+        const employeeApplications = applications
+          .filter((application) =>
+            normalizeEmployeeCodeForRoster(application.EmployeeId) === employeeCode &&
+            normalizeLeaveType(application.LeaveType) === normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE) &&
+            !/reject|cancel|void|deleted/i.test(application.RequestStatus),
+          );
+        const selectedMonthDates = this.fullMonthDays().map((day) => this.rosterDate(day.date));
+        const selectedMonthDateSet = new Set(selectedMonthDates);
+        const postedDateSet = new Set<string>();
+        const postedYearDateSet = new Set<string>();
+        for (const application of employeeApplications) {
+          const fromDate = this.rosterDateValue(application.FromDate);
+          const toDate = this.rosterDateValue(application.ToDate);
+          if (fromDate && toDate) {
+            for (const date of selectedMonthDates) {
+              if (date >= fromDate && date <= toDate) {
+                postedDateSet.add(date);
+              }
+            }
+            const firstCoveredDate = fromDate > yearStart ? fromDate : yearStart;
+            const lastCoveredDate = toDate < todayDate ? toDate : todayDate;
+            const dateCursor = new Date(`${firstCoveredDate}T00:00:00`);
+            const rangeEnd = new Date(`${lastCoveredDate}T00:00:00`);
+            while (dateCursor <= rangeEnd) {
+              const date = this.localDateString(dateCursor);
+              postedYearDateSet.add(date);
+              dateCursor.setDate(dateCursor.getDate() + 1);
+            }
+          }
+        }
+        const applicationDays = rosterUnannouncedLeaveDaysForYear(
+          employeeApplications,
+          employee.EmployeeCode,
+          today.getFullYear(),
+          today,
+        );
+        const historicalAbsenceDates = rosterUnannouncedAbsenceDatesForYear(
+          employee.EmployeeCode,
+          this.rosterShiftIndex,
+          attendance,
+          this.workstationService.workstations(),
+          today,
+        );
+        const unpostedHistoricalAbsences = historicalAbsenceDates.filter(
+          (date) => !postedYearDateSet.has(date),
+        ).length;
+        this.postedUnannouncedLeaveDateKeys.update((current) => {
+          const next = new Set(current);
+          for (const date of postedDateSet) {
+            if (selectedMonthDateSet.has(date)) {
+              next.add(`${employee.EmployeeCode.toLowerCase()}|${date}`);
+            }
+          }
+          return next;
+        });
+        return {
+          recordedDays: applicationDays + unpostedHistoricalAbsences,
+          unpostedHistoricalAbsenceDates: historicalAbsenceDates.filter(
+            (date) => !postedYearDateSet.has(date),
+          ),
+        };
+      }),
+      switchMap(({ recordedDays, unpostedHistoricalAbsenceDates }) => {
+        if (
+          unpostedHistoricalAbsenceDates.length &&
+          (!employee.detail || !employee.apiId?.trim())
+        ) {
+          throw new Error('Employee profile details are required to post detected Unannounced Leave.');
+        }
+        const postRequest = unpostedHistoricalAbsenceDates.length
+          ? this.submitUnannouncedLeaveDates(employee, unpostedHistoricalAbsenceDates)
+          : of({ results: [], successfulDates: [] });
+        return postRequest.pipe(
+          switchMap((postResult) =>
+            this.reconcileEmployeeUnannouncedLeaveProfile(employee, recordedDays).pipe(
+              map((updatedEmployee) => ({
+                updatedEmployee,
+                postResult,
+                profileError: null,
+              })),
+              catchError((profileError: unknown) => of({
+                updatedEmployee: null,
+                postResult,
+                profileError,
+              })),
+            ),
+          ),
+        );
+      }),
+      finalize(() => {
+        if (requestId === this.unannouncedLeaveSyncRequestId) {
+          this.syncingUnannouncedLeaveProfile.set(false);
+        }
+      }),
+    ).subscribe({
+      next: ({ updatedEmployee, postResult, profileError }: UnannouncedLeaveProfileSyncResult) => {
+        if (updatedEmployee) {
+          this.employeeService.upsertApplicationRecord(updatedEmployee);
+          this.employees.update((employees) =>
+            employees.map((item) =>
+              item.EmployeeCode === updatedEmployee.EmployeeCode ? updatedEmployee : item,
+            ),
+          );
+          if (this.employeeSummaryDialog()?.EmployeeCode === updatedEmployee.EmployeeCode) {
+            this.employeeSummaryDialog.set(updatedEmployee);
+          }
+        }
+
+        const failedRanges = postResult.results.filter((result) => result.error !== null);
+        if (failedRanges.length) {
+          const failedRangeLabels = failedRanges
+            .map(({ dateRange }) => `${dateRange[0]} to ${dateRange[dateRange.length - 1]}`)
+            .join(', ');
+          this.alertService.error(
+            'Some Unannounced Leave Dates Were Not Posted',
+            `${postResult.successfulDates.length} day(s) were posted. Failed date range(s): ${failedRangeLabels}.`,
+          );
+        } else if (postResult.successfulDates.length) {
+          this.alertService.success(
+            'Unannounced Leave Posted',
+            `${postResult.successfulDates.length} detected day(s) were automatically posted for ${employee.EmployeeName}.`,
+          );
+        }
+
+        if (profileError) {
+          this.alertService.error(
+            'Unannounced Leave Profile Sync Failed',
+            formatApiErrorMessage(profileError, 'Could not sync the employee profile from detected Unannounced Leave.'),
+          );
+        }
+      },
+      error: (error: unknown) => {
+        if (requestId === this.unannouncedLeaveSyncRequestId) {
+          this.alertService.error(
+            'Unannounced Leave Sync Failed',
+            formatApiErrorMessage(error, 'Could not detect, post, or sync the employee Unannounced Leave.'),
+          );
+        }
+      },
+    });
+  }
+
+  private reconcileEmployeeUnannouncedLeaveProfile(
+    employee: RosterEmployee,
+    recordedDays: number,
+  ): Observable<RosterEmployee | null> {
+    if (!employee.detail) {
+      return of(null);
+    }
+    const hasUnannouncedLeaveRow = employee.detail.leaveManagement.some(
+      (row) => normalizeLeaveType(row.leaveType) === normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE),
+    );
+    if (
+      recordedDays === 0 &&
+      parseLeaveBalanceValue(employee.detail.unannouncedLeaves) === 0 &&
+      !hasUnannouncedLeaveRow
+    ) {
+      return of(null);
+    }
+    const updatedDetail = reconcileRosterUnannouncedLeaveCount(employee.detail, recordedDays);
+    if (updatedDetail === employee.detail) {
+      return of(null);
+    }
+    if (!employee.apiId?.trim()) {
+      throw new Error('Employee profile identifier is missing.');
+    }
+    const updatedEmployee = { ...employee, detail: updatedDetail };
+    const payload = this.employeeService.buildFlatEmployeeProfilePayload(updatedDetail);
+    return this.employeeService.updateEmployeeProfile(employee.apiId, payload).pipe(
+      map(() => updatedEmployee),
+    );
   }
 
   private rosterDateValue(value: string): string {
@@ -774,6 +1665,7 @@ export class EmployeeRosterComponent implements OnInit {
         employment_status: employee?.EmploymentStatus ?? '',
       });
     }
+    this.rosterShiftIndex = indexRosterShifts(this.rosterRecords);
   }
 
   isAssignedShift(shift: ShiftCode): boolean {
@@ -933,7 +1825,7 @@ export class EmployeeRosterComponent implements OnInit {
       return 145;
     }
     if (normalizedDescription === 'scheduled day off' || normalizedDescription === 'day off') {
-      return 215;
+      return 145;
     }
 
     const descriptions = this.workstationService
@@ -959,11 +1851,19 @@ export class EmployeeRosterComponent implements OnInit {
     if (dayDate === undefined) {
       return;
     }
-    this.loadWorkstations();
     this.selectedCell.set({ employeeCode: employee.EmployeeCode, day: dayIndex });
-    this.shiftDialog.set({ employee, dayIndex, dayDate, shift: this.shiftFor(employee, dayIndex) });
+    this.shiftDialog.set(null);
+    this.shiftDetailDialog.set({
+      employee,
+      dayIndex,
+      dayDate,
+      shift: this.shiftFor(employee, dayIndex),
+      attendance: null,
+      loading: true,
+      error: null,
+    });
     const popoverWidth = 350;
-    const popoverHeight = Math.min(560, Math.max(220, window.innerHeight - 16));
+    const popoverHeight = 330;
     const gap = 10;
     const left = event.clientX + gap + popoverWidth <= window.innerWidth
       ? event.clientX + gap
@@ -973,6 +1873,64 @@ export class EmployeeRosterComponent implements OnInit {
       top,
       left: Math.max(8, left),
     });
+
+    const requestId = ++this.shiftDetailRequestId;
+    this.attendanceService
+      .fetchDailyAttendance(employee, this.rosterDate(dayDate))
+      .pipe(finalize(() => {
+        if (requestId === this.shiftDetailRequestId) {
+          this.shiftDetailDialog.update((dialog) => dialog ? { ...dialog, loading: false } : dialog);
+        }
+      }))
+      .subscribe({
+        next: (attendance) => {
+          if (requestId === this.shiftDetailRequestId) {
+            this.shiftDetailDialog.update((dialog) => dialog
+              ? { ...dialog, attendance }
+              : dialog);
+          }
+        },
+        error: (error: unknown) => {
+          if (requestId === this.shiftDetailRequestId) {
+            this.shiftDetailDialog.update((dialog) => dialog
+              ? {
+                ...dialog,
+                error: formatApiErrorMessage(error, 'Could not load punch details for this day.'),
+              }
+              : dialog);
+          }
+        },
+      });
+  }
+
+  openShiftUpdateDialog(): void {
+    const detail = this.shiftDetailDialog();
+    if (!detail) {
+      return;
+    }
+
+    this.loadWorkstations();
+    this.shiftDetailDialog.set(null);
+    this.shiftDialog.set({
+      employee: detail.employee,
+      dayIndex: detail.dayIndex,
+      dayDate: detail.dayDate,
+      shift: detail.shift,
+    });
+    const popoverHeight = Math.min(560, Math.max(220, window.innerHeight - 16));
+    this.shiftDialogPosition.update((position) => ({
+      ...position,
+      top: Math.min(position.top, Math.max(8, window.innerHeight - popoverHeight - 8)),
+    }));
+  }
+
+  closeShiftDetailDialog(): void {
+    this.shiftDetailRequestId += 1;
+    this.shiftDetailDialog.set(null);
+  }
+
+  formatPunchTime(value: string | null | undefined): string {
+    return formatAttendancePunchTime(value ?? '');
   }
 
   startShiftDialogDrag(event: PointerEvent): void {
@@ -1181,6 +2139,7 @@ export class EmployeeRosterComponent implements OnInit {
       this.employees().map((employee) => [employee.EmployeeCode, [...employee.shifts]]),
     );
     this.clearSelection();
+    this.loadRosterAttendance();
   }
 
   onMonthHalfChange(value: string): void {
@@ -1321,7 +2280,7 @@ export class EmployeeRosterComponent implements OnInit {
           record.hub,
         ),
         role: record.role || record.designation || rosterEmployee.role,
-        shifts: rosterShiftsForEmployeeMonth(records, employeeCode, this.monthLabel()),
+        shifts: this.rosterShiftsForMonth(employeeCode),
       };
     });
   }

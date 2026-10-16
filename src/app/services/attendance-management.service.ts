@@ -129,6 +129,111 @@ export class AttendanceManagementService {
     );
   }
 
+  fetchDailyAttendance(
+    employee: ApplicationFormRecord,
+    date: string,
+  ): Observable<AttendanceDailyRecord | null> {
+    const userId =
+      employee.ExtEmpNo?.trim() ||
+      employee.detail?.loginDetails.legacyCode?.trim() ||
+      employee.userId?.trim() ||
+      employee.detail?.loginDetails.userId?.trim() ||
+      employee.EmployeeCode;
+    const query: AttendanceQuery = { mode: 'date', userId, date };
+
+    return this.fetchPunches(query, [employee]).pipe(
+      map((punches) => {
+        const session = this.createSession(punches, [employee], query);
+        const slot = session.slots.find((item) => item.date === date);
+        if (!slot) {
+          return null;
+        }
+
+        const groupedPunches = session.punchGroups.get(attendanceGroupKey(slot.employeeKey, date)) ?? [];
+        return this.slotToDailyRecord(slot, groupedPunches);
+      }),
+    );
+  }
+
+  fetchRosterAttendance(
+    employees: ApplicationFormRecord[],
+    fromDate: string,
+    toDate: string,
+  ): Observable<Map<string, AttendanceDailyRecord>> {
+    const query: AttendanceQuery = { mode: 'dateRange', fromDate, toDate };
+    return this.fetchPunches(query, employees).pipe(
+      map((punches) => {
+        const session = this.createSession(punches, employees, query);
+        const employeeCodeByAttendanceKey = new Map<string, string>();
+        for (const employee of employees) {
+          const candidates = [
+            employee.ExtEmpNo,
+            employee.detail?.loginDetails.legacyCode,
+            resolveAttendanceUserId(employee),
+            employee.userId,
+            employee.EmployeeCode,
+          ];
+          for (const candidate of candidates) {
+            if (!candidate?.trim()) {
+              continue;
+            }
+            const attendanceKey = resolvePunchKey(candidate, session.index.aliasToCanonical);
+            if (attendanceKey) {
+              employeeCodeByAttendanceKey.set(attendanceKey, employee.EmployeeCode);
+            }
+          }
+        }
+
+        const attendanceByEmployeeDay = new Map<string, AttendanceDailyRecord>();
+        for (const slot of session.slots) {
+          if (slot.status !== 'Present') {
+            continue;
+          }
+          const employeeCode = employeeCodeByAttendanceKey.get(slot.employeeKey);
+          if (!employeeCode) {
+            continue;
+          }
+          const punchesForDay = session.punchGroups.get(attendanceGroupKey(slot.employeeKey, slot.date)) ?? [];
+          attendanceByEmployeeDay.set(
+            `${employeeCode.toLowerCase()}|${slot.date}`,
+            this.slotToDailyRecord(slot, punchesForDay),
+          );
+        }
+        return attendanceByEmployeeDay;
+      }),
+    );
+  }
+
+  fetchEmployeeRosterAttendance(
+    employee: ApplicationFormRecord,
+    fromDate: string,
+    toDate: string,
+  ): Observable<Map<string, AttendanceDailyRecord>> {
+    const userId =
+      employee.ExtEmpNo?.trim() ||
+      employee.detail?.loginDetails.legacyCode?.trim() ||
+      resolveAttendanceUserId(employee) ||
+      employee.EmployeeCode;
+    const query: AttendanceQuery = { mode: 'dateRange', userId, fromDate, toDate };
+    return this.fetchPunches(query, [employee]).pipe(
+      map((punches) => {
+        const session = this.createSession(punches, [employee], query);
+        const attendanceByEmployeeDay = new Map<string, AttendanceDailyRecord>();
+        for (const slot of session.slots) {
+          if (slot.status !== 'Present') {
+            continue;
+          }
+          const punchesForDay = session.punchGroups.get(attendanceGroupKey(slot.employeeKey, slot.date)) ?? [];
+          attendanceByEmployeeDay.set(
+            `${employee.EmployeeCode.toLowerCase()}|${slot.date}`,
+            this.slotToDailyRecord(slot, punchesForDay),
+          );
+        }
+        return attendanceByEmployeeDay;
+      }),
+    );
+  }
+
   materializeSlots(slotRefs: AttendanceSlotRef[]): AttendanceDailyRecord[] {
     const session = this.sessionState();
     if (!session) {

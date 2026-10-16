@@ -1047,8 +1047,14 @@
               />
             </div>
             <div class="cjr-row">
-              <label for="additional-leave-field">Additional Field:</label>
-              <input id="additional-leave-field" type="text" class="cjr-leave-table__input" />
+              <label for="unannounced-leave-field">Unannounced Leave:</label>
+              <input
+                id="unannounced-leave-field"
+                type="text"
+                class="cjr-leave-table__input cjr-leave-table__input--readonly"
+                [ngModel]="unannouncedLeaves()"
+                readonly
+              />
             </div>
           </div>
 
@@ -1066,6 +1072,10 @@
               @for (row of leaveManagementRows(); let i = $index; track i) {
               <tr>
                 <td>
+                  @if (isUnannouncedLeaveRow(row)) {
+                  <input type="text" class="cjr-leave-table__input cjr-leave-table__input--readonly"
+                    [ngModel]="row.leaveType" readonly aria-label="Leave type" />
+                  } @else {
                   <select class="cjr-leave-table__input" [ngModel]="row.leaveType"
                     (ngModelChange)="updateLeaveManagementRow(i, 'leaveType', $event)">
                     <option value="">Select leave type</option>
@@ -1073,14 +1083,19 @@
                     <option [value]="option.name">{{ option.name }}</option>
                     }
                   </select>
+                  }
                 </td>
                 <td>
-                  <input type="text" class="cjr-leave-table__input" inputmode="numeric" [ngModel]="row.leavesAllocated"
+                  <input type="text" class="cjr-leave-table__input"
+                    [class.cjr-leave-table__input--readonly]="isUnannouncedLeaveRow(row)"
+                    [readonly]="isUnannouncedLeaveRow(row)" inputmode="numeric" [ngModel]="row.leavesAllocated"
                     (ngModelChange)="updateLeaveManagementRow(i, 'leavesAllocated', $event)"
                     (keydown)="onIntegerKeyDown($event)" placeholder="0" />
                 </td>
                 <td>
-                  <input type="text" class="cjr-leave-table__input" inputmode="numeric" [ngModel]="row.leavesAvailed"
+                  <input type="text" class="cjr-leave-table__input"
+                    [class.cjr-leave-table__input--readonly]="isUnannouncedLeaveRow(row)"
+                    [readonly]="isUnannouncedLeaveRow(row)" inputmode="numeric" [ngModel]="row.leavesAvailed"
                     (ngModelChange)="updateLeaveManagementRow(i, 'leavesAvailed', $event)"
                     (keydown)="onIntegerKeyDown($event)" placeholder="0" />
                 </td>
@@ -1089,7 +1104,7 @@
                     [ngModel]="computeRemainingLeave(row)" readonly tabindex="-1" placeholder="Auto-calculated" />
                 </td>
                 <td class="cjr-leave-table__actions-col">
-                  @if (leaveManagementRows().length > 1) {
+                  @if (leaveManagementRows().length > 1 && !isUnannouncedLeaveRow(row)) {
                   <button type="button" class="cjr-remove-section cjr-leave-table__remove"
                     (click)="removeLeaveManagementRow(i)" aria-label="Remove leave row">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
