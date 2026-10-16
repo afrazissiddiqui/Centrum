@@ -171,6 +171,7 @@ export class PurchaseRequestComponent implements OnInit, OnDestroy {
     this.loadTaxCodes();
     this.loadDepartmentOptions();
     this.loadWarehouseOptions();
+    this.loadItemOptions();
   }
 
   ngOnDestroy(): void {
