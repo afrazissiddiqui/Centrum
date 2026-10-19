@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, OnInit, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import {
   getNavigableHrMenuActions,
@@ -8,8 +9,9 @@ import {
 } from '../../config/hr-menu.config';
 import { AuthService } from '../../services/auth.service';
 import { PermissionService } from '../../services/permission.service';
+import { PublicHolidayService } from '../../services/public-holiday.service';
 
-export type CompanyCalendarEventCategory = 'approved' | 'pending' | 'remote' | 'holiday' | 'office';
+export type CompanyCalendarEventCategory = 'approved' | 'pending' | 'remote' | 'holiday' | 'dayoff' | 'office';
 
 export interface CompanyCalendarEvent {
   id: string;
@@ -19,6 +21,7 @@ export interface CompanyCalendarEvent {
   time?: string;
   location?: string;
   description?: string;
+  holidayColorIndex?: number;
 }
 
 export type DashboardRequestStatus = 'approved' | 'pending' | 'review' | 'withdrawn';
@@ -73,16 +76,17 @@ function dateKey(date: Date): string {
 
 @Component({
   selector: 'app-dashboard',
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.css',
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class dashboardComponent {
+export class dashboardComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
   private readonly permissionService = inject(PermissionService);
+  private readonly publicHolidayService = inject(PublicHolidayService);
   private readonly today = new Date();
   private readonly hour = this.today.getHours();
 
@@ -102,12 +106,20 @@ export class dashboardComponent {
   );
 
   readonly employeeName = computed(() => this.authService.getSessionUser()?.name?.trim() || 'there');
+  readonly canManageCompanyHolidays = computed(() => this.authService.getSessionUser()?.is_admin === true);
   readonly accountEmail = computed(() => this.authService.getSessionUser()?.email?.trim() || '');
   readonly portalUserId = computed(() => this.authService.getSessionUser()?.id ?? null);
   readonly accountType = computed(() => this.authService.getSessionUser()?.is_admin ? 'Administrator' : 'Employee');
   readonly greeting = this.hour < 12 ? 'Good morning' : this.hour < 17 ? 'Good afternoon' : 'Good evening';
   readonly employeeServiceLabel = 'Employee Self-Service (ESS)';
   readonly calendarEvents = signal<CompanyCalendarEvent[]>([]);
+  readonly holidayLoadError = signal(false);
+  readonly holidayDialogOpen = signal(false);
+  readonly holidayDate = signal(dateKey(this.today));
+  readonly holidayDescription = signal('');
+  readonly holidaySaving = signal(false);
+  readonly holidayCreateError = signal('');
+  readonly holidayCreateSuccess = signal('');
   readonly submittedRequests = signal<DashboardSubmittedRequest[]>([]);
   readonly milestones = signal<DashboardMilestone[]>([]);
   readonly activeRequestCount = computed(() =>
@@ -193,6 +205,139 @@ export class dashboardComponent {
     );
   });
 
+  ngOnInit(): void {
+    this.loadPublicHolidays();
+  }
+
+  openHolidayDialog(): void {
+    if (!this.canManageCompanyHolidays()) {
+      return;
+    }
+    this.holidayDate.set(dateKey(this.today));
+    this.holidayDescription.set('');
+    this.holidayCreateError.set('');
+    this.holidayCreateSuccess.set('');
+    this.holidayDialogOpen.set(true);
+  }
+
+  closeHolidayDialog(): void {
+    if (!this.holidaySaving()) {
+      this.holidayDialogOpen.set(false);
+    }
+  }
+
+  submitPublicHoliday(): void {
+    const date = this.holidayDate();
+    const description = this.holidayDescription().trim();
+    if (!this.canManageCompanyHolidays() || this.holidaySaving()) {
+      return;
+    }
+    if (!this.isValidDateKey(date) || !description || description.length > 200) {
+      this.holidayCreateError.set('Enter a valid holiday date and description.');
+      return;
+    }
+
+    this.holidaySaving.set(true);
+    this.holidayCreateError.set('');
+    this.publicHolidayService.addPublicHoliday({ date, description }).subscribe({
+      next: (response) => {
+        if (this.isApiFailure(response)) {
+          this.holidayCreateError.set(this.apiMessage(response) || 'The holiday could not be saved.');
+          this.holidaySaving.set(false);
+          return;
+        }
+
+        const holidayDate = this.eventDisplayDate(date);
+        const holidayColorIndex = this.calendarEvents().filter((event) => event.category === 'holiday').length % 8 + 1;
+        const event: CompanyCalendarEvent = {
+          id: `public-holiday-${date}-${description.toLocaleLowerCase()}`,
+          title: description,
+          date,
+          category: 'holiday',
+          description,
+          holidayColorIndex,
+        };
+        this.calendarEvents.update((events) => [
+          ...events.filter((existing) => existing.id !== event.id),
+          event,
+        ]);
+        this.selectedDate.set(holidayDate);
+        this.monthAnchor.set(firstOfMonth(holidayDate));
+        this.holidaySaving.set(false);
+        this.holidayDialogOpen.set(false);
+        this.holidayCreateSuccess.set(`${description} was added to the calendar.`);
+        this.loadPublicHolidays();
+      },
+      error: (error: unknown) => {
+        console.error('Failed to add a company public holiday.', error);
+        this.holidayCreateError.set('The holiday could not be saved. Please try again.');
+        this.holidaySaving.set(false);
+      },
+    });
+  }
+
+  private loadPublicHolidays(): void {
+    this.publicHolidayService.fetchPublicHolidays().subscribe({
+      next: (holidays) => {
+        this.holidayLoadError.set(false);
+        const listedHolidayEvents = holidays.map((holiday, index) => ({
+          id: `public-holiday-${holiday.id}`,
+          title: holiday.description,
+          date: holiday.date,
+          category: 'holiday' as const,
+          location: holiday.company,
+          description: holiday.description,
+          holidayColorIndex: index % 8 + 1,
+        }));
+        this.calendarEvents.update((events) => {
+          const mergedHolidays = new Map<string, CompanyCalendarEvent>();
+          for (const holiday of listedHolidayEvents) {
+            mergedHolidays.set(this.holidayEventKey(holiday), holiday);
+          }
+          for (const holiday of events.filter((event) => event.category === 'holiday')) {
+            const key = this.holidayEventKey(holiday);
+            if (!mergedHolidays.has(key)) {
+              mergedHolidays.set(key, holiday);
+            }
+          }
+          return [
+            ...events.filter((event) => event.category !== 'holiday'),
+            ...mergedHolidays.values(),
+          ];
+        });
+      },
+      error: (error: unknown) => {
+        console.error('Failed to load company public holidays for the dashboard calendar.', error);
+        this.holidayLoadError.set(true);
+      },
+    });
+  }
+
+  private isValidDateKey(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  }
+
+  private holidayEventKey(event: CompanyCalendarEvent): string {
+    return `${event.date}|${event.title.toLocaleLowerCase()}|${event.location?.toLocaleLowerCase() ?? ''}`;
+  }
+
+  private isApiFailure(response: unknown): boolean {
+    return typeof response === 'object' && response !== null &&
+      'status' in response && response.status === false;
+  }
+
+  private apiMessage(response: unknown): string {
+    if (typeof response !== 'object' || response === null || !('message' in response)) {
+      return '';
+    }
+    return typeof response.message === 'string' ? response.message : '';
+  }
+
   openAction(action: HrMenuAction): void {
     void this.router.navigateByUrl(action.route);
   }
@@ -233,8 +378,13 @@ export class dashboardComponent {
       pending: 'My pending request',
       remote: 'My remote / WFH day',
       holiday: 'Statutory holiday',
+      dayoff: 'Weekly day off',
       office: 'In-office shift',
     }[category];
+  }
+
+  holidayHue(colorIndex: number): number {
+    return ((colorIndex - 1) * 137.508) % 360;
   }
 
   eventDisplayDate(date: string): Date {
@@ -244,9 +394,18 @@ export class dashboardComponent {
 
   private eventsForDate(date: Date): CompanyCalendarEvent[] {
     const key = dateKey(date);
-    return this.calendarEvents()
+    const events = this.calendarEvents()
       .filter((event) => event.date === key)
       .sort((left, right) => (left.time ?? '').localeCompare(right.time ?? ''));
+    if (date.getDay() === 0) {
+      events.push({
+        id: `weekly-day-off-${key}`,
+        title: 'Weekly Day Off',
+        date: key,
+        category: 'dayoff',
+      });
+    }
+    return events;
   }
 
   private calendarDay(date: Date): CalendarDay {

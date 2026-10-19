@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, map, of, tap } from 'rxjs';
+import { Observable, catchError, map, of, shareReplay, tap } from 'rxjs';
 import { apiUrl } from '../../config/api.config';
 
 export interface GatePassBusinessPartner {
@@ -52,10 +52,12 @@ export class GatePassBusinessPartnerService {
         }),
         catchError(() => {
           this.partners.set([]);
-          this.loaded = true;
           this.loading = false;
+          this.loaded = false;
+          this.load$ = undefined;
           return of([]);
         }),
+        shareReplay(1),
       );
     }
 

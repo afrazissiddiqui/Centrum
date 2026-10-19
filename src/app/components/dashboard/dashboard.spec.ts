@@ -1,20 +1,31 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
+import { of } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
 import { PermissionService } from '../../services/permission.service';
+import { PublicHolidayRecord, PublicHolidayService } from '../../services/public-holiday.service';
 import { dashboardComponent } from './dashboard';
 
 describe('Dashboard', () => {
   let component: dashboardComponent;
   let fixture: ComponentFixture<dashboardComponent>;
+  let sessionUser: { name: string; is_admin: boolean };
 
   beforeEach(async () => {
+    sessionUser = { name: 'Alex Wong', is_admin: false };
     await TestBed.configureTestingModule({
       imports: [dashboardComponent],
       providers: [
         { provide: Router, useValue: { navigateByUrl: () => Promise.resolve(true) } },
-        { provide: AuthService, useValue: { getSessionUser: () => ({ name: 'Alex Wong' }) } },
+        { provide: AuthService, useValue: { getSessionUser: () => sessionUser } },
         { provide: PermissionService, useValue: { canAccess: () => true } },
+        {
+          provide: PublicHolidayService,
+          useValue: {
+            fetchPublicHolidays: () => of([]),
+            addPublicHoliday: () => of({ status: true }),
+          },
+        },
       ],
     }).compileComponents();
 
@@ -67,6 +78,93 @@ describe('Dashboard', () => {
 
     const selectedDay = component.calendarDays().find((day) => day.isSelected);
     expect(selectedDay?.events.map((event) => event.title)).toEqual(['Company town hall']);
+  });
+
+  it('loads company public holidays into the calendar with their company label', () => {
+    const holiday: PublicHolidayRecord = {
+      id: 'holiday-1',
+      date: '2026-03-23',
+      description: 'Pakistan Day',
+      company: 'Al Hafiz',
+    };
+    const publicHolidayService = TestBed.inject(PublicHolidayService);
+    spyOn(publicHolidayService, 'fetchPublicHolidays').and.returnValue(of([holiday]));
+
+    component.ngOnInit();
+
+    expect(component.calendarEvents()).toContain({
+      id: 'public-holiday-holiday-1',
+      title: 'Pakistan Day',
+      date: '2026-03-23',
+      category: 'holiday',
+      location: 'Al Hafiz',
+      description: 'Pakistan Day',
+    });
+  });
+
+  it('marks every Sunday as a weekly day off in calendar views', () => {
+    component.selectedDate.set(new Date(2026, 9, 11, 12));
+    component.activeView.set('day');
+
+    expect(component.visibleCalendarDays()[0].events).toContain({
+      id: 'weekly-day-off-2026-10-11',
+      title: 'Weekly Day Off',
+      date: '2026-10-11',
+      category: 'dayoff',
+    });
+  });
+
+  it('assigns different colors to each listed public holiday', () => {
+    const publicHolidayService = TestBed.inject(PublicHolidayService);
+    spyOn(publicHolidayService, 'fetchPublicHolidays').and.returnValue(of([
+      { id: '1', date: '2026-03-23', description: 'Pakistan Day' },
+      { id: '2', date: '2026-05-01', description: 'Labour Day' },
+    ]));
+
+    component.ngOnInit();
+
+    expect(component.calendarEvents()
+      .filter((event) => event.category === 'holiday')
+      .map((event) => event.holidayColorIndex)).toEqual([1, 2]);
+  });
+
+  it('shows the add holiday action only to administrators', () => {
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.holiday-add-button')).toBeNull();
+
+    sessionUser.is_admin = true;
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.holiday-add-button')).not.toBeNull();
+  });
+
+  it('posts an administrator holiday and selects its calendar date', () => {
+    sessionUser.is_admin = true;
+    const holiday: PublicHolidayRecord = {
+      id: 'holiday-10',
+      date: '2026-10-10',
+      description: 'Pakistan Day',
+    };
+    const publicHolidayService = TestBed.inject(PublicHolidayService);
+    spyOn(publicHolidayService, 'fetchPublicHolidays').and.returnValue(of([holiday]));
+    const addHoliday = spyOn(publicHolidayService, 'addPublicHoliday').and.returnValue(of({ status: true }));
+
+    component.openHolidayDialog();
+    component.holidayDate.set('2026-10-10');
+    component.holidayDescription.set('Pakistan Day');
+    component.submitPublicHoliday();
+
+    expect(addHoliday).toHaveBeenCalledWith({
+      date: '2026-10-10',
+      description: 'Pakistan Day',
+    });
+    expect(component.monthAnchor().getMonth()).toBe(9);
+    expect(component.monthAnchor().getDate()).toBe(1);
+    expect(component.selectedDate().getDate()).toBe(10);
+    expect(component.calendarEvents().some((event) =>
+      event.category === 'holiday' && event.date === '2026-10-10' && event.title === 'Pakistan Day',
+    )).toBe(true);
+    expect(component.holidayDialogOpen()).toBe(false);
   });
 
   it('returns to the current month from a different date', () => {

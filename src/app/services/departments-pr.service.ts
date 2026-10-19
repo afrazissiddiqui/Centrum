@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, map, of, tap } from 'rxjs';
+import { Observable, catchError, map, of, shareReplay, tap } from 'rxjs';
 import { apiUrl } from '../config/api.config';
 
 export interface DepartmentPr {
@@ -25,11 +25,18 @@ export class DepartmentsPrService {
     if (!this.load$) {
       this.load$ = this.http.get<unknown>(DEPARTMENTS_PR_URL).pipe(
         map((response) => this.parse(response)),
-        tap((list) => this.catalog.set(list)),
+        tap((list) => {
+          this.catalog.set(list);
+          if (list.length === 0) {
+            this.load$ = undefined;
+          }
+        }),
         catchError(() => {
           this.catalog.set([]);
+          this.load$ = undefined;
           return of([]);
         }),
+        shareReplay(1),
       );
     }
 

@@ -110,7 +110,7 @@
         <h2 id="calendar-title">My Schedule &amp; Time-Off Calendar</h2>
         <span class="privacy-badge">
           <ui5-icon name="locked" aria-hidden="true"></ui5-icon>
-          Private view · Only you can see this
+          Your schedule is private
         </span>
       </div>
 
@@ -125,6 +125,12 @@
           </button>
         </div>
         <button type="button" class="today-button" (click)="goToToday()">Today</button>
+        @if (canManageCompanyHolidays()) {
+          <button type="button" class="holiday-add-button" (click)="openHolidayDialog()">
+            <ui5-icon name="add" aria-hidden="true"></ui5-icon>
+            Add Holiday
+          </button>
+        }
         <div class="view-switch" role="group" aria-label="Calendar view">
           <button
             type="button"
@@ -154,6 +160,7 @@
       <span class="legend-item"><i class="legend-swatch legend-swatch--pending"></i>My Pending Request</span>
       <span class="legend-item"><i class="legend-swatch legend-swatch--remote"></i>My Remote / WFH Day</span>
       <span class="legend-item"><i class="legend-swatch legend-swatch--holiday"></i>Statutory Holiday</span>
+      <span class="legend-item"><i class="legend-swatch legend-swatch--dayoff"></i>Sunday Day Off</span>
       <span class="legend-item"><i class="legend-swatch legend-swatch--office"></i>In-Office Shift</span>
     </div>
 
@@ -192,11 +199,16 @@
                   @for (event of day.events; track event.id) {
                     <article
                       [class]="'calendar-event calendar-event--' + event.category"
+                      [class.calendar-event--holiday-colored]="event.category === 'holiday'"
+                      [style.--holiday-hue]="event.holidayColorIndex ? holidayHue(event.holidayColorIndex) : null"
                       [attr.aria-label]="eventCategoryLabel(event.category) + ': ' + event.title"
                     >
                       <strong>{{ event.title }}</strong>
                       @if (event.time) {
                         <span>{{ event.time }}</span>
+                      }
+                      @if (event.location) {
+                        <span>{{ event.location }}</span>
                       }
                     </article>
                   }
@@ -211,9 +223,73 @@
       <span class="calendar-footer__indicator" aria-hidden="true"></span>
       <span>Private employee schedule</span>
       <span class="calendar-footer__divider" aria-hidden="true"></span>
-      <span>Schedule details will appear here once employee calendar data is connected.</span>
+      @if (holidayLoadError()) {
+        <span>Company public holidays could not be loaded.</span>
+      } @else if (holidayCreateSuccess()) {
+        <span role="status">{{ holidayCreateSuccess() }}</span>
+      } @else {
+        <span>Company public holidays are shown alongside employee schedule events.</span>
+      }
     </footer>
   </section>
+
+  @if (holidayDialogOpen()) {
+    <div class="holiday-dialog-backdrop" (click)="closeHolidayDialog()">
+      <section
+        class="holiday-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="holiday-dialog-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="holiday-dialog__header">
+          <div>
+            <h2 id="holiday-dialog-title">Add Company Holiday</h2>
+            <p>Choose the day off date and enter its description.</p>
+          </div>
+          <button
+            type="button"
+            class="holiday-dialog__close"
+            aria-label="Close add holiday dialog"
+            [disabled]="holidaySaving()"
+            (click)="closeHolidayDialog()"
+          >×</button>
+        </header>
+        <form class="holiday-form" (ngSubmit)="submitPublicHoliday()">
+          <label for="holiday-date">Date</label>
+          <input
+            id="holiday-date"
+            name="holidayDate"
+            type="date"
+            required
+            [ngModel]="holidayDate()"
+            (ngModelChange)="holidayDate.set($event)"
+          />
+          <label for="holiday-description">Description</label>
+          <input
+            id="holiday-description"
+            name="holidayDescription"
+            type="text"
+            maxlength="200"
+            required
+            autocomplete="off"
+            placeholder="e.g. Pakistan Day"
+            [ngModel]="holidayDescription()"
+            (ngModelChange)="holidayDescription.set($event)"
+          />
+          @if (holidayCreateError()) {
+            <p class="holiday-form__error" role="alert">{{ holidayCreateError() }}</p>
+          }
+          <div class="holiday-form__actions">
+            <button type="button" class="holiday-form__cancel" [disabled]="holidaySaving()" (click)="closeHolidayDialog()">Cancel</button>
+            <button type="submit" class="holiday-form__submit" [disabled]="holidaySaving()">
+              {{ holidaySaving() ? 'Saving…' : 'Save Holiday' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
 
   <section class="dashboard-followup-grid" aria-label="Requests and milestones">
     <section class="followup-card requests-card" aria-labelledby="requests-title">
