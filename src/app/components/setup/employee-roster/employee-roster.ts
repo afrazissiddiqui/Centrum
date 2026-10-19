@@ -326,6 +326,47 @@ export function indexRosterShifts(
   return buildEmployeeRosterLoadIndex(records).shiftsByMonth;
 }
 
+export function indexRequestedLeaveDates(
+  applications: LeaveApplicationRecord[],
+  monthLabel: string,
+): Set<string> {
+  const monthKey = rosterMonthKey(monthLabel);
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = `${monthKey}-${String(rosterMonthDayCount(monthKey)).padStart(2, '0')}`;
+  const leaveDateKeys = new Set<string>();
+
+  for (const application of applications) {
+    if (/reject|deny|cancel|void|deleted/i.test(application.RequestStatus)) {
+      continue;
+    }
+    const employeeCode = normalizeEmployeeCodeForRoster(application.EmployeeId);
+    const fromDate = normalizeLeaveDate(application.FromDate) || normalizeLeaveDate(application.ToDate);
+    const toDate = normalizeLeaveDate(application.ToDate) || fromDate;
+    if (!employeeCode || !fromDate || !toDate || fromDate > toDate || toDate < monthStart || fromDate > monthEnd) {
+      continue;
+    }
+
+    const firstDate = fromDate > monthStart ? fromDate : monthStart;
+    const lastDate = toDate < monthEnd ? toDate : monthEnd;
+    const [firstYear, firstMonth, firstDay] = firstDate.split('-').map(Number);
+    const [lastYear, lastMonth, lastDay] = lastDate.split('-').map(Number);
+    const cursor = new Date(Date.UTC(firstYear, firstMonth - 1, firstDay));
+    const end = Date.UTC(lastYear, lastMonth - 1, lastDay);
+    while (cursor.getTime() <= end) {
+      const date = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}-${String(cursor.getUTCDate()).padStart(2, '0')}`;
+      leaveDateKeys.add(`${employeeCode}|${date}`);
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
+
+  return leaveDateKeys;
+}
+
+function normalizeLeaveDate(value: string): string {
+  const isoDate = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return isoDate?.[1] ?? '';
+}
+
 function buildEmployeeRosterLoadIndex(records: EmployeeRosterListRecord[]): EmployeeRosterLoadIndex {
   const recordsByEmployee = new Map<string, EmployeeRosterListRecord>();
   const assignedEmployeeCodes = new Set<string>();
@@ -744,6 +785,10 @@ export class EmployeeRosterComponent implements OnInit {
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly employees = signal<RosterEmployee[]>([]);
+  readonly leaveApplications = signal<LeaveApplicationRecord[]>([]);
+  readonly requestedLeaveDateKeys = computed(() =>
+    indexRequestedLeaveDates(this.leaveApplications(), this.monthLabel()),
+  );
   readonly unassignedEmployees = signal<ApplicationFormRecord[]>([]);
   readonly unassignedSearchText = signal('');
   readonly unassignedDepartmentFilter = signal('');
@@ -982,10 +1027,24 @@ export class EmployeeRosterComponent implements OnInit {
     forkJoin({
       roster: this.employeeService.fetchEmployeeRosterList(),
       profiles: this.employeeService.fetchEmployeeProfiles(),
+      leaveApplications: this.leaveApplicationService.fetchLeaveApplications().pipe(
+        catchError((error: unknown) => {
+          this.alertService.error(
+            'Leave Applications Load Failed',
+            formatApiErrorMessage(error, 'Leave dates could not be loaded for the roster.'),
+          );
+          return of([] as LeaveApplicationRecord[]);
+        }),
+      ),
     })
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
-        next: ({ roster, profiles }: { roster: EmployeeRosterListRecord[]; profiles: ApplicationFormRecord[] }) => {
+        next: ({ roster, profiles, leaveApplications }: {
+          roster: EmployeeRosterListRecord[];
+          profiles: ApplicationFormRecord[];
+          leaveApplications: LeaveApplicationRecord[];
+        }) => {
+          this.leaveApplications.set(leaveApplications);
           this.rosterRecords = roster;
           const rosterIndex = buildEmployeeRosterLoadIndex(roster);
           const profileIndex = buildEmployeeRosterProfileIndex(
@@ -1178,6 +1237,9 @@ export class EmployeeRosterComponent implements OnInit {
             }
             return next;
           });
+          if (successfulDates.length) {
+            this.refreshRosterLeaveApplications();
+          }
           return { results, successfulDates };
         }),
       )),
@@ -1485,7 +1547,7 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   isRosterDayAbsent(employee: RosterEmployee, dayDate: number, shift: ShiftCode): boolean {
-    if (!this.rosterAttendanceLoaded()) {
+    if (shift.trim().toUpperCase() === 'L' || !this.rosterAttendanceLoaded()) {
       return false;
     }
     const date = this.rosterDate(dayDate);
@@ -1571,6 +1633,18 @@ export class EmployeeRosterComponent implements OnInit {
 
   private localDateString(date: Date): string {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  private refreshRosterLeaveApplications(): void {
+    this.leaveApplicationService.fetchLeaveApplications().subscribe({
+      next: (applications) => this.leaveApplications.set(applications),
+      error: (error: unknown) => {
+        this.alertService.error(
+          'Leave Applications Refresh Failed',
+          formatApiErrorMessage(error, 'Leave dates could not be refreshed for the roster.'),
+        );
+      },
+    });
   }
 
   private syncEmployeeProfileFromPostedUnannouncedLeave(employee: RosterEmployee): void {
@@ -1867,6 +1941,15 @@ export class EmployeeRosterComponent implements OnInit {
       return employee.shifts[date - 1] ?? '+';
     }
     return employee.shifts[dayIndex % employee.shifts.length];
+  }
+
+  rosterDisplayShift(employee: RosterEmployee, dayIndex: number): ShiftCode {
+    const dayDate = this.visibleDays()[dayIndex]?.date;
+    if (dayDate === undefined) {
+      return this.shiftFor(employee, dayIndex);
+    }
+    const leaveKey = `${normalizeEmployeeCodeForRoster(employee.EmployeeCode)}|${this.rosterDate(dayDate)}`;
+    return this.requestedLeaveDateKeys().has(leaveKey) ? 'L' : this.shiftFor(employee, dayIndex);
   }
 
   shiftForFullMonth(employee: RosterEmployee, dayIndex: number): ShiftCode {

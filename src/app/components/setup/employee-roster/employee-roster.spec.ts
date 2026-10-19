@@ -12,6 +12,7 @@ import {
   rosterApplicationRecord,
   rosterDaysOffCount,
   indexRosterShifts,
+  indexRequestedLeaveDates,
   isRosterDateInFuture,
   isScheduledShiftAbsent,
   applyRosterUnannouncedLeaveCount,
@@ -29,6 +30,56 @@ import {
 import { WorkstationRecord } from '../../../services/workstation.service';
 import { AttendanceDailyRecord } from '../../../services/attendance-management.service';
 import { LeaveApplicationRecord } from '../../../services/leave-application.service';
+
+describe('indexRequestedLeaveDates', () => {
+  it('marks requested single-day and date-range leaves in the selected month', () => {
+    const applications = [
+      {
+        EmployeeId: 'Emp-00000042',
+        FromDate: '2026-10-03',
+        ToDate: '2026-10-05',
+        RequestStatus: 'Submitted',
+      },
+      {
+        EmployeeId: 'Emp-00000042',
+        FromDate: '2026-10-12T00:00:00',
+        ToDate: '',
+        RequestStatus: 'Pending',
+      },
+      {
+        EmployeeId: 'Emp-00000042',
+        FromDate: '2026-10-15',
+        ToDate: '2026-10-16',
+        RequestStatus: 'Rejected',
+      },
+    ] as LeaveApplicationRecord[];
+
+    const leaveDates = indexRequestedLeaveDates(applications, 'October 2026');
+
+    expect(leaveDates.has('emp-00000042|2026-10-03')).toBe(true);
+    expect(leaveDates.has('emp-00000042|2026-10-04')).toBe(true);
+    expect(leaveDates.has('emp-00000042|2026-10-05')).toBe(true);
+    expect(leaveDates.has('emp-00000042|2026-10-12')).toBe(true);
+    expect(leaveDates.has('emp-00000042|2026-10-15')).toBe(false);
+  });
+
+  it('clips leave ranges to the selected month and ignores other employees', () => {
+    const applications = [
+      {
+        EmployeeId: 'Emp-00000042',
+        FromDate: '2026-09-29',
+        ToDate: '2026-10-02',
+        RequestStatus: 'Approved',
+      },
+    ] as LeaveApplicationRecord[];
+
+    const leaveDates = indexRequestedLeaveDates(applications, 'October 2026');
+
+    expect(leaveDates.size).toBe(2);
+    expect(leaveDates.has('emp-00000042|2026-10-01')).toBe(true);
+    expect(leaveDates.has('emp-00000042|2026-10-02')).toBe(true);
+  });
+});
 
 describe('rosterBranchName', () => {
   it('normalizes branch codes and legacy head office labels', () => {
