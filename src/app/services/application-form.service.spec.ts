@@ -65,6 +65,17 @@ describe('ApplicationFormService', () => {
     expect(nestedFlags.detail.remuneration.overTimeApplicable).toBe('Yes');
   });
 
+  it('always fetches roster rows from the employee-roster-list API', () => {
+    service.fetchEmployeeRosterList().subscribe();
+
+    const httpMock = TestBed.inject(HttpTestingController);
+    const request = httpMock.expectOne((req) =>
+      req.method === 'GET' && req.url.endsWith('/api/employee-roster-list'),
+    );
+
+    request.flush([]);
+  });
+
   it('includes zero unannounced leaves in the employee profile payload by default', () => {
     const record = (service as any).mapApiItemToFullRecord({});
     const payload = service.buildFlatEmployeeProfilePayload(record.detail);
@@ -125,13 +136,14 @@ describe('ApplicationFormService', () => {
   });
 
   it('includes a null Cost Center in the employee profile update body', () => {
-    service.updateEmployeeProfile(7, { costCenter: null } as any).subscribe();
+    service.updateEmployeeProfile(7, { costCenter: null, flag: '1' } as any).subscribe();
 
     const httpMock = TestBed.inject(HttpTestingController);
     const request = httpMock.expectOne((req) => req.url.endsWith('/employee-profile-update/7'));
 
     expect(request.request.body.costCenter).toBeNull();
     expect(request.request.body.remuneration.costCenter).toBeNull();
+    expect(request.request.body.flag).toBe('1');
     request.flush({});
   });
 });

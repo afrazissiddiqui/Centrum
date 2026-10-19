@@ -479,6 +479,7 @@ export interface EmployeeProfileAddPayload {
   loginEmployeeName: string;
   password: string;
   status: number;
+  flag?: string | number;
 }
 
 const REMUNERATION_FIELD_KEYS: ReadonlyArray<[camel: string, snake: string]> = [

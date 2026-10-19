@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { catchError, concatMap, finalize, forkJoin, from, map, Observable, of, Subscription, switchMap, toArray } from 'rxjs';
-import { ApplicationFormDetail, ApplicationFormRecord, ApplicationFormService, canonicalizeEmployeeCodeValue, EmployeeRosterAddPayload, EmployeeRosterListRecord } from '../../../services/application-form.service';
+import { ApplicationFormDetail, ApplicationFormRecord, ApplicationFormService, canonicalizeEmployeeCodeValue, EmployeeProfileAddPayload, EmployeeRosterAddPayload, EmployeeRosterListRecord } from '../../../services/application-form.service';
 import { AlertService } from '../../../services/alert.service';
 import {
   AttendanceDailyRecord,
@@ -73,6 +73,23 @@ interface UnannouncedLeaveProfileSyncResult {
   profileError: unknown | null;
 }
 
+interface EmployeeRosterProfileFlagUpdateResult {
+  profileFlagUpdated: boolean;
+  profileFlagError: unknown | null;
+}
+
+interface EmployeeRosterLoadIndex {
+  recordsByEmployee: Map<string, EmployeeRosterListRecord>;
+  assignedEmployeeCodes: Set<string>;
+  shiftsByMonth: Map<string, Map<string, ShiftCode[]>>;
+}
+
+interface EmployeeRosterProfileIndex {
+  profilesByCode: Map<string, ApplicationFormRecord>;
+  shiftApplicableEmployeeCodes: Set<string>;
+  unassignedEmployees: ApplicationFormRecord[];
+}
+
 export function findUnassignedEmployees(
   employees: ApplicationFormRecord[],
   roster: EmployeeRosterListRecord[],
@@ -85,22 +102,77 @@ export function findUnassignedEmployees(
     }
   }
 
+  return findUnassignedEmployeesForCodes(employees, assignedEmployeeCodes);
+}
+
+function findUnassignedEmployeesForCodes(
+  employees: ApplicationFormRecord[],
+  assignedEmployeeCodes: Set<string>,
+): ApplicationFormRecord[] {
   const seenEmployeeCodes = new Set<string>();
-  return employees.filter((employee) => {
+  const unassignedEmployees: ApplicationFormRecord[] = [];
+  for (const employee of employees) {
     const employeeCode = normalizeEmployeeCodeForRoster(employee.EmployeeCode);
-    const rawApplicability = (employee as ApplicationFormRecord & { EmployeeShiftApplicable?: unknown }).EmployeeShiftApplicable;
-    const explicitlyApplicable = rawApplicability === true || ['true', 'yes', '1'].includes(String(rawApplicability ?? '').trim().toLowerCase())
-      ? true
-      : rawApplicability === false || ['false', 'no', '0'].includes(String(rawApplicability ?? '').trim().toLowerCase())
-        ? false
-        : undefined;
-    const applicable = explicitlyApplicable ?? employee.detail?.hrSettings.attendanceShiftManagement.trim().toLowerCase() === 'yes';
-    if (!applicable || !employeeCode || assignedEmployeeCodes.has(employeeCode) || seenEmployeeCodes.has(employeeCode)) {
-      return false;
+    if (
+      employeeShiftIsApplicable(employee) &&
+      employeeCode &&
+      !assignedEmployeeCodes.has(employeeCode) &&
+      !seenEmployeeCodes.has(employeeCode)
+    ) {
+      seenEmployeeCodes.add(employeeCode);
+      unassignedEmployees.push(employee);
     }
-    seenEmployeeCodes.add(employeeCode);
-    return true;
-  });
+  }
+  return unassignedEmployees;
+}
+
+function employeeShiftIsApplicable(employee: ApplicationFormRecord): boolean {
+  const rawApplicability = (employee as ApplicationFormRecord & { EmployeeShiftApplicable?: unknown }).EmployeeShiftApplicable;
+  const explicitlyApplicable = rawApplicability === true || ['true', 'yes', '1'].includes(String(rawApplicability ?? '').trim().toLowerCase())
+    ? true
+    : rawApplicability === false || ['false', 'no', '0'].includes(String(rawApplicability ?? '').trim().toLowerCase())
+      ? false
+      : undefined;
+  return explicitlyApplicable ?? employee.detail?.hrSettings.attendanceShiftManagement.trim().toLowerCase() === 'yes';
+}
+
+function buildEmployeeRosterProfileIndex(
+  profiles: ApplicationFormRecord[],
+  assignedEmployeeCodes: Set<string>,
+): EmployeeRosterProfileIndex {
+  const profilesByCode = new Map<string, ApplicationFormRecord>();
+  const shiftApplicableEmployeeCodes = new Set<string>();
+  const seenUnassignedCodes = new Set<string>();
+  const unassignedEmployees: ApplicationFormRecord[] = [];
+  for (const profile of profiles) {
+    const employeeCode = normalizeEmployeeCodeForRoster(profile.EmployeeCode);
+    const shiftApplicable = employeeShiftIsApplicable(profile);
+    profilesByCode.set(employeeCode, profile);
+    if (shiftApplicable && employeeCode) {
+      shiftApplicableEmployeeCodes.add(employeeCode);
+    } else {
+      shiftApplicableEmployeeCodes.delete(employeeCode);
+    }
+    if (
+      shiftApplicable &&
+      employeeCode &&
+      !assignedEmployeeCodes.has(employeeCode) &&
+      !seenUnassignedCodes.has(employeeCode)
+    ) {
+      seenUnassignedCodes.add(employeeCode);
+      unassignedEmployees.push(profile);
+    }
+  }
+  return { profilesByCode, shiftApplicableEmployeeCodes, unassignedEmployees };
+}
+
+export function filterShiftApplicableRosterRecords(
+  recordsByEmployee: Map<string, EmployeeRosterListRecord>,
+  shiftApplicableEmployeeCodes: Set<string>,
+): Array<[string, EmployeeRosterListRecord]> {
+  return Array.from(recordsByEmployee).filter(([employeeCode]) =>
+    shiftApplicableEmployeeCodes.has(employeeCode),
+  );
 }
 
 function normalizeEmployeeCodeForRoster(value: string | null | undefined): string {
@@ -251,8 +323,21 @@ export function rosterDayIndexForMonth(shiftDate: string, monthLabel: string): n
 export function indexRosterShifts(
   records: EmployeeRosterListRecord[],
 ): Map<string, Map<string, ShiftCode[]>> {
+  return buildEmployeeRosterLoadIndex(records).shiftsByMonth;
+}
+
+function buildEmployeeRosterLoadIndex(records: EmployeeRosterListRecord[]): EmployeeRosterLoadIndex {
+  const recordsByEmployee = new Map<string, EmployeeRosterListRecord>();
+  const assignedEmployeeCodes = new Set<string>();
   const recordsByMonth = new Map<string, Map<string, Map<number, EmployeeRosterListRecord>>>();
   for (const record of records) {
+    const employeeCode = normalizeEmployeeCodeForRoster(record.employee_id);
+    if (employeeCode) {
+      assignedEmployeeCodes.add(employeeCode);
+      if (!recordsByEmployee.has(employeeCode)) {
+        recordsByEmployee.set(employeeCode, record);
+      }
+    }
     if (!isAssignedRosterShift(record.shift)) {
       continue;
     }
@@ -261,7 +346,6 @@ export function indexRosterShifts(
       continue;
     }
     const monthKey = `${date.year}-${String(date.monthIndex + 1).padStart(2, '0')}`;
-    const employeeCode = normalizeEmployeeCodeForRoster(record.employee_id);
     let employeesByDay = recordsByMonth.get(monthKey);
     if (!employeesByDay) {
       employeesByDay = new Map();
@@ -292,7 +376,7 @@ export function indexRosterShifts(
     shiftIndex.set(monthKey, monthShifts);
   }
 
-  return shiftIndex;
+  return { recordsByEmployee, assignedEmployeeCodes, shiftsByMonth: shiftIndex };
 }
 
 export function rosterShiftsForEmployeeMonth(
@@ -903,13 +987,22 @@ export class EmployeeRosterComponent implements OnInit {
       .subscribe({
         next: ({ roster, profiles }: { roster: EmployeeRosterListRecord[]; profiles: ApplicationFormRecord[] }) => {
           this.rosterRecords = roster;
-          this.rosterShiftIndex = indexRosterShifts(roster);
-          const rosterEmployees = this.toRosterEmployees(roster, profiles);
+          const rosterIndex = buildEmployeeRosterLoadIndex(roster);
+          const profileIndex = buildEmployeeRosterProfileIndex(
+            profiles,
+            rosterIndex.assignedEmployeeCodes,
+          );
+          this.rosterShiftIndex = rosterIndex.shiftsByMonth;
+          const rosterEmployees = this.toRosterEmployees(
+            rosterIndex.recordsByEmployee,
+            profileIndex.profilesByCode,
+            profileIndex.shiftApplicableEmployeeCodes,
+          );
           this.employees.set(rosterEmployees);
           this.originalRosterShifts = new Map(
             rosterEmployees.map((employee) => [employee.EmployeeCode, [...employee.shifts]]),
           );
-          this.unassignedEmployees.set(findUnassignedEmployees(profiles, roster));
+          this.unassignedEmployees.set(profileIndex.unassignedEmployees);
           this.loadRosterAttendance();
         },
         error: (error) => {
@@ -1187,6 +1280,13 @@ export class EmployeeRosterComponent implements OnInit {
       return;
     }
 
+    const profileId = employee.apiId?.trim();
+    const profileDetail = employee.detail;
+    if (!profileId || !profileDetail) {
+      this.alertService.validation('Employee profile details are unavailable. Reload the employee list and try again.');
+      return;
+    }
+
     const assignedDays = days.filter(({ index }) =>
       this.isAssignedShift(this.shiftForFullMonth(employee, index)),
     );
@@ -1216,13 +1316,29 @@ export class EmployeeRosterComponent implements OnInit {
         note: null,
       })),
     };
+    const profilePayload: EmployeeProfileAddPayload = {
+      ...this.employeeService.buildFlatEmployeeProfilePayload(profileDetail),
+      flag: '1',
+    };
 
     this.saving.set(true);
     this.employeeService
       .addEmployeeRoster(payload)
+      .pipe(
+        concatMap(() => this.employeeService.updateEmployeeProfile(profileId, profilePayload).pipe(
+          map((): EmployeeRosterProfileFlagUpdateResult => ({
+            profileFlagUpdated: true,
+            profileFlagError: null,
+          })),
+          catchError((profileFlagError: unknown) => of({
+            profileFlagUpdated: false,
+            profileFlagError,
+          })),
+        )),
+      )
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
-        next: () => {
+        next: (result) => {
           this.employees.update((employees) => [
             ...employees.filter((item) => item.EmployeeCode !== employee.EmployeeCode),
             employee,
@@ -1233,7 +1349,17 @@ export class EmployeeRosterComponent implements OnInit {
             employees.filter((item) => item.EmployeeCode !== employee.EmployeeCode),
           );
           this.closeUnassignedCalendar();
-          this.alertService.success('Roster Submitted', `${employee.EmployeeName} was added for ${this.monthLabel()}.`);
+          if (result.profileFlagUpdated) {
+            this.alertService.success('Roster Submitted', `${employee.EmployeeName} was added for ${this.monthLabel()}.`);
+          } else {
+            this.alertService.error(
+              'Roster Submitted, Profile Update Failed',
+              formatApiErrorMessage(
+                result.profileFlagError,
+                'The roster was submitted, but the employee profile flag could not be updated.',
+              ),
+            );
+          }
         },
         error: (error: unknown) => {
           this.alertService.error('Roster Submit Failed', formatApiErrorMessage(error, 'Could not submit employee roster.'));
@@ -2248,41 +2374,32 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   private toRosterEmployees(
-    records: EmployeeRosterListRecord[],
-    profiles: ApplicationFormRecord[],
+    recordsByEmployee: Map<string, EmployeeRosterListRecord>,
+    profilesByCode: Map<string, ApplicationFormRecord>,
+    shiftApplicableEmployeeCodes: Set<string>,
   ): RosterEmployee[] {
-    const grouped = new Map<string, EmployeeRosterListRecord>();
-    const profilesByCode = new Map(
-      profiles.map((profile) => [this.normalizeRosterEmployeeCode(profile.EmployeeCode), profile]),
+    const monthKey = rosterMonthKey(this.monthLabel());
+    const monthShifts = this.rosterShiftIndex.get(monthKey);
+    const emptyMonthShifts = Array.from(
+      { length: rosterMonthDayCount(monthKey) },
+      () => '+',
     );
 
-    for (const record of records) {
-      const employeeCode = this.normalizeRosterEmployeeCode(record.employee_id);
-      if (!employeeCode) {
-        continue;
-      }
-
-      const existing = grouped.get(employeeCode);
-      if (!existing) {
-        grouped.set(employeeCode, record);
-      }
-    }
-
-    return Array.from(grouped.values()).map((record, index) => {
-      const employeeCode = this.normalizeRosterEmployeeCode(record.employee_id);
-      const profile = profilesByCode.get(employeeCode);
-      const rosterEmployee = this.toRosterEmployee(rosterApplicationRecord(record, profile), index);
-      return {
-        ...rosterEmployee,
-        hub: rosterBranchName(
-          profile?.detail?.personalInfo.branchLocation ||
-          profile?.detail?.requisition.location ||
-          record.hub,
-        ),
-        role: record.role || record.designation || rosterEmployee.role,
-        shifts: this.rosterShiftsForMonth(employeeCode),
-      };
-    });
+    return filterShiftApplicableRosterRecords(recordsByEmployee, shiftApplicableEmployeeCodes)
+      .map(([employeeCode, record], index) => {
+        const profile = profilesByCode.get(employeeCode);
+        const rosterEmployee = this.toRosterEmployee(rosterApplicationRecord(record, profile), index);
+        return {
+          ...rosterEmployee,
+          hub: rosterBranchName(
+            profile?.detail?.personalInfo.branchLocation ||
+            profile?.detail?.requisition.location ||
+            record.hub,
+          ),
+          role: record.role || record.designation || rosterEmployee.role,
+          shifts: [...(monthShifts?.get(employeeCode) ?? emptyMonthShifts)],
+        };
+      });
   }
 
   private normalizeRosterEmployeeCode(value: string | null | undefined): string {

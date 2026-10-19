@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ApplicationFormDetail, ApplicationFormRecord, EmployeeRosterListRecord } from '../../../services/application-form.service';
 import {
   filterUnassignedEmployees,
+  filterShiftApplicableRosterRecords,
   findUnassignedEmployees,
   matchesRosterBranch,
   matchesRosterEmployeeSearch,
@@ -243,6 +244,22 @@ describe('rosterShiftInitial', () => {
 });
 
 describe('findUnassignedEmployees', () => {
+  it('includes only employees with shift applicability enabled', () => {
+    const employees = [
+      {
+        EmployeeCode: 'Emp-00000041',
+        detail: { hrSettings: { attendanceShiftManagement: 'Yes' } },
+      },
+      {
+        EmployeeCode: 'Emp-00000042',
+        detail: { hrSettings: { attendanceShiftManagement: 'No' } },
+      },
+    ] as ApplicationFormRecord[];
+
+    expect(findUnassignedEmployees(employees, []).map((employee) => employee.EmployeeCode))
+      .toEqual(['Emp-00000041']);
+  });
+
   it('does not mark an employee unassigned when a roster record has no shift value', () => {
     const employee = {
       EmployeeCode: 'Emp-00000042',
@@ -267,6 +284,28 @@ describe('findUnassignedEmployees', () => {
     } as EmployeeRosterListRecord;
 
     expect(findUnassignedEmployees([employee], [rosterEntry])).toEqual([]);
+  });
+});
+
+describe('filterShiftApplicableRosterRecords', () => {
+  it('keeps roster employees whose profile has shift applicability enabled', () => {
+    const applicableRecord = {
+      employee_id: 'Emp-00000041',
+      employee_name: 'Ali Khan',
+    } as EmployeeRosterListRecord;
+    const inapplicableRecord = {
+      employee_id: 'Emp-00000042',
+      employee_name: 'Sara Ahmed',
+    } as EmployeeRosterListRecord;
+    const recordsByEmployee = new Map([
+      ['emp-00000041', applicableRecord],
+      ['emp-00000042', inapplicableRecord],
+    ]);
+
+    expect(filterShiftApplicableRosterRecords(
+      recordsByEmployee,
+      new Set(['emp-00000041']),
+    )).toEqual([['emp-00000041', applicableRecord]]);
   });
 });
 
