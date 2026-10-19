@@ -2,14 +2,14 @@
   class="sir-warehouse-search"
   [class.sir-warehouse-search--compact]="compact"
 >
-  @if (loading && options.length === 0) {
+  @if (loading() && options().length === 0) {
     <select class="sir-warehouse-search__select" [class.sir-table-input]="compact" disabled>
       <option>Loading warehouses…</option>
     </select>
-  } @else if (loadError && options.length === 0) {
+  } @else if (loadError() && options().length === 0) {
     <div class="sir-warehouse-search__error">
       <select class="sir-warehouse-search__select" [class.sir-table-input]="compact" disabled>
-        <option>{{ loadError }}</option>
+        <option>{{ loadError() }}</option>
       </select>
       <button type="button" class="sir-warehouse-search__retry-btn" (click)="retryLoad($event)">
         Retry
@@ -19,11 +19,11 @@
     <select
       class="sir-warehouse-search__select"
       [class.sir-table-input]="compact"
-      [ngModel]="selectedCode"
+      [ngModel]="selectedCode()"
       (ngModelChange)="onSelect($event)"
     >
       <option value="">{{ placeholder }}</option>
-      @for (warehouse of options; track warehouse.warehouseCode) {
+      @for (warehouse of options(); track warehouse.warehouseCode) {
         <option [value]="warehouse.warehouseCode">
           {{ optionLabel(warehouse) }}
         </option>

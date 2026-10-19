@@ -9,6 +9,7 @@ import {
   Output,
   SimpleChanges,
   inject,
+  signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
@@ -32,24 +33,24 @@ export class WarehouseSearchSelectComponent implements OnInit, OnChanges, OnDest
   @Input() placeholder = 'Select warehouse';
   @Output() warehouseCodeChange = new EventEmitter<string>();
 
-  options: WarehouseOption[] = [];
-  selectedCode = '';
-  loading = false;
-  loadError: string | null = null;
+  readonly options = signal<WarehouseOption[]>([]);
+  readonly selectedCode = signal('');
+  readonly loading = signal(false);
+  readonly loadError = signal<string | null>(null);
   private allOptions: WarehouseOption[] = [];
 
   ngOnInit(): void {
-    this.selectedCode = (this.warehouseCode ?? '').trim();
+    this.selectedCode.set((this.warehouseCode ?? '').trim());
     this.loadOptions();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['warehouseCode']) {
-      this.selectedCode = (this.warehouseCode ?? '').trim();
+      this.selectedCode.set((this.warehouseCode ?? '').trim());
     }
 
     if (changes['branchCode'] && this.allOptions.length > 0) {
-      this.options = this.filterOptionsForBranch(this.allOptions);
+      this.options.set(this.filterOptionsForBranch(this.allOptions));
     }
   }
 
@@ -58,14 +59,14 @@ export class WarehouseSearchSelectComponent implements OnInit, OnChanges, OnDest
   }
 
   onSelect(code: string): void {
-    this.selectedCode = code;
+    this.selectedCode.set(code);
     this.warehouseCodeChange.emit(code);
   }
 
   retryLoad(event: Event): void {
     event.preventDefault();
     event.stopPropagation();
-    this.loadError = null;
+    this.loadError.set(null);
     this.loadOptions(true);
   }
 
@@ -74,7 +75,7 @@ export class WarehouseSearchSelectComponent implements OnInit, OnChanges, OnDest
   }
 
   private loadOptions(forceReload = false): void {
-    this.loading = true;
+    this.loading.set(true);
     this.loadSub?.unsubscribe();
     const request = forceReload
       ? this.warehouseService.reload()
@@ -82,24 +83,24 @@ export class WarehouseSearchSelectComponent implements OnInit, OnChanges, OnDest
 
     this.loadSub = request.subscribe({
       next: (rows) => {
-        this.loading = false;
+        this.loading.set(false);
         this.allOptions = [...rows];
-        this.options = this.filterOptionsForBranch(this.allOptions);
-        this.loadError = rows.length === 0 ? 'No warehouses returned from API.' : null;
+        this.options.set(this.filterOptionsForBranch(this.allOptions));
+        this.loadError.set(rows.length === 0 ? 'No warehouses returned from API.' : null);
 
         // Keep a pre-filled PO warehouse visible even if catalog is still catching up.
-        const code = this.selectedCode.trim();
-        if (code && !this.options.some((row) => row.warehouseCode === code)) {
-          this.options = [
+        const code = this.selectedCode().trim();
+        if (code && !this.options().some((row) => row.warehouseCode === code)) {
+          this.options.set([
             { warehouseCode: code, warehouseName: code },
-            ...this.options,
-          ];
+            ...this.options(),
+          ]);
         }
       },
       error: () => {
-        this.loading = false;
-        this.options = [];
-        this.loadError = 'Could not load warehouses from API.';
+        this.loading.set(false);
+        this.options.set([]);
+        this.loadError.set('Could not load warehouses from API.');
       },
     });
   }

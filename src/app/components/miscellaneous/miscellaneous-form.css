@@ -315,6 +315,21 @@
   width: 100%;
   min-width: 0;
   flex: 1 1 auto;
+  box-sizing: border-box;
+  color: var(--sir-text);
+  background: var(--sir-surface);
+  border: 1px solid var(--sir-border-strong);
+  border-radius: 2px;
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 13px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.sir-warehouse-search__select:focus {
+  outline: none;
+  border-color: var(--sir-primary);
+  box-shadow: 0 0 0 2px rgba(10, 110, 209, 0.12);
 }
 
 .sir-warehouse-search--compact .sir-warehouse-search__select {
