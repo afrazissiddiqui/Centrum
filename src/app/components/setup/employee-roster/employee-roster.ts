@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { catchError, concatMap, finalize, forkJoin, from, map, Observable, of, Subscription, switchMap, toArray } from 'rxjs';
+import { catchError, concatMap, finalize, forkJoin, map, Observable, of, Subscription, switchMap } from 'rxjs';
 import { ApplicationFormDetail, ApplicationFormRecord, ApplicationFormService, canonicalizeEmployeeCodeValue, EmployeeProfileAddPayload, EmployeeRosterAddPayload, EmployeeRosterListRecord } from '../../../services/application-form.service';
 import { AlertService } from '../../../services/alert.service';
 import {
@@ -69,7 +69,6 @@ interface UnannouncedLeaveProfileUpdateResult {
 
 interface UnannouncedLeaveProfileSyncResult {
   updatedEmployee: RosterEmployee | null;
-  postResult: UnannouncedLeavePostResult;
   profileError: unknown | null;
 }
 
@@ -362,6 +361,24 @@ export function indexRequestedLeaveDates(
   return leaveDateKeys;
 }
 
+export function rosterPaidLeaveDays(
+  leaveDateKeys: ReadonlySet<string>,
+  employeeCode: string,
+): number {
+  return rosterPaidLeaveDates(leaveDateKeys, employeeCode).length;
+}
+
+export function rosterPaidLeaveDates(
+  leaveDateKeys: ReadonlySet<string>,
+  employeeCode: string,
+): string[] {
+  const keyPrefix = `${normalizeEmployeeCodeForRoster(employeeCode)}|`;
+  return Array.from(leaveDateKeys)
+    .filter((key) => key.startsWith(keyPrefix))
+    .map((key) => key.slice(keyPrefix.length))
+    .sort();
+}
+
 function normalizeLeaveDate(value: string): string {
   const isoDate = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
   return isoDate?.[1] ?? '';
@@ -533,19 +550,8 @@ export function rosterUnannouncedLeaveDates(
   ));
 }
 
-export function rosterConsecutiveDateRanges(dates: string[]): string[][] {
-  const sortedDates = [...new Set(dates)].sort();
-  const ranges: string[][] = [];
-  for (const date of sortedDates) {
-    const currentRange = ranges[ranges.length - 1];
-    const previousDate = currentRange?.[currentRange.length - 1];
-    if (!previousDate || rosterDateDistance(previousDate, date) !== 1) {
-      ranges.push([date]);
-    } else {
-      currentRange.push(date);
-    }
-  }
-  return ranges;
+export function rosterUnannouncedLeaveDateRange(dates: string[]): string[] {
+  return [...new Set(dates)].sort();
 }
 
 export function rosterUnannouncedLeaveBalance(
@@ -709,16 +715,6 @@ function parseLeaveBalanceValue(value: string | number | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function rosterDateDistance(fromDate: string, toDate: string): number {
-  const parseDate = (value: string): number => {
-    const parts = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    return parts
-      ? Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]))
-      : Number.NaN;
-  };
-  return (parseDate(toDate) - parseDate(fromDate)) / 86_400_000;
-}
-
 export function rosterShiftOptions(workstations: WorkstationRecord[]) {
   const options = workstations
     .map((workstation) => {
@@ -807,6 +803,15 @@ export class EmployeeRosterComponent implements OnInit {
   readonly requestedLeaveDateKeys = computed(() =>
     indexRequestedLeaveDates(this.leaveApplications(), this.monthLabel()),
   );
+  readonly employeePaidLeaveDays = computed(() => {
+    const leaveDateKeys = this.requestedLeaveDateKeys();
+    return new Map(
+      this.employees().map((employee) => [
+        employee.EmployeeCode,
+        rosterPaidLeaveDays(leaveDateKeys, employee.EmployeeCode),
+      ]),
+    );
+  });
   readonly unassignedEmployees = signal<ApplicationFormRecord[]>([]);
   readonly unassignedSearchText = signal('');
   readonly unassignedDepartmentFilter = signal('');
@@ -830,7 +835,9 @@ export class EmployeeRosterComponent implements OnInit {
   readonly selectedCell = signal<{ employeeCode: string; day: number } | null>(null);
   readonly shiftDetailDialog = signal<ShiftDetailDialog | null>(null);
   readonly employeeSummaryDialog = signal<RosterEmployee | null>(null);
+  readonly paidLeaveDatesDialog = signal<{ employee: RosterEmployee; dates: string[] } | null>(null);
   readonly syncingUnannouncedLeaveProfile = signal(false);
+  readonly confirmingUnannouncedLeave = signal(false);
   readonly postingUnannouncedLeave = signal(false);
   readonly postedUnannouncedLeaveDateKeys = signal(new Set<string>());
   readonly employeeUnannouncedLeaveDates = computed(() => {
@@ -1225,6 +1232,17 @@ export class EmployeeRosterComponent implements OnInit {
     this.employeeSummaryDialog.set(null);
   }
 
+  openPaidLeaveDates(employee: RosterEmployee): void {
+    this.paidLeaveDatesDialog.set({
+      employee,
+      dates: rosterPaidLeaveDates(this.requestedLeaveDateKeys(), employee.EmployeeCode),
+    });
+  }
+
+  closePaidLeaveDates(): void {
+    this.paidLeaveDatesDialog.set(null);
+  }
+
   updateShiftsFromEmployeeSummary(): void {
     const employee = this.employeeSummaryDialog();
     if (!employee) {
@@ -1234,9 +1252,9 @@ export class EmployeeRosterComponent implements OnInit {
     this.openEmployeeCalendar(employee);
   }
 
-  postEmployeeUnannouncedLeave(): void {
+  async postEmployeeUnannouncedLeave(): Promise<void> {
     const employee = this.employeeSummaryDialog();
-    if (!employee) {
+    if (!employee || this.confirmingUnannouncedLeave() || this.postingUnannouncedLeave()) {
       return;
     }
     if (this.syncingUnannouncedLeaveProfile()) {
@@ -1257,6 +1275,23 @@ export class EmployeeRosterComponent implements OnInit {
     }
     if (!employee.apiId?.trim() || !employee.detail) {
       this.alertService.error('Employee Profile Missing', 'Could not update the employee leave balance because profile details are unavailable.');
+      return;
+    }
+
+    const firstDate = dates[0];
+    const lastDate = dates[dates.length - 1];
+    this.confirmingUnannouncedLeave.set(true);
+    let confirmed: boolean;
+    try {
+      confirmed = await this.alertService.confirmWarning(
+        'Post Unannounced Leave?',
+        `Create one Unannounced Leave request for ${employee.EmployeeName} covering ${firstDate} to ${lastDate}, with ${dates.length} detected leave day(s)?`,
+        'Post Leave Request',
+      );
+    } finally {
+      this.confirmingUnannouncedLeave.set(false);
+    }
+    if (!confirmed) {
       return;
     }
 
@@ -1335,45 +1370,31 @@ export class EmployeeRosterComponent implements OnInit {
     employee: RosterEmployee,
     dates: string[],
   ): Observable<UnannouncedLeavePostResult> {
-    const dateRanges = rosterConsecutiveDateRanges(dates);
+    const dateRange = rosterUnannouncedLeaveDateRange(dates);
     const suffix = Number(String(Date.now()).slice(-4));
-    let successfulDays = 0;
     return this.ensureUnannouncedLeaveType().pipe(
-      switchMap((leaveType) => from(dateRanges).pipe(
-        concatMap((dateRange, rangeIndex) => {
-          const payload = this.buildUnannouncedLeavePayload(
-            employee,
-            leaveType,
-            dateRange,
-            suffix + rangeIndex,
-            successfulDays,
-          );
-          return this.leaveApplicationService.addLeaveApplication(payload).pipe(
-            map(() => {
-              successfulDays += dateRange.length;
-              return { dateRange, error: null };
-            }),
-            catchError((error: unknown) => of({ dateRange, error })),
-          );
-        }),
-        toArray(),
-        map((results) => {
-          const successfulDates = results
-            .filter((result) => result.error === null)
-            .flatMap((result) => result.dateRange);
-          this.postedUnannouncedLeaveDateKeys.update((current) => {
-            const next = new Set(current);
-            for (const date of successfulDates) {
-              next.add(`${employee.EmployeeCode.toLowerCase()}|${date}`);
+      switchMap((leaveType) => {
+        const payload = this.buildUnannouncedLeavePayload(employee, leaveType, dateRange, suffix, 0);
+        return this.leaveApplicationService.addLeaveApplication(payload).pipe(
+          map(() => ({ dateRange, error: null })),
+          catchError((error: unknown) => of({ dateRange, error })),
+          map((result) => {
+            const results = [result];
+            const successfulDates = result.error === null ? dateRange : [];
+            this.postedUnannouncedLeaveDateKeys.update((current) => {
+              const next = new Set(current);
+              for (const date of successfulDates) {
+                next.add(`${employee.EmployeeCode.toLowerCase()}|${date}`);
+              }
+              return next;
+            });
+            if (successfulDates.length) {
+              this.refreshRosterLeaveApplications();
             }
-            return next;
-          });
-          if (successfulDates.length) {
-            this.refreshRosterLeaveApplications();
-          }
-          return { results, successfulDates };
-        }),
-      )),
+            return { results, successfulDates };
+          }),
+        );
+      }),
     );
   }
 
@@ -1756,7 +1777,7 @@ export class EmployeeRosterComponent implements OnInit {
         toDate: lastDate,
         totalLeaveDaysRequested: dateRange.length,
         requestStatus: 'Submitted',
-        remarks: 'Automatically generated from unannounced absence recorded in Employee Roster.',
+        remarks: 'Generated from unannounced absence confirmed in Employee Roster.',
       },
       leaveBalanceInformation: balance,
     };
@@ -1785,13 +1806,8 @@ export class EmployeeRosterComponent implements OnInit {
     const requestId = ++this.unannouncedLeaveSyncRequestId;
     this.syncingUnannouncedLeaveProfile.set(true);
     const today = new Date();
-    const todayDate = this.localDateString(today);
-    const yearStart = `${today.getFullYear()}-01-01`;
-    forkJoin({
-      applications: this.leaveApplicationService.fetchLeaveApplications(),
-      attendance: this.attendanceService.fetchEmployeeRosterAttendance(employee, yearStart, todayDate),
-    }).pipe(
-      map(({ applications, attendance }) => {
+    this.leaveApplicationService.fetchLeaveApplications().pipe(
+      map((applications) => {
         const employeeCode = normalizeEmployeeCodeForRoster(employee.EmployeeCode);
         const employeeApplications = applications
           .filter((application) =>
@@ -1802,7 +1818,6 @@ export class EmployeeRosterComponent implements OnInit {
         const selectedMonthDates = this.fullMonthDays().map((day) => this.rosterDate(day.date));
         const selectedMonthDateSet = new Set(selectedMonthDates);
         const postedDateSet = new Set<string>();
-        const postedYearDateSet = new Set<string>();
         for (const application of employeeApplications) {
           const fromDate = this.rosterDateValue(application.FromDate);
           const toDate = this.rosterDateValue(application.ToDate);
@@ -1812,15 +1827,6 @@ export class EmployeeRosterComponent implements OnInit {
                 postedDateSet.add(date);
               }
             }
-            const firstCoveredDate = fromDate > yearStart ? fromDate : yearStart;
-            const lastCoveredDate = toDate < todayDate ? toDate : todayDate;
-            const dateCursor = new Date(`${firstCoveredDate}T00:00:00`);
-            const rangeEnd = new Date(`${lastCoveredDate}T00:00:00`);
-            while (dateCursor <= rangeEnd) {
-              const date = this.localDateString(dateCursor);
-              postedYearDateSet.add(date);
-              dateCursor.setDate(dateCursor.getDate() + 1);
-            }
           }
         }
         const applicationDays = rosterUnannouncedLeaveDaysForYear(
@@ -1829,16 +1835,6 @@ export class EmployeeRosterComponent implements OnInit {
           today.getFullYear(),
           today,
         );
-        const historicalAbsenceDates = rosterUnannouncedAbsenceDatesForYear(
-          employee.EmployeeCode,
-          this.rosterShiftIndex,
-          attendance,
-          this.workstationService.workstations(),
-          today,
-        );
-        const unpostedHistoricalAbsences = historicalAbsenceDates.filter(
-          (date) => !postedYearDateSet.has(date),
-        ).length;
         this.postedUnannouncedLeaveDateKeys.update((current) => {
           const next = new Set(current);
           for (const date of postedDateSet) {
@@ -1848,47 +1844,27 @@ export class EmployeeRosterComponent implements OnInit {
           }
           return next;
         });
-        return {
-          recordedDays: applicationDays + unpostedHistoricalAbsences,
-          unpostedHistoricalAbsenceDates: historicalAbsenceDates.filter(
-            (date) => !postedYearDateSet.has(date),
-          ),
-        };
+        return applicationDays;
       }),
-      switchMap(({ recordedDays, unpostedHistoricalAbsenceDates }) => {
-        if (
-          unpostedHistoricalAbsenceDates.length &&
-          (!employee.detail || !employee.apiId?.trim())
-        ) {
-          throw new Error('Employee profile details are required to post detected Unannounced Leave.');
-        }
-        const postRequest = unpostedHistoricalAbsenceDates.length
-          ? this.submitUnannouncedLeaveDates(employee, unpostedHistoricalAbsenceDates)
-          : of({ results: [], successfulDates: [] });
-        return postRequest.pipe(
-          switchMap((postResult) =>
-            this.reconcileEmployeeUnannouncedLeaveProfile(employee, recordedDays).pipe(
-              map((updatedEmployee) => ({
-                updatedEmployee,
-                postResult,
-                profileError: null,
-              })),
-              catchError((profileError: unknown) => of({
-                updatedEmployee: null,
-                postResult,
-                profileError,
-              })),
-            ),
-          ),
-        );
-      }),
+      switchMap((recordedDays) =>
+        this.reconcileEmployeeUnannouncedLeaveProfile(employee, recordedDays).pipe(
+          map((updatedEmployee) => ({
+            updatedEmployee,
+            profileError: null,
+          })),
+          catchError((profileError: unknown) => of({
+            updatedEmployee: null,
+            profileError,
+          })),
+        ),
+      ),
       finalize(() => {
         if (requestId === this.unannouncedLeaveSyncRequestId) {
           this.syncingUnannouncedLeaveProfile.set(false);
         }
       }),
     ).subscribe({
-      next: ({ updatedEmployee, postResult, profileError }: UnannouncedLeaveProfileSyncResult) => {
+      next: ({ updatedEmployee, profileError }: UnannouncedLeaveProfileSyncResult) => {
         if (updatedEmployee) {
           this.employeeService.upsertApplicationRecord(updatedEmployee);
           this.employees.update((employees) =>
@@ -1899,24 +1875,6 @@ export class EmployeeRosterComponent implements OnInit {
           if (this.employeeSummaryDialog()?.EmployeeCode === updatedEmployee.EmployeeCode) {
             this.employeeSummaryDialog.set(updatedEmployee);
           }
-        }
-
-        const failedRanges = postResult.results.filter((result) => result.error !== null);
-        if (failedRanges.length) {
-          const failedRangeLabels = failedRanges
-            .map(({ dateRange, error }) =>
-              `${dateRange[0]} to ${dateRange[dateRange.length - 1]}: ${formatApiErrorMessage(error, 'The request was rejected.')}`,
-            )
-            .join(', ');
-          this.alertService.error(
-            'Some Unannounced Leave Dates Were Not Posted',
-            `${postResult.successfulDates.length} day(s) were posted. Failed date range(s): ${failedRangeLabels}.`,
-          );
-        } else if (postResult.successfulDates.length) {
-          this.alertService.success(
-            'Unannounced Leave Posted',
-            `${postResult.successfulDates.length} detected day(s) were automatically posted for ${employee.EmployeeName}.`,
-          );
         }
 
         if (profileError) {

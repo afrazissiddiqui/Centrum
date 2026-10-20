@@ -5,6 +5,8 @@ import {
   filterUnassignedEmployees,
   filterShiftApplicableRosterRecords,
   findUnassignedEmployees,
+  rosterPaidLeaveDates,
+  rosterPaidLeaveDays,
   matchesRosterBranch,
   matchesRosterEmployeeSearch,
   rosterDayIndexForMonth,
@@ -16,7 +18,7 @@ import {
   isRosterDateInFuture,
   isScheduledShiftAbsent,
   applyRosterUnannouncedLeaveCount,
-  rosterConsecutiveDateRanges,
+  rosterUnannouncedLeaveDateRange,
   reconcileRosterUnannouncedLeaveCount,
   rosterUnannouncedAbsenceDatesForYear,
   rosterUnannouncedLeaveDaysForYear,
@@ -62,6 +64,14 @@ describe('indexRequestedLeaveDates', () => {
     expect(leaveDates.has('emp-00000042|2026-10-05')).toBe(true);
     expect(leaveDates.has('emp-00000042|2026-10-12')).toBe(true);
     expect(leaveDates.has('emp-00000042|2026-10-15')).toBe(false);
+    expect(rosterPaidLeaveDays(leaveDates, 'Emp-00000042')).toBe(4);
+    expect(rosterPaidLeaveDates(leaveDates, 'Emp-00000042')).toEqual([
+      '2026-10-03',
+      '2026-10-04',
+      '2026-10-05',
+      '2026-10-12',
+    ]);
+    expect(rosterPaidLeaveDays(leaveDates, 'Emp-00000043')).toBe(0);
   });
 
   it('clips leave ranges to the selected month and ignores other employees', () => {
@@ -476,16 +486,16 @@ describe('rosterUnannouncedLeaveDates', () => {
 });
 
 describe('unannounced leave posting helpers', () => {
-  it('groups only consecutive dates into leave applications', () => {
-    expect(rosterConsecutiveDateRanges([
-      '2026-10-08',
-      '2026-10-06',
-      '2026-10-07',
-      '2026-10-12',
-      '2026-10-12',
+  it('collects all detected dates in one sorted leave application range', () => {
+    expect(rosterUnannouncedLeaveDateRange([
+      '2026-10-11',
+      '2026-08-04',
+      '2026-10-04',
+      '2026-10-04',
     ])).toEqual([
-      ['2026-10-06', '2026-10-07', '2026-10-08'],
-      ['2026-10-12'],
+      '2026-08-04',
+      '2026-10-04',
+      '2026-10-11',
     ]);
   });
 
