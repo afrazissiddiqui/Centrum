@@ -269,6 +269,17 @@
             (ngModelChange)="unpaidLeaveReportSearch.set($event)"
           />
         </label>
+        @if (unpaidLeaveReportLoaded() && selectableUnpaidLeaveReportEntries().length) {
+          <label class="unpaid-leave-report-select-all">
+            <input
+              type="checkbox"
+              [checked]="allUnpaidLeaveReportEmployeesSelected()"
+              [disabled]="unpaidLeaveReportPosting()"
+              (change)="toggleAllUnpaidLeaveReportEmployees($any($event.target).checked)"
+            />
+            <span>Select all matching employees with unposted dates ({{ selectableUnpaidLeaveReportEntries().length }})</span>
+          </label>
+        }
         @if (unpaidLeaveReportLoading()) {
           <p class="shift-options__status">Loading attendance for {{ unpaidLeaveReportMonth() }}...</p>
         } @else if (unpaidLeaveReportError()) {
@@ -283,10 +294,22 @@
           @for (entry of filteredUnpaidLeaveReport(); track entry.employee.EmployeeCode) {
             <article class="unpaid-leave-report-item">
               <div class="unpaid-leave-report-item__header">
-                <strong>{{ entry.employee.EmployeeName }}</strong>
+                <label class="unpaid-leave-report-employee">
+                  <input
+                    type="checkbox"
+                    [checked]="selectedUnpaidLeaveEmployees().has(entry.employee.EmployeeCode)"
+                    [disabled]="!entry.pendingDates.length || unpaidLeaveReportPosting()"
+                    [attr.aria-label]="'Select ' + entry.employee.EmployeeName + ' for leave posting'"
+                    (change)="toggleUnpaidLeaveReportEmployee(entry.employee.EmployeeCode, $any($event.target).checked)"
+                  />
+                  <strong>{{ entry.employee.EmployeeName }}</strong>
+                </label>
                 <span>{{ entry.dates.length }} day(s)</span>
               </div>
               <small>{{ entry.employee.EmployeeCode }} · {{ entry.employee.Department || 'No department' }}</small>
+              @if (entry.pendingDates.length < entry.dates.length) {
+                <small>{{ entry.pendingDates.length }} day(s) not yet posted</small>
+              }
               <ul aria-label="Unannounced leave dates">
                 @for (date of entry.dates; track date) {
                   <li>{{ date }}</li>
@@ -297,7 +320,15 @@
         }
       </div>
       <footer class="shift-dialog__footer">
-        <span>{{ filteredUnpaidLeaveReport().length }} employee(s) · {{ monthlyUnannouncedLeaveTotalDays() }} day(s)</span>
+        <span>{{ filteredUnpaidLeaveReport().length }} employee(s) · {{ monthlyUnannouncedLeaveTotalDays() }} day(s) · {{ selectedUnpaidLeaveReportEntries().length }} selected</span>
+        <button
+          type="button"
+          class="dialog-button dialog-button--apply"
+          [disabled]="unpaidLeaveReportPosting() || !selectedUnpaidLeaveReportEntries().length || unpaidLeaveReportLoading()"
+          (click)="postSelectedUnpaidLeaveReportEmployees()"
+        >
+          {{ unpaidLeaveReportPosting() ? 'Posting…' : 'Post Selected' }}
+        </button>
         <button type="button" class="dialog-button dialog-button--apply" (click)="closeUnpaidLeaveReport()">Close</button>
       </footer>
     </section>

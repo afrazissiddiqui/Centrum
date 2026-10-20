@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { catchError, concatMap, finalize, forkJoin, map, Observable, of, Subscription, switchMap } from 'rxjs';
+import { catchError, concatMap, finalize, forkJoin, from, map, Observable, of, Subscription, switchMap, toArray } from 'rxjs';
 import { ApplicationFormDetail, ApplicationFormRecord, ApplicationFormService, canonicalizeEmployeeCodeValue, EmployeeProfileAddPayload, EmployeeRosterAddPayload, EmployeeRosterListRecord } from '../../../services/application-form.service';
 import { AlertService } from '../../../services/alert.service';
 import {
@@ -901,6 +901,13 @@ export class EmployeeRosterComponent implements OnInit {
     const dates = Array.from({ length: daysInMonth }, (_, index) =>
       this.rosterDateForMonth(monthLabel, index + 1),
     );
+    const postedDates = indexRequestedLeaveDates(
+      this.leaveApplications().filter((application) =>
+        normalizeLeaveType(application.LeaveType) === normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE),
+      ),
+      monthLabel,
+    );
+    const locallyPostedDates = this.postedUnannouncedLeaveDateKeys();
     return this.employees()
       .map((employee) => ({
         employee,
@@ -913,6 +920,16 @@ export class EmployeeRosterComponent implements OnInit {
         ),
       }))
       .filter((entry) => entry.dates.length > 0)
+      .map((entry) => {
+        const employeeKey = normalizeEmployeeCodeForRoster(entry.employee.EmployeeCode);
+        return {
+          ...entry,
+          pendingDates: entry.dates.filter((date) =>
+            !postedDates.has(`${employeeKey}|${date}`) &&
+            !locallyPostedDates.has(`${entry.employee.EmployeeCode.toLowerCase()}|${date}`),
+          ),
+        };
+      })
       .sort((left, right) => left.employee.EmployeeName.localeCompare(right.employee.EmployeeName));
   });
   readonly filteredUnpaidLeaveReport = computed(() => {
@@ -928,6 +945,23 @@ export class EmployeeRosterComponent implements OnInit {
   readonly monthlyUnannouncedLeaveTotalDays = computed(() =>
     this.filteredUnpaidLeaveReport().reduce((total, entry) => total + entry.dates.length, 0),
   );
+  readonly selectedUnpaidLeaveEmployees = signal(new Set<string>());
+  readonly unpaidLeaveReportPosting = signal(false);
+  readonly selectableUnpaidLeaveReportEntries = computed(() =>
+    this.filteredUnpaidLeaveReport().filter((entry) => entry.pendingDates.length > 0),
+  );
+  readonly selectedUnpaidLeaveReportEntries = computed(() => {
+    const selected = this.selectedUnpaidLeaveEmployees();
+    return this.monthlyUnannouncedLeaveReport().filter(
+      (entry) => entry.pendingDates.length > 0 && selected.has(entry.employee.EmployeeCode),
+    );
+  });
+  readonly allUnpaidLeaveReportEmployeesSelected = computed(() => {
+    const selectableEntries = this.selectableUnpaidLeaveReportEntries();
+    const selected = this.selectedUnpaidLeaveEmployees();
+    return selectableEntries.length > 0 &&
+      selectableEntries.every(({ employee }) => selected.has(employee.EmployeeCode));
+  });
   readonly shiftOptions = computed(() => rosterShiftOptions(this.workstationService.workstations()));
   readonly unassignedBranchOptions = [ALL_BRANCHES_FILTER, ...ROSTER_BRANCH_OPTIONS];
   readonly unassignedDepartmentOptions = computed(() => {
@@ -1088,12 +1122,14 @@ export class EmployeeRosterComponent implements OnInit {
   openUnpaidLeaveReport(): void {
     this.unpaidLeaveReportMonth.set(this.monthLabel());
     this.unpaidLeaveReportSearch.set('');
+    this.selectedUnpaidLeaveEmployees.set(new Set());
     this.unpaidLeaveReportOpen.set(true);
     this.loadUnpaidLeaveReportAttendance();
   }
 
   closeUnpaidLeaveReport(): void {
     this.unpaidLeaveReportOpen.set(false);
+    this.selectedUnpaidLeaveEmployees.set(new Set());
     this.unpaidLeaveReportRequestId++;
     this.unpaidLeaveReportRequest?.unsubscribe();
     this.unpaidLeaveReportRequest = undefined;
@@ -1105,7 +1141,36 @@ export class EmployeeRosterComponent implements OnInit {
     const date = new Date(`${monthName} 1, ${yearText}`);
     date.setMonth(date.getMonth() + offset);
     this.unpaidLeaveReportMonth.set(date.toLocaleString('en-US', { month: 'long', year: 'numeric' }));
+    this.selectedUnpaidLeaveEmployees.set(new Set());
     this.loadUnpaidLeaveReportAttendance();
+  }
+
+  toggleUnpaidLeaveReportEmployee(employeeCode: string, checked: boolean): void {
+    this.selectedUnpaidLeaveEmployees.update((selected) => {
+      const next = new Set(selected);
+      if (checked) {
+        next.add(employeeCode);
+      } else {
+        next.delete(employeeCode);
+      }
+      return next;
+    });
+  }
+
+  toggleAllUnpaidLeaveReportEmployees(checked: boolean): void {
+    const visibleCodes = this.selectableUnpaidLeaveReportEntries()
+      .map(({ employee }) => employee.EmployeeCode);
+    this.selectedUnpaidLeaveEmployees.update((selected) => {
+      const next = new Set(selected);
+      for (const employeeCode of visibleCodes) {
+        if (checked) {
+          next.add(employeeCode);
+        } else {
+          next.delete(employeeCode);
+        }
+      }
+      return next;
+    });
   }
 
   private loadUnpaidLeaveReportAttendance(): void {
@@ -1347,6 +1412,114 @@ export class EmployeeRosterComponent implements OnInit {
     });
   }
 
+  async postSelectedUnpaidLeaveReportEmployees(): Promise<void> {
+    if (this.unpaidLeaveReportPosting()) {
+      return;
+    }
+    if (this.unpaidLeaveReportLoading() || !this.unpaidLeaveReportLoaded()) {
+      this.alertService.warning('Attendance Not Ready', 'Wait for the selected month report to finish loading before posting leave.');
+      return;
+    }
+
+    const selectedEntries = this.selectedUnpaidLeaveReportEntries();
+    if (!selectedEntries.length) {
+      this.alertService.warning('No Employees Selected', 'Select at least one employee with unposted unannounced leave dates.');
+      return;
+    }
+    const totalDays = selectedEntries.reduce((total, entry) => total + entry.pendingDates.length, 0);
+    this.unpaidLeaveReportPosting.set(true);
+    let confirmed = false;
+    try {
+      confirmed = await this.alertService.confirmWarning(
+        'Post Unannounced Leave?',
+        `Create one leave request for each of ${selectedEntries.length} selected employee(s), covering ${totalDays} unposted leave day(s) in ${this.unpaidLeaveReportMonth()}?`,
+        'Post Selected Leave',
+      );
+    } finally {
+      this.unpaidLeaveReportPosting.set(false);
+    }
+    if (!confirmed) {
+      return;
+    }
+
+    this.unpaidLeaveReportPosting.set(true);
+    from(selectedEntries).pipe(
+      concatMap(({ employee, pendingDates }) => {
+        if (!employee.apiId?.trim() || !employee.detail) {
+          return of({
+            employee,
+            successfulDates: [],
+            postingError: new Error('Employee profile details are unavailable.'),
+            profileError: null,
+          });
+        }
+        return this.submitUnannouncedLeaveDates(employee, pendingDates).pipe(
+          switchMap((postResult) => {
+            const successfulDates = postResult.successfulDates;
+            const postingError = postResult.results.find((result) => result.error !== null)?.error ?? null;
+            if (!successfulDates.length) {
+              return of({ employee, successfulDates, postingError, profileError: null });
+            }
+            return this.updateProfileAfterPostedUnannouncedLeave(employee, successfulDates).pipe(
+              map((profileResult) => ({
+                employee,
+                successfulDates,
+                postingError,
+                profileError: profileResult.profileError,
+              })),
+            );
+          }),
+          catchError((postingError: unknown) => of({
+            employee,
+            successfulDates: [],
+            postingError,
+            profileError: null,
+          })),
+        );
+      }),
+      toArray(),
+      finalize(() => this.unpaidLeaveReportPosting.set(false)),
+    ).subscribe({
+      next: (results) => {
+        const successfulResults = results.filter((result) => result.successfulDates.length > 0);
+        const failedResults = results.filter((result) => result.postingError !== null);
+        const profileFailures = results.filter((result) => result.profileError !== null);
+        const successfulCodes = new Set(successfulResults.map(({ employee }) => employee.EmployeeCode));
+        this.selectedUnpaidLeaveEmployees.update((selected) =>
+          new Set(Array.from(selected).filter((employeeCode) => !successfulCodes.has(employeeCode))),
+        );
+
+        const failures = [
+          ...failedResults.map(({ employee, postingError }) =>
+            `${employee.EmployeeName}: ${formatApiErrorMessage(postingError, 'The request was rejected.')}`,
+          ),
+          ...profileFailures.map(({ employee, profileError }) =>
+            `${employee.EmployeeName}: the leave request was posted, but the profile balance was not updated. ${formatApiErrorMessage(profileError, 'Could not update the employee profile.')}`,
+          ),
+        ];
+        if (failures.length) {
+          const successfulDays = successfulResults.reduce((total, result) => total + result.successfulDates.length, 0);
+          this.alertService.error(
+            'Unannounced Leave Posting Completed with Issues',
+            `${successfulResults.length} request(s) for ${successfulDays} day(s) posted. Issues:\n${failures.join('\n')}`,
+          );
+        } else {
+          const postedDays = successfulResults.reduce((total, result) => total + result.successfulDates.length, 0);
+          this.alertService.success(
+            'Unannounced Leave Posted',
+            `${successfulResults.length} request(s) for ${postedDays} day(s) were posted successfully.`,
+          );
+        }
+      },
+      error: (error: unknown) => {
+        this.alertService.error(
+          'Unannounced Leave Posting Failed',
+          formatApiErrorMessage(error, 'Could not post selected unannounced leave requests.'),
+        );
+      },
+    });
+  }
+
   private ensureUnannouncedLeaveType(): Observable<string> {
     return this.leaveTypeService.fetchLeaveTypes().pipe(
       switchMap((leaveTypes) => {
@@ -1416,7 +1589,9 @@ export class EmployeeRosterComponent implements OnInit {
             item.EmployeeCode === employee.EmployeeCode ? updatedEmployee : item,
           ),
         );
-        this.employeeSummaryDialog.set(updatedEmployee);
+        if (this.employeeSummaryDialog()?.EmployeeCode === employee.EmployeeCode) {
+          this.employeeSummaryDialog.set(updatedEmployee);
+        }
         return { profileUpdated: true, profileError: null };
       }),
       catchError((profileError: unknown) => of({
