@@ -59,6 +59,44 @@ describe('LeaveApplicationService', () => {
     request.flush({ status: true });
   });
 
+  it('surfaces API-level failures returned with a successful HTTP response', () => {
+    let submissionError: unknown;
+    service.addLeaveApplication({
+      headerInfo: {
+        formNumber: 'LR-2026-0015',
+        employeeId: 'EMP-1001',
+        employeeName: 'Muhammad Umer',
+        employeeCategory: 'Permanent',
+        employmentNature: 'Full Time',
+        employmentType: 'Monthly',
+        workGradeLevel: 'G7',
+        department: 'Information Technology',
+        jobTitle: 'Software Developer',
+        location: 'Lahore',
+      },
+      leaveRequest: {
+        requestDate: '2026-05-25',
+        leaveType: 'Unannounced Leave',
+        causeOfLeave: 'Unannounced absence',
+        fromDate: '2026-06-01',
+        toDate: '2026-06-01',
+        totalLeaveDaysRequested: 1,
+        requestStatus: 'Submitted',
+        remarks: 'Automatically generated from unannounced absence recorded in Employee Roster.',
+      },
+      leaveBalanceInformation: {
+        totalLeaves: 0,
+        leavesAvailed: 1,
+        remainingLeaves: -1,
+      },
+    }).subscribe({ error: (error: unknown) => submissionError = error });
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/leave-application-add'));
+    request.flush({ status: false, message: 'Duplicate leave request.' });
+
+    expect(submissionError).toEqual(new Error('Duplicate leave request.'));
+  });
+
   it('maps the wrapped detail response data envelope for the modal view', () => {
     service.fetchLeaveApplicationDetail(1).subscribe((record) => {
       expect(record.Id).toBe(1);

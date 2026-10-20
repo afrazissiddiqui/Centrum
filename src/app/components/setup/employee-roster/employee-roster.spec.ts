@@ -20,6 +20,7 @@ import {
   reconcileRosterUnannouncedLeaveCount,
   rosterUnannouncedAbsenceDatesForYear,
   rosterUnannouncedLeaveDaysForYear,
+  rosterUnannouncedLeaveApplicationBalance,
   rosterUnannouncedLeaveBalance,
   rosterUnannouncedLeaveDates,
   rosterPeriodForDate,
@@ -437,9 +438,9 @@ describe('rosterDaysOffCount', () => {
 describe('isScheduledShiftAbsent', () => {
   const today = new Date(2026, 9, 16);
 
-  it('marks past and current non-day-off shifts without punches absent, but not future dates', () => {
+  it('marks only completed non-day-off shifts without punches absent', () => {
     expect(isScheduledShiftAbsent('M', null, '2026-10-15', [], today)).toBe(true);
-    expect(isScheduledShiftAbsent('M', null, '2026-10-16', [], today)).toBe(true);
+    expect(isScheduledShiftAbsent('M', null, '2026-10-16', [], today)).toBe(false);
     expect(isScheduledShiftAbsent('M', null, '2026-10-17', [], today)).toBe(false);
     expect(isScheduledShiftAbsent('+', null, '2026-10-15', [], today)).toBe(false);
     expect(isScheduledShiftAbsent('', null, '2026-10-15', [], today)).toBe(false);
@@ -513,6 +514,25 @@ describe('unannounced leave posting helpers', () => {
         remainingLeave: '-2',
       }],
     });
+  });
+
+  it('does not send a negative remaining balance in leave application payloads', () => {
+    const detail = {
+      unannouncedLeaves: '2',
+      leaveManagement: [{
+        leaveType: 'Unannounced Leave',
+        leavesAllocated: '0',
+        leavesAvailed: '2',
+        remainingLeave: '-2',
+      }],
+    } as ApplicationFormDetail;
+
+    expect(rosterUnannouncedLeaveApplicationBalance(detail, 4)).toEqual({
+      totalLeaves: 0,
+      leavesAvailed: 6,
+      remainingLeaves: 0,
+    });
+    expect(rosterUnannouncedLeaveApplicationBalance(detail, 0).remainingLeaves).toBe(0);
   });
 
   it('creates a zero-allocation leave balance row when none exists', () => {
@@ -631,7 +651,7 @@ describe('unannounced leave posting helpers', () => {
       attendance,
       [],
       today,
-    )).toEqual(['2026-06-01', '2026-10-16']);
+    )).toEqual(['2026-06-01']);
   });
 });
 

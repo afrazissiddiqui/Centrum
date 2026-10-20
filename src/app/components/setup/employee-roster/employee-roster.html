@@ -42,7 +42,7 @@
       <button type="button" class="action-button" (click)="applyRotation()">Apply Rotation</button>
       <button type="button" class="action-button" (click)="loadEmployees()" [disabled]="loading() || hasChanges()">Reload Employees</button>
       <button type="button" class="action-button action-button--danger" (click)="clearSelection()">Clear Selection</button>
-      <div class="action-row action-row--secondary"><button type="button" class="action-button"><ui5-icon name="process" aria-hidden="true"></ui5-icon> Shift Rotation Engine (3 Active)</button><button type="button" class="action-button"><ui5-icon name="calendar" aria-hidden="true"></ui5-icon> Days Off Patterns</button><button type="button" class="action-button action-button--holiday" (click)="openBranchHolidays()" aria-haspopup="dialog"><ui5-icon name="accept" aria-hidden="true"></ui5-icon> Branch Holidays ({{ branchHolidays().length }})</button><button type="button" class="action-button action-button--danger"><ui5-icon name="alert" aria-hidden="true"></ui5-icon> 4 Conflicts</button></div>
+      <div class="action-row action-row--secondary"><button type="button" class="action-button"><ui5-icon name="process" aria-hidden="true"></ui5-icon> Shift Rotation Engine (3 Active)</button><button type="button" class="action-button" (click)="openUnpaidLeaveReport()" aria-haspopup="dialog"><ui5-icon name="calendar" aria-hidden="true"></ui5-icon> Unpaid Leave</button><button type="button" class="action-button action-button--holiday" (click)="openBranchHolidays()" aria-haspopup="dialog"><ui5-icon name="accept" aria-hidden="true"></ui5-icon> Branch Holidays ({{ branchHolidays().length }})</button><button type="button" class="action-button action-button--danger"><ui5-icon name="alert" aria-hidden="true"></ui5-icon> 4 Conflicts</button></div>
     </section>
 
     @if (conflictsVisible()) { <section class="conflict-banner"><div class="conflict-icon"><ui5-icon name="alert" aria-hidden="true"></ui5-icon></div><div><strong>Scheduling conflicts detected in {{ monthLabel() }}</strong><p>Review assignments for unassigned gaps and shift transitions before saving.</p></div><button type="button" class="resolve-button" (click)="applyRotation()">Review Conflicts</button><button type="button" class="close-button" aria-label="Dismiss conflicts" (click)="dismissConflicts()">×</button></section> }
@@ -98,8 +98,8 @@
       <footer class="shift-dialog__footer">
         <button type="button" class="dialog-button dialog-button--cancel" (click)="closeEmployeeSummary()">Close</button>
         <button type="button" class="dialog-button dialog-button--apply" (click)="updateShiftsFromEmployeeSummary()">Update Shifts</button>
-        <button type="button" class="dialog-button dialog-button--apply" [disabled]="postingUnannouncedLeave() || !pendingUnannouncedLeaveDates().length || rosterAttendanceLoading()" (click)="postEmployeeUnannouncedLeave()">
-          {{ postingUnannouncedLeave() ? 'Posting…' : 'Post Unannounced Leave' }}
+        <button type="button" class="dialog-button dialog-button--apply" [disabled]="syncingUnannouncedLeaveProfile() || postingUnannouncedLeave() || !pendingUnannouncedLeaveDates().length || rosterAttendanceLoading()" (click)="postEmployeeUnannouncedLeave()">
+          {{ syncingUnannouncedLeaveProfile() ? 'Syncing…' : postingUnannouncedLeave() ? 'Posting…' : 'Post Unannounced Leave' }}
         </button>
       </footer>
     </section>
@@ -213,6 +213,66 @@
         }
       </div>
       <footer class="shift-dialog__footer"><span>{{ workstationService.workstations().length }} workstation(s)</span><button type="button" class="dialog-button dialog-button--apply" (click)="closeWorkstationLegend()">Close</button></footer>
+    </section>
+  }
+
+  @if (unpaidLeaveReportOpen()) {
+    <div class="dialog-backdrop" (click)="closeUnpaidLeaveReport()"></div>
+    <section class="unpaid-leave-report-dialog" role="dialog" aria-modal="true" aria-labelledby="unpaid-leave-report-title" (click)="$event.stopPropagation()">
+      <header class="shift-dialog__header">
+        <div>
+          <h2 id="unpaid-leave-report-title">Unpaid Leave Report</h2>
+          <p>Unannounced leave detected for {{ unpaidLeaveReportMonth() }}</p>
+        </div>
+        <button type="button" class="dialog-close" aria-label="Close unpaid leave report" (click)="closeUnpaidLeaveReport()">×</button>
+      </header>
+      <nav class="unpaid-leave-report-month" aria-label="Report month">
+        <button type="button" aria-label="Previous report month" (click)="changeUnpaidLeaveReportMonth(-1)">‹</button>
+        <strong>{{ unpaidLeaveReportMonth() }}</strong>
+        <button type="button" aria-label="Next report month" (click)="changeUnpaidLeaveReportMonth(1)">›</button>
+      </nav>
+      <div class="unpaid-leave-report-list">
+        <label class="unpaid-leave-report-search">
+          <ui5-icon name="search" aria-hidden="true"></ui5-icon>
+          <input
+            type="search"
+            aria-label="Search employees in unpaid leave report"
+            placeholder="Search by employee name, code, or department..."
+            [ngModel]="unpaidLeaveReportSearch()"
+            (ngModelChange)="unpaidLeaveReportSearch.set($event)"
+          />
+        </label>
+        @if (unpaidLeaveReportLoading()) {
+          <p class="shift-options__status">Loading attendance for {{ unpaidLeaveReportMonth() }}...</p>
+        } @else if (unpaidLeaveReportError()) {
+          <p class="shift-options__status" role="alert">{{ unpaidLeaveReportError() }}</p>
+        } @else if (!unpaidLeaveReportLoaded()) {
+          <p class="shift-options__status" role="alert">Attendance data is not available for this month. Try selecting the month again.</p>
+        } @else if (!monthlyUnannouncedLeaveReport().length) {
+          <p class="shift-options__status">No unannounced leave was detected for {{ unpaidLeaveReportMonth() }}.</p>
+        } @else if (!filteredUnpaidLeaveReport().length) {
+          <p class="shift-options__status">No employees match "{{ unpaidLeaveReportSearch() }}".</p>
+        } @else {
+          @for (entry of filteredUnpaidLeaveReport(); track entry.employee.EmployeeCode) {
+            <article class="unpaid-leave-report-item">
+              <div class="unpaid-leave-report-item__header">
+                <strong>{{ entry.employee.EmployeeName }}</strong>
+                <span>{{ entry.dates.length }} day(s)</span>
+              </div>
+              <small>{{ entry.employee.EmployeeCode }} · {{ entry.employee.Department || 'No department' }}</small>
+              <ul aria-label="Unannounced leave dates">
+                @for (date of entry.dates; track date) {
+                  <li>{{ date }}</li>
+                }
+              </ul>
+            </article>
+          }
+        }
+      </div>
+      <footer class="shift-dialog__footer">
+        <span>{{ filteredUnpaidLeaveReport().length }} employee(s) · {{ monthlyUnannouncedLeaveTotalDays() }} day(s)</span>
+        <button type="button" class="dialog-button dialog-button--apply" (click)="closeUnpaidLeaveReport()">Close</button>
+      </footer>
     </section>
   }
 

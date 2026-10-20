@@ -4,6 +4,7 @@ import { Observable, map, tap } from 'rxjs';
 import { apiUrl } from '../config/api.config';
 import { AuthService } from './auth.service';
 import { filterRecordsBySessionBranches } from '../utils/branch-filter.util';
+import { formatSapApiFailureMessage } from '../utils/api-error.util';
 
 export interface LeaveApplicationHeaderInfo {
   formNumber: string;
@@ -87,7 +88,17 @@ export class LeaveApplicationService {
   readonly leaves = this.leaveList.asReadonly();
 
   addLeaveApplication(payload: LeaveApplicationAddPayload): Observable<unknown> {
-    return this.http.post(LEAVE_APPLICATION_ADD_URL, payload);
+    return this.http.post<unknown>(LEAVE_APPLICATION_ADD_URL, payload).pipe(
+      map((response) => {
+        if (response && typeof response === 'object' && !Array.isArray(response)) {
+          const result = response as Record<string, unknown>;
+          if (result['status'] === false || result['success'] === false) {
+            throw new Error(formatSapApiFailureMessage(response, 'Leave application could not be submitted.'));
+          }
+        }
+        return response;
+      }),
+    );
   }
 
   updateLeaveApplication(id: string | number, payload: LeaveApplicationAddPayload): Observable<unknown> {
