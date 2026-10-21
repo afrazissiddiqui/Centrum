@@ -2029,8 +2029,8 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     this.advancePercentAllowed.set(remuneration.advancePercentAllowed ?? '');
     this.maximumLoanCapacity.set(
       this.firstNonEmpty(
-        this.remunerationValue(remuneration.maximumLoanCapacity),
         this.remunerationValue(remuneration.loanAmountAllowed),
+        this.remunerationValue(remuneration.maximumLoanCapacity),
       ),
     );
     this.allowancesApplicable.set((remuneration.allowancesApplicable as 'Yes' | 'No' | '') || 'Yes');

@@ -1006,6 +1006,7 @@ export class AddLoanAdvanceComponent implements OnInit {
       headerInfo: {
         documentNo: this.documentNo(),
         requestType: this.requestType(),
+        expenseType: this.requestType(),
         employeeID: this.headerEmployeeID(),
         employeeName: this.headerEmployeeName(),
         department: this.department(),

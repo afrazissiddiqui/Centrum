@@ -156,3 +156,15 @@ h1 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 22px;
 .roster-shift { position: relative; }
 .roster-shift--absent { border-color: #c62828; }
 .roster-shift__absence-mark { position: absolute; top: -5px; right: -5px; display: grid; width: 13px; height: 13px; place-items: center; border: 1px solid #fff; border-radius: 50%; background: #c62828; color: #fff; font: 700 9px Arial, sans-serif; line-height: 1; }
+.table-scroll { scrollbar-color: #9aadc5 #eaf0f7; scrollbar-width: thin; }
+.table-scroll::-webkit-scrollbar { height: 12px; }
+.table-scroll::-webkit-scrollbar-track { border-radius: 8px; background: #eaf0f7; }
+.table-scroll::-webkit-scrollbar-thumb { border: 3px solid #eaf0f7; border-radius: 8px; background: #9aadc5; }
+.table-scroll::-webkit-scrollbar-thumb:hover { background: #7188a5; }
+.table-scroll--whole-month { overscroll-behavior-x: contain; }
+.table-scroll--whole-month .roster-table { width: max-content; min-width: 100%; }
+.table-scroll--whole-month .roster-table thead th:nth-child(n + 6) { width: 48px; }
+.table-scroll--whole-month .roster-table th:first-child,
+.table-scroll--whole-month .roster-table td:first-child { position: sticky; left: 0; z-index: 2; }
+.table-scroll--whole-month .roster-table thead th:first-child { z-index: 3; background: #eef3fb; }
+.table-scroll--whole-month .roster-table tbody td:first-child { background: #fff; }

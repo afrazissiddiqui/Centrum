@@ -26,6 +26,7 @@ import {
   rosterUnannouncedLeaveBalance,
   rosterUnannouncedLeaveDates,
   rosterPeriodForDate,
+  rosterDaysForMonthHalf,
   rosterShiftInitial,
   rosterShiftsForEmployeeMonth,
   rosterShiftOptions,
@@ -670,6 +671,21 @@ describe('rosterPeriodForDate', () => {
     expect(rosterPeriodForDate(new Date(2026, 8, 15))).toEqual({
       monthLabel: 'September 2026',
       monthHalf: 'First Half',
+    });
+  });
+
+  describe('rosterDaysForMonthHalf', () => {
+    const days = Array.from({ length: 31 }, (_, index) => ({ date: index + 1 }));
+
+    it('returns all dates for Whole Month', () => {
+      expect(rosterDaysForMonthHalf(days, 'Whole Month')).toEqual(days);
+    });
+
+    it('keeps the existing first-half and second-half ranges', () => {
+      expect(rosterDaysForMonthHalf(days, 'First Half').map(({ date }) => date))
+        .toEqual(Array.from({ length: 15 }, (_, index) => index + 1));
+      expect(rosterDaysForMonthHalf(days, 'Second Half').map(({ date }) => date))
+        .toEqual(Array.from({ length: 16 }, (_, index) => index + 16));
     });
   });
 

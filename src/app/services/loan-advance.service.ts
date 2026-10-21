@@ -10,6 +10,7 @@ export interface LoanAdvanceHeaderInfo {
   employeeNature: string;
   department: string;
   requestType: string;
+  expenseType: string;
   employeeID: string;
   employmentType: string;
   designation: string;
@@ -335,6 +336,7 @@ export class LoanAdvanceService {
         employeeNature: pick(header.employeeNature, record.EmployeeNature),
         department: pick(header.department, record.Department),
         requestType: pick(header.requestType, record.RequestType),
+        expenseType: pick(header.expenseType, header.requestType, record.RequestType),
         employeeID: pick(header.employeeID, record.EmployeeID),
         employmentType: pick(header.employmentType, record.EmploymentType),
         designation: pick(header.designation, record.Designation),
@@ -726,7 +728,22 @@ export class LoanAdvanceService {
       documentNo: this.pickString([item], ['documentNo', 'document_no', 'DocumentNo']),
       employeeNature: this.pickString([item], ['employeeNature', 'employee_nature', 'EmployeeNature']),
       department: this.pickString([item], ['department', 'Department']),
-      requestType: this.pickString([item], ['requestType', 'request_type', 'RequestType']),
+      requestType: this.pickString([item], [
+        'requestType',
+        'request_type',
+        'RequestType',
+        'expenseType',
+        'expense_type',
+        'ExpenseType',
+      ]),
+      expenseType: this.pickString([item], [
+        'expenseType',
+        'expense_type',
+        'ExpenseType',
+        'requestType',
+        'request_type',
+        'RequestType',
+      ]),
       employeeID: this.pickString([item], ['employeeID', 'employee_id', 'employeeId', 'EmployeeID']),
       employmentType: this.pickString([item], ['employmentType', 'employment_type', 'EmploymentType']),
       designation: this.pickString([item], ['designation', 'Designation']),
@@ -985,7 +1002,22 @@ export class LoanAdvanceService {
       documentNo: this.pickString(sources, ['documentNo', 'document_no', 'DocumentNo']),
       employeeNature: this.pickString(sources, ['employeeNature', 'employee_nature', 'EmployeeNature']),
       department: this.pickString(sources, ['department', 'Department']),
-      requestType: this.pickString(sources, ['requestType', 'request_type', 'RequestType']),
+      requestType: this.pickString(sources, [
+        'requestType',
+        'request_type',
+        'RequestType',
+        'expenseType',
+        'expense_type',
+        'ExpenseType',
+      ]),
+      expenseType: this.pickString(sources, [
+        'expenseType',
+        'expense_type',
+        'ExpenseType',
+        'requestType',
+        'request_type',
+        'RequestType',
+      ]),
       employeeID: this.pickString(sources, ['employeeID', 'employee_id', 'employeeId', 'EmployeeID']),
       employmentType: this.pickString(sources, ['employmentType', 'employment_type', 'EmploymentType']),
       designation: this.pickString(sources, ['designation', 'Designation']),

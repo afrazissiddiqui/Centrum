@@ -965,7 +965,9 @@ export class ApplicationFormService {
       loanAmountAllowed: toNullableApiNumber(
         remuneration.loanAmountAllowed || remuneration.maximumLoanCapacity,
       ),
-      maximumLoanCapacity: toNullableApiNumber(remuneration.maximumLoanCapacity),
+      maximumLoanCapacity: toNullableApiNumber(
+        remuneration.loanAmountAllowed || remuneration.maximumLoanCapacity,
+      ),
       maximumAdvanceCapacity: toNullableApiNumber(remuneration.maximumAdvanceCapacity),
       overTimeApplicable: toApiFlag(remuneration.overTimeApplicable),
       allowancesApplicable: toApiFlag(remuneration.allowancesApplicable),
@@ -1167,6 +1169,7 @@ export class ApplicationFormService {
       dateOfJoining: payload.dateOfJoining,
       cashSalaryPercentage: payload.cashSalaryPercentage,
       advancePercentAllowed: payload.advancePercentAllowed,
+      loanAmountAllowed: payload.loanAmountAllowed,
       maximumLoanCapacity: payload.maximumLoanCapacity,
       maximumAdvanceCapacity: payload.maximumAdvanceCapacity,
       overTimeApplicable: payload.overTimeApplicable,
@@ -2287,8 +2290,8 @@ export class ApplicationFormService {
         mobileAllowances: asNumberString(pickRem('mobileAllowances', 'mobile_allowances')),
         carAllowances: asNumberString(pickRem('carAllowances', 'car_allowances')),
         maximumLoanCapacity: asNumberString(
-          pickRem('maximumLoanCapacity', 'maximum_loan_capacity') ||
-          pickRem('loanAmountAllowed', 'loan_amount_allowed'),
+          pickRem('loanAmountAllowed', 'loan_amount_allowed') ||
+          pickRem('maximumLoanCapacity', 'maximum_loan_capacity'),
         ),
         maximumAdvanceCapacity: asNumberString(
           this.resolveMaximumAdvanceCapacityValue(

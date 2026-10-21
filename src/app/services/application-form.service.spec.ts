@@ -45,6 +45,26 @@ describe('ApplicationFormService', () => {
     expect(record.detail.requisition.costCenter).toBe('CC-124');
   });
 
+  it('uses loanAmountAllowed for maximum loan capacity when the API max field is zero', () => {
+    const record = (service as any).mapApiItemToFullRecord({
+      id: 7,
+      employeeCode: 'Emp-00000001',
+      remuneration: {
+        loanAmountAllowed: '10000000.00',
+        maximumLoanCapacity: '0.00',
+      },
+    });
+    const payload = service.buildFlatEmployeeProfilePayload(record.detail);
+    const serializedPayload = (service as any).serializeEmployeeProfilePayload(payload);
+
+    expect(record.detail.remuneration.loanAmountAllowed).toBe('10000000.00');
+    expect(record.detail.remuneration.maximumLoanCapacity).toBe('10000000.00');
+    expect(payload.loanAmountAllowed).toBe(10000000);
+    expect(payload.maximumLoanCapacity).toBe(10000000);
+    expect(serializedPayload.remuneration.loanAmountAllowed).toBe(10000000);
+    expect(serializedPayload.remuneration.maximumLoanCapacity).toBe(10000000);
+  });
+
   it('maps shift and overtime applicability aliases to the employee profile flags', () => {
     const rootFlags = (service as any).mapApiItemToFullRecord({
       employeeCode: 'EMP-001',

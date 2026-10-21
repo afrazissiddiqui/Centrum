@@ -23,7 +23,7 @@ import { WorkstationRecord, WorkstationService } from '../../../services/worksta
 import { glAccountBranchLabel, resolveBranchCode } from '../gl-account-determination/gl-account-branch.options';
 
 type ShiftCode = string;
-type MonthHalf = 'First Half' | 'Second Half';
+export type MonthHalf = 'First Half' | 'Second Half' | 'Whole Month';
 const UNANNOUNCED_LEAVE_TYPE = 'Unannounced Leave';
 const UNANNOUNCED_LEAVE_DESCRIPTION = 'Unannounced-Leave For (S.A.Y)';
 const ROSTER_BRANCH_OPTIONS = ['AHCP_Peshawar', 'AHCP_HO', 'AHCP_Faisalabad'];
@@ -473,6 +473,13 @@ export function rosterPeriodForDate(date: Date): { monthLabel: string; monthHalf
     monthLabel: date.toLocaleString('en-US', { month: 'long', year: 'numeric' }),
     monthHalf: date.getDate() <= 15 ? 'First Half' : 'Second Half',
   };
+}
+
+export function rosterDaysForMonthHalf<T extends { date: number }>(days: T[], monthHalf: MonthHalf): T[] {
+  if (monthHalf === 'Whole Month') {
+    return days;
+  }
+  return days.filter((day) => monthHalf === 'First Half' ? day.date <= 15 : day.date > 15);
 }
 
 export function rosterDaysOffCount(
@@ -985,10 +992,10 @@ export class EmployeeRosterComponent implements OnInit {
     const year = Number(yearText);
     const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
     const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-    const firstHalf = this.selectedMonthHalf() === 'First Half';
+    const monthHalf = this.selectedMonthHalf();
     const today = new Date();
 
-    return Array.from({ length: daysInMonth }, (_, index) => {
+    const days = Array.from({ length: daysInMonth }, (_, index) => {
       const date = index + 1;
       const day = new Date(year, monthIndex, date);
       return {
@@ -1000,7 +1007,8 @@ export class EmployeeRosterComponent implements OnInit {
           today.getDate() === date,
         isHoliday: day.getDay() === 0 || day.getDay() === 6,
       };
-    }).filter((day) => (firstHalf ? day.date <= 15 : day.date > 15));
+    });
+    return rosterDaysForMonthHalf(days, monthHalf);
   });
 
   readonly fullMonthDays = computed<RosterDay[]>(() => {
