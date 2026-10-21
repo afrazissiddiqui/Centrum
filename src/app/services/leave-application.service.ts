@@ -1,7 +1,8 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, map, tap } from 'rxjs';
+import { Observable, map, of, tap } from 'rxjs';
 import { apiUrl } from '../config/api.config';
+import { canonicalizeEmployeeCodeValue } from './application-form.service';
 import { AuthService } from './auth.service';
 import { filterRecordsBySessionBranches } from '../utils/branch-filter.util';
 import { formatSapApiFailureMessage } from '../utils/api-error.util';
@@ -117,6 +118,23 @@ export class LeaveApplicationService {
       map((records) =>
         filterRecordsBySessionBranches(records, (record) => record.Location, this.authService.getSessionUser()),
       ),
+      tap((records) => this.leaveList.set(records)),
+    );
+  }
+
+  fetchLeaveApplicationsForEmployee(employeeIds: Iterable<string>): Observable<LeaveApplicationRecord[]> {
+    const employeeIdSet = new Set(
+      Array.from(employeeIds, (employeeId) => this.normalizeEmployeeId(employeeId)).filter(Boolean),
+    );
+    if (!employeeIdSet.size) {
+      return of([]);
+    }
+
+    return this.http.get<unknown>(LEAVE_APPLICATION_LIST_URL).pipe(
+      map((response) => this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item))),
+      map((records) => records.filter((record) =>
+        employeeIdSet.has(this.normalizeEmployeeId(record.EmployeeId)),
+      )),
       tap((records) => this.leaveList.set(records)),
     );
   }
@@ -270,6 +288,12 @@ export class LeaveApplicationService {
     const text = this.pickString(sources, keys);
     const parsed = Number.parseFloat(text);
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private normalizeEmployeeId(value: string): string {
+    const normalized = canonicalizeEmployeeCodeValue(value).trim().toLowerCase();
+    const numericCode = normalized.match(/^(?:emp[-\s]?)?(\d+)$/)?.[1];
+    return numericCode ? `emp-${numericCode.padStart(8, '0')}` : normalized;
   }
 
   private mapDetailResponse(response: unknown): LeaveApplicationRecord {

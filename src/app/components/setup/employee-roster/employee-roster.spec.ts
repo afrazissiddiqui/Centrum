@@ -8,6 +8,7 @@ import {
   rosterPaidLeaveDates,
   rosterPaidLeaveDays,
   matchesRosterBranch,
+  matchesRosterDepartment,
   matchesRosterEmployeeSearch,
   rosterDayIndexForMonth,
   rosterBranchName,
@@ -110,6 +111,23 @@ describe('matchesRosterBranch', () => {
     expect(matchesRosterBranch('AHCP_Faisalabad', 'AHCP_Peshawar')).toBe(false);
     expect(matchesRosterBranch('2', 'All Branches')).toBe(true);
   });
+
+  it('matches zero-padded branch IDs and alternate branch labels', () => {
+    expect(matchesRosterBranch('01', 'AHCP_Peshawar')).toBe(true);
+    expect(matchesRosterBranch('02', 'AHCP_HO')).toBe(true);
+    expect(matchesRosterBranch('03', 'AHCP_Faisalabad')).toBe(true);
+    expect(matchesRosterBranch('Lahore HO', 'AHCP_HO')).toBe(true);
+  });
+});
+
+describe('matchesRosterDepartment', () => {
+  it('matches departments without case or surrounding/internal spacing differences', () => {
+    expect(matchesRosterDepartment('  Human   Resources ', 'Human Resources')).toBe(true);
+    expect(matchesRosterDepartment('finance', 'Finance')).toBe(true);
+    expect(matchesRosterDepartment('Finance', 'Operations')).toBe(false);
+    expect(matchesRosterDepartment('', 'Finance')).toBe(false);
+    expect(matchesRosterDepartment('', 'All Departments')).toBe(true);
+  });
 });
 
 describe('matchesRosterEmployeeSearch', () => {
@@ -178,6 +196,29 @@ describe('rosterApplicationRecord', () => {
     expect(employee.ExtEmpNo).toBe('00002222');
     expect(employee.detail?.loginDetails.legacyCode).toBe('LEG-0022');
     expect(matchesRosterEmployeeSearch(employee, 'LEG-0022', true)).toBe(true);
+  });
+
+  it('uses the roster department when the profile only has a placeholder', () => {
+    const rosterRecord: EmployeeRosterListRecord = {
+      employee_id: 'E003',
+      employee_name: 'Ayesha Khan',
+      department: 'Finance',
+      designation: 'Officer',
+      employment_status: 'Active',
+      shift_date: '2026-10-01',
+      shift: 'M',
+      role: 'Officer',
+      hub: '',
+      note: null,
+    };
+
+    const employee = rosterApplicationRecord(rosterRecord, {
+      EmployeeCode: 'E003',
+      EmployeeName: 'Ayesha Khan',
+      Department: '—',
+    } as ApplicationFormRecord);
+
+    expect(employee.Department).toBe('Finance');
   });
 });
 

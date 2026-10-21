@@ -129,7 +129,10 @@ export function dashboardLeaveEvents(
     const category: CompanyCalendarEventCategory = /approv|accept|confirm/i.test(application.RequestStatus)
       ? 'approved'
       : 'pending';
-    const title = application.LeaveType.trim() || 'Leave';
+    const leaveType = application.LeaveType.trim();
+    const title = leaveType
+      ? /leave/i.test(leaveType) ? leaveType : `${leaveType} Leave`
+      : 'Leave';
     const cursor = new Date(`${fromDate}T12:00:00`);
     const lastDate = new Date(`${toDate}T12:00:00`);
     while (cursor <= lastDate) {
@@ -308,7 +311,7 @@ export class dashboardComponent implements OnInit {
           employee.userId ?? '',
           employee.detail?.loginDetails.userId ?? '',
         ];
-        return this.leaveApplicationService.fetchLeaveApplications().pipe(
+        return this.leaveApplicationService.fetchLeaveApplicationsForEmployee(employeeIds).pipe(
           map((applications) => dashboardLeaveEvents(applications, employeeIds)),
         );
       }),

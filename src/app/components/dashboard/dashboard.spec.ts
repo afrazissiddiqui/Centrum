@@ -40,6 +40,7 @@ describe('Dashboard', () => {
         } },
         { provide: LeaveApplicationService, useValue: {
           fetchLeaveApplications: () => of(leaveApplications),
+          fetchLeaveApplicationsForEmployee: () => of(leaveApplications),
         } },
         {
           provide: PublicHolidayService,
@@ -164,6 +165,42 @@ describe('Dashboard', () => {
     expect(leaveEvents[10].date).toBe('2026-10-20');
     expect(leaveEvents[10].category).toBe('pending');
     expect(leaveEvents.some((event) => event.title === 'Sick Leave')).toBe(false);
+  });
+
+  it('renders Manzoor’s submitted Special Leave on each requested calendar day', () => {
+    sessionUser.name = 'manzoor';
+    signedInEmployee = {
+      EmployeeCode: 'Emp-00000011',
+      EmployeeName: 'Manzoor Ahmad',
+      detail: {
+        loginDetails: { userId: '00000011', employeeCode: 'Emp-00000011' },
+      },
+    } as ApplicationFormRecord;
+    leaveApplications = [{
+      Id: 2501,
+      EmployeeId: 'Emp-00000011',
+      EmployeeName: 'Manzoor Ahmad',
+      LeaveType: 'Special',
+      RequestStatus: 'Submitted',
+      FromDate: '01/10/2026',
+      ToDate: '2026-10-10T00:00:00.000000Z',
+      CauseOfLeave: 'test phase',
+      Remarks: 'test manzoor.',
+    }] as LeaveApplicationRecord[];
+    component.monthAnchor.set(new Date(2026, 9, 1, 12));
+    component.selectedDate.set(new Date(2026, 9, 1, 12));
+
+    component.ngOnInit();
+
+    const firstLeaveDay = component.calendarDays().find((day) => day.date.getDate() === 1 && day.date.getMonth() === 9);
+    const lastLeaveDay = component.calendarDays().find((day) => day.date.getDate() === 10 && day.date.getMonth() === 9);
+    expect(firstLeaveDay?.events.some((event) =>
+      event.title === 'Special Leave' && event.category === 'pending',
+    )).toBe(true);
+    expect(lastLeaveDay?.events.some((event) =>
+      event.title === 'Special Leave' && event.category === 'pending',
+    )).toBe(true);
+    expect(component.calendarEvents().filter((event) => event.category === 'pending')).toHaveSize(10);
   });
 
   it('resolves the employee profile using the authenticated portal user ID', () => {

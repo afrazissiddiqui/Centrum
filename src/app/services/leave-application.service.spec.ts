@@ -1,15 +1,33 @@
+// @vitest-environment jsdom
+import '@angular/compiler';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { LeaveApplicationAddPayload, LeaveApplicationService } from './leave-application.service';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  LeaveApplicationAddPayload,
+  LeaveApplicationRecord,
+  LeaveApplicationService,
+} from './leave-application.service';
+import { AuthService } from './auth.service';
 
 describe('LeaveApplicationService', () => {
   let service: LeaveApplicationService;
   let httpMock: HttpTestingController;
 
+  beforeAll(() => {
+    TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+  });
+
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [LeaveApplicationService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        LeaveApplicationService,
+        { provide: AuthService, useValue: { getSessionUser: () => null } },
+        provideHttpClient(),
+        provideHttpClientTesting(),
+      ],
     });
 
     service = TestBed.inject(LeaveApplicationService);
@@ -18,6 +36,11 @@ describe('LeaveApplicationService', () => {
 
   afterEach(() => {
     httpMock.verify();
+    TestBed.resetTestingModule();
+  });
+
+  afterAll(() => {
+    TestBed.resetTestEnvironment();
   });
 
   it('posts an Unannounced Leave application with the leave application API payload shape', () => {
@@ -95,6 +118,50 @@ describe('LeaveApplicationService', () => {
     request.flush({ status: false, message: 'Duplicate leave request.' });
 
     expect(submissionError).toEqual(new Error('Duplicate leave request.'));
+  });
+
+  it('loads only the signed-in employee leave records without branch filtering', () => {
+    let records: LeaveApplicationRecord[] | undefined;
+    service.fetchLeaveApplicationsForEmployee(['Emp-00000011']).subscribe((result) => {
+      records = result;
+    });
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/leave-application-list'));
+    expect(request.request.method).toBe('GET');
+    request.flush({
+      status: true,
+      message: 'Leave Application List',
+      data: [
+        {
+          id: 2501,
+          employee_id: 'Emp-00000011',
+          employee_name: 'Manzoor Ahmad',
+          location: '02',
+          leave_type: 'Special',
+          from_date: '01/10/2026',
+          to_date: '2026-10-10T00:00:00.000000Z',
+          request_status: 'Submitted',
+        },
+        {
+          id: 2502,
+          employee_id: 'Emp-00000012',
+          employee_name: 'Another employee',
+          location: '02',
+          leave_type: 'Annual',
+          from_date: '2026-10-01',
+          to_date: '2026-10-02',
+          request_status: 'Submitted',
+        },
+      ],
+    });
+
+    expect(records?.length).toBe(1);
+    expect(records?.[0].EmployeeId).toBe('Emp-00000011');
+    expect(records?.[0].EmployeeName).toBe('Manzoor Ahmad');
+    expect(records?.[0].LeaveType).toBe('Special');
+    expect(records?.[0].FromDate).toBe('01/10/2026');
+    expect(records?.[0].ToDate).toBe('2026-10-10T00:00:00.000000Z');
+    expect(records?.[0].RequestStatus).toBe('Submitted');
   });
 
   it('maps the wrapped detail response data envelope for the modal view', () => {

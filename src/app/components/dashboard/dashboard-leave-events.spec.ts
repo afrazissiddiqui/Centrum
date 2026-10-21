@@ -62,7 +62,7 @@ describe('dashboardLeaveEvents', () => {
     expect(events).toHaveLength(10);
     expect(events[0]).toMatchObject({
       date: '2026-10-01',
-      title: 'Special',
+      title: 'Special Leave',
       category: 'pending',
     });
     expect(events[9]).toMatchObject({

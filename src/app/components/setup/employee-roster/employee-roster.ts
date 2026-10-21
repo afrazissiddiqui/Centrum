@@ -17,11 +17,11 @@ import {
 import { LeaveTypeService } from '../../../services/leave-type.service';
 import { PublicHolidayService } from '../../../services/public-holiday.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
+import { resolveBranchNameFromBplId } from '../../../utils/branch-name.util';
 import { countUnannouncedLeaveDaysForYear } from '../../../utils/unannounced-leave-count.util';
 import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
 import { GatePassDepartmentService } from '../../gate-pass/gate-pass-department.service';
 import { WorkstationRecord, WorkstationService } from '../../../services/workstation.service';
-import { glAccountBranchLabel, resolveBranchCode } from '../gl-account-determination/gl-account-branch.options';
 
 type ShiftCode = string;
 export type MonthHalf = 'First Half' | 'Second Half' | 'Whole Month';
@@ -188,18 +188,21 @@ function normalizeEmployeeCodeForRoster(value: string | null | undefined): strin
 
 export function rosterBranchName(value: string | null | undefined): string {
   const branch = String(value ?? '').trim();
-  if (!branch) {
-    return '';
-  }
-  if (branch.toLowerCase() === 'lahore ho') {
-    return 'AHCP_HO';
-  }
-  return glAccountBranchLabel(resolveBranchCode(branch));
+  return resolveBranchNameFromBplId(branch);
 }
 
 export function matchesRosterBranch(employeeBranch: string, selectedBranch: string): boolean {
   return selectedBranch === 'All Branches' ||
     rosterBranchName(employeeBranch).toLowerCase() === rosterBranchName(selectedBranch).toLowerCase();
+}
+
+export function matchesRosterDepartment(employeeDepartment: string | null | undefined, selectedDepartment: string): boolean {
+  if (selectedDepartment === 'All Departments') {
+    return true;
+  }
+  const normalizeDepartment = (department: string | null | undefined): string =>
+    String(department ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return normalizeDepartment(employeeDepartment) === normalizeDepartment(selectedDepartment);
 }
 
 export function matchesRosterEmployeeSearch(
@@ -226,11 +229,12 @@ export function rosterApplicationRecord(
   record: EmployeeRosterListRecord,
   profile?: ApplicationFormRecord,
 ): ApplicationFormRecord {
+  const profileDepartment = String(profile?.Department ?? '').trim();
   return {
     ...profile,
     EmployeeCode: profile?.EmployeeCode || record.employee_id,
     EmployeeName: profile?.EmployeeName || record.employee_name || record.employee_id,
-    Department: profile?.Department || record.department,
+    Department: profileDepartment && profileDepartment !== '—' ? profileDepartment : record.department,
     EmployeeNature: profile?.EmployeeNature || '',
     Designation: profile?.Designation || record.designation || record.role,
     ReportingManager: profile?.ReportingManager || '',
@@ -1143,7 +1147,7 @@ export class EmployeeRosterComponent implements OnInit {
     const department = this.selectedDepartment();
     return this.employees().filter((employee) => {
       const matchesBranch = matchesRosterBranch(employee.hub, this.selectedHub());
-      const matchesDepartment = department === 'All Departments' || employee.Department === department;
+      const matchesDepartment = matchesRosterDepartment(employee.Department, department);
       const matchesSearch = matchesRosterEmployeeSearch(
         employee,
         this.searchText(),

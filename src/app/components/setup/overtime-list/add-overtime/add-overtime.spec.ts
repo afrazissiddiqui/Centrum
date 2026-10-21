@@ -350,7 +350,7 @@ describe('AddOvertimeComponent', () => {
     ]));
     attendanceService.fetchCalculatedWorkingHoursByDate.and.returnValue(of([
       { date: monthStart, hoursWorked: '10h' },
-      { date: secondWorkedDate, hoursWorked: '9h 15m' },
+      { date: secondWorkedDate, hoursWorked: '7h' },
       { date: outsideWorkedDate, hoursWorked: '20h' },
     ]));
 
@@ -362,9 +362,9 @@ describe('AddOvertimeComponent', () => {
       { mode: 'dateRange', fromDate: '2026-10-01', toDate: '2026-10-31' },
       '4023',
     );
-    expect(fixture.nativeElement.textContent).toContain('19h 15m');
+    expect(fixture.nativeElement.textContent).toContain('17h');
     expect(fixture.nativeElement.textContent).toContain('16h 30m');
-    expect(fixture.nativeElement.textContent).toContain('2h 45m');
+    expect(fixture.nativeElement.textContent).toContain('30m');
   });
 
   it('shows no overtime when working hours do not exceed shift hours', () => {

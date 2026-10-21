@@ -559,7 +559,6 @@ export class AddOvertimeComponent implements OnInit {
     const dailyHours = new Map(hoursByDate.map((item) => [item.date, item.hoursWorked]));
     let totalWorkingMinutes = 0;
     let totalShiftMinutes = 0;
-    let totalOvertimeMinutes = 0;
     let hasWorkingHours = false;
     let hasShiftHours = false;
 
@@ -596,16 +595,14 @@ export class AddOvertimeComponent implements OnInit {
       }
       hasShiftHours = true;
       totalShiftMinutes += shiftMinutes;
-      const workedMinutes = this.durationToMinutes(dailyHours.get(date) ?? null);
-      if (workedMinutes !== null) {
-        totalOvertimeMinutes += Math.max(0, workedMinutes - shiftMinutes);
-      }
     }
 
     return {
       workingHours: hasWorkingHours ? this.formatDuration(totalWorkingMinutes) : null,
       shiftHours: hasShiftHours ? this.formatDuration(totalShiftMinutes) : null,
-      calculatedOvertimeHours: hasShiftHours ? this.formatDuration(totalOvertimeMinutes) : null,
+      calculatedOvertimeHours: hasShiftHours
+        ? this.formatDuration(Math.max(0, totalWorkingMinutes - totalShiftMinutes))
+        : null,
     };
   }
 
