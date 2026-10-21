@@ -15,6 +15,7 @@ import {
   LeaveApplicationService,
 } from '../../../services/leave-application.service';
 import { LeaveTypeService } from '../../../services/leave-type.service';
+import { PublicHolidayService } from '../../../services/public-holiday.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
 import { countUnannouncedLeaveDaysForYear } from '../../../utils/unannounced-leave-count.util';
 import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
@@ -127,12 +128,17 @@ function findUnassignedEmployeesForCodes(
 
 function employeeShiftIsApplicable(employee: ApplicationFormRecord): boolean {
   const rawApplicability = (employee as ApplicationFormRecord & { EmployeeShiftApplicable?: unknown }).EmployeeShiftApplicable;
-  const explicitlyApplicable = rawApplicability === true || ['true', 'yes', '1'].includes(String(rawApplicability ?? '').trim().toLowerCase())
+  const normalized = String(rawApplicability ?? '').trim().toLowerCase();
+  const explicitlyApplicable = rawApplicability === true || ['true', 'yes', '1'].includes(normalized)
     ? true
-    : rawApplicability === false || ['false', 'no', '0'].includes(String(rawApplicability ?? '').trim().toLowerCase())
+    : rawApplicability === false || ['false', 'no', '0'].includes(normalized)
       ? false
       : undefined;
-  return explicitlyApplicable ?? employee.detail?.hrSettings.attendanceShiftManagement.trim().toLowerCase() === 'yes';
+  if (explicitlyApplicable !== undefined) {
+    return explicitlyApplicable;
+  }
+  const hrSetting = employee.detail?.hrSettings?.attendanceShiftManagement;
+  return String(hrSetting ?? '').trim().toLowerCase() === 'yes';
 }
 
 function buildEmployeeRosterProfileIndex(
@@ -546,15 +552,69 @@ export function rosterUnannouncedLeaveDates(
   attendance: ReadonlyMap<string, AttendanceDailyRecord>,
   workstations: WorkstationRecord[] = [],
   today = new Date(),
+  publicHolidayDates: Iterable<string> = [],
 ): string[] {
   const normalizedEmployeeCode = employeeCode.toLowerCase();
-  return dates.filter((date, index) => isScheduledShiftAbsent(
-    shifts[index] ?? '+',
-    attendance.get(`${normalizedEmployeeCode}|${date}`),
-    date,
+  const holidaySet = new Set(Array.from(publicHolidayDates, (value) => value.trim()).filter(Boolean));
+  return dates.filter((date, index) => {
+    if (holidaySet.has(date)) {
+      return false;
+    }
+    return isScheduledShiftAbsent(
+      shifts[index] ?? '+',
+      attendance.get(`${normalizedEmployeeCode}|${date}`),
+      date,
+      workstations,
+      today,
+    );
+  });
+}
+
+export function nonShiftUnannouncedLeaveDates(
+  employeeCode: string,
+  dates: string[],
+  attendance: ReadonlyMap<string, AttendanceDailyRecord>,
+  publicHolidayDates: Iterable<string> = [],
+  today = new Date(),
+): string[] {
+  const normalizedEmployeeCode = employeeCode.toLowerCase();
+  const holidaySet = new Set(Array.from(publicHolidayDates, (value) => value.trim()).filter(Boolean));
+  return dates.filter((date) => {
+    if (holidaySet.has(date) || isRosterDateInFuture(date, today)) {
+      return false;
+    }
+    const dailyAttendance = attendance.get(`${normalizedEmployeeCode}|${date}`);
+    return !dailyAttendance?.PunchIn && !dailyAttendance?.PunchOut;
+  });
+}
+
+export function trackedEmployeeUnannouncedLeaveDates(
+  employee: Pick<ApplicationFormRecord, 'EmployeeCode'> & Partial<{ shifts: ShiftCode[] }>,
+  dates: string[],
+  attendance: ReadonlyMap<string, AttendanceDailyRecord>,
+  workstations: WorkstationRecord[] = [],
+  today = new Date(),
+  publicHolidayDates: Iterable<string> = [],
+): string[] {
+  if (!employeeShiftIsApplicable(employee as ApplicationFormRecord)) {
+    return nonShiftUnannouncedLeaveDates(
+      employee.EmployeeCode,
+      dates,
+      attendance,
+      publicHolidayDates,
+      today,
+    );
+  }
+
+  return rosterUnannouncedLeaveDates(
+    employee.EmployeeCode,
+    employee.shifts ?? [],
+    dates,
+    attendance,
     workstations,
     today,
-  ));
+    publicHolidayDates,
+  );
 }
 
 export function rosterUnannouncedLeaveDateRange(dates: string[]): string[] {
@@ -802,6 +862,7 @@ export class EmployeeRosterComponent implements OnInit {
   readonly workstationService = inject(WorkstationService);
   private readonly leaveApplicationService = inject(LeaveApplicationService);
   private readonly leaveTypeService = inject(LeaveTypeService);
+  private readonly publicHolidayService = inject(PublicHolidayService);
 
   readonly loading = signal(false);
   readonly saving = signal(false);
@@ -847,17 +908,31 @@ export class EmployeeRosterComponent implements OnInit {
   readonly confirmingUnannouncedLeave = signal(false);
   readonly postingUnannouncedLeave = signal(false);
   readonly postedUnannouncedLeaveDateKeys = signal(new Set<string>());
+  readonly publicHolidayDatesLoaded = signal(false);
   readonly employeeUnannouncedLeaveDates = computed(() => {
     const employee = this.employeeSummaryDialog();
-    if (!employee || !this.rosterAttendanceLoaded()) {
+    if (!employee || !this.rosterAttendanceLoaded() || !this.publicHolidayDatesLoaded()) {
       return [];
+    }
+    const publicHolidayDates = this.publicHolidayDatesForMonth(this.monthLabel());
+    const dates = this.fullMonthDays().map((day) => this.rosterDate(day.date));
+    if (!employeeShiftIsApplicable(employee as ApplicationFormRecord)) {
+      return nonShiftUnannouncedLeaveDates(
+        employee.EmployeeCode,
+        dates,
+        this.rosterAttendance(),
+        publicHolidayDates,
+        new Date(),
+      );
     }
     return rosterUnannouncedLeaveDates(
       employee.EmployeeCode,
       this.monthlyShifts(employee),
-      this.fullMonthDays().map((day) => this.rosterDate(day.date)),
+      dates,
       this.rosterAttendance(),
       this.workstationService.workstations(),
+      new Date(),
+      publicHolidayDates,
     );
   });
   readonly pendingUnannouncedLeaveDates = computed(() => {
@@ -879,6 +954,9 @@ export class EmployeeRosterComponent implements OnInit {
   private unannouncedLeaveSyncRequestId = 0;
   private rosterAttendanceRequestId = 0;
   private rosterAttendanceRequest?: Subscription;
+  private readonly publicHolidayDatesByMonth = new Map<string, Set<string>>();
+  private publicHolidayRequest?: Subscription;
+  private employeeProfiles: ApplicationFormRecord[] = [];
   readonly rosterAttendance = signal(new Map<string, AttendanceDailyRecord>());
   readonly rosterAttendanceLoading = signal(false);
   readonly rosterAttendanceLoaded = signal(false);
@@ -915,16 +993,27 @@ export class EmployeeRosterComponent implements OnInit {
       monthLabel,
     );
     const locallyPostedDates = this.postedUnannouncedLeaveDateKeys();
+    const publicHolidayDates = this.publicHolidayDatesForMonth(monthLabel);
     return this.employees()
       .map((employee) => ({
         employee,
-        dates: rosterUnannouncedLeaveDates(
-          employee.EmployeeCode,
-          this.unpaidLeaveReportShifts(employee, monthLabel),
-          dates,
-          this.unpaidLeaveReportAttendance(),
-          this.workstationService.workstations(),
-        ),
+        dates: employeeShiftIsApplicable(employee as ApplicationFormRecord)
+          ? rosterUnannouncedLeaveDates(
+            employee.EmployeeCode,
+            this.unpaidLeaveReportShifts(employee, monthLabel),
+            dates,
+            this.unpaidLeaveReportAttendance(),
+            this.workstationService.workstations(),
+            new Date(),
+            publicHolidayDates,
+          )
+          : nonShiftUnannouncedLeaveDates(
+            employee.EmployeeCode,
+            dates,
+            this.unpaidLeaveReportAttendance(),
+            publicHolidayDates,
+            new Date(),
+          ),
       }))
       .filter((entry) => entry.dates.length > 0)
       .map((entry) => {
@@ -1837,6 +1926,56 @@ export class EmployeeRosterComponent implements OnInit {
       .get(monthKey)
       ?.get(normalizeEmployeeCodeForRoster(employeeCode));
     return shifts ? [...shifts] : Array.from({ length: rosterMonthDayCount(monthKey) }, () => '+');
+  }
+
+  private publicHolidayDatesForMonth(monthLabel: string): string[] {
+    const monthKey = rosterMonthKey(monthLabel);
+    const cachedDates = this.publicHolidayDatesByMonth.get(monthKey);
+    if (cachedDates) {
+      return Array.from(cachedDates);
+    }
+
+    if (!this.publicHolidayRequest) {
+      this.publicHolidayRequest = this.publicHolidayService.fetchPublicHolidays().subscribe({
+        next: (holidays) => {
+          const nextMap = new Map<string, Set<string>>();
+          for (const holiday of holidays) {
+            const key = holiday.date.slice(0, 7);
+            if (!nextMap.has(key)) {
+              nextMap.set(key, new Set());
+            }
+            nextMap.get(key)!.add(holiday.date);
+          }
+          this.publicHolidayDatesByMonth.clear();
+          for (const [key, dates] of nextMap.entries()) {
+            this.publicHolidayDatesByMonth.set(key, dates);
+          }
+          this.publicHolidayDatesLoaded.set(true);
+          this.publicHolidayRequest = undefined;
+        },
+        error: () => {
+          this.publicHolidayDatesLoaded.set(true);
+          this.publicHolidayRequest = undefined;
+        },
+      });
+    }
+
+    const loadedDates = this.publicHolidayDatesByMonth.get(monthKey);
+    if (loadedDates) {
+      return Array.from(loadedDates);
+    }
+
+    const monthDates = new Set<string>();
+    for (const [key, dates] of this.publicHolidayDatesByMonth.entries()) {
+      if (key.startsWith(`${monthKey.slice(0, 4)}-`) && key === monthKey) {
+        for (const date of dates) {
+          if (date.startsWith(`${monthKey}-`)) {
+            monthDates.add(date);
+          }
+        }
+      }
+    }
+    return Array.from(monthDates);
   }
 
   private loadRosterAttendance(): void {

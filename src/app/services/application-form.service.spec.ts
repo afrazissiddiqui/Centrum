@@ -34,6 +34,39 @@ describe('ApplicationFormService', () => {
     expect(service.normalizeEmployeeCodeValue('Emp-00003314')).toBe('Emp-00000257');
   });
 
+  it('resolves a unique one-word login name to the matching full employee name', () => {
+    (service as any).applicationRecords.set([
+      {
+        EmployeeCode: 'Emp-00000011',
+        EmployeeName: 'Manzoor Ahmad',
+        detail: {
+          personalInfo: { personName: 'Manzoor Ahmad' },
+          loginDetails: { employeeName: 'Manzoor Ahmad', userId: '00000011' },
+        },
+      },
+      {
+        EmployeeCode: 'Emp-00000012',
+        EmployeeName: 'Ayesha Khan',
+        detail: {
+          personalInfo: { personName: 'Ayesha Khan' },
+          loginDetails: { employeeName: 'Ayesha Khan', userId: '00000012' },
+        },
+      },
+    ]);
+
+    expect(service.getSignedInUserRecord('portal-user-42', 'manzoor')?.EmployeeCode)
+      .toBe('Emp-00000011');
+  });
+
+  it('does not resolve an ambiguous one-word login name to another employee', () => {
+    (service as any).applicationRecords.set([
+      { EmployeeCode: 'Emp-00000011', EmployeeName: 'Manzoor Ahmad' },
+      { EmployeeCode: 'Emp-00000012', EmployeeName: 'Manzoor Ali' },
+    ]);
+
+    expect(service.getSignedInUserRecord('portal-user-42', 'manzoor')).toBeUndefined();
+  });
+
   it('loads Cost Center from nested remuneration data for profile updates', () => {
     const record = (service as any).mapApiItemToFullRecord({
       id: 7,
@@ -45,24 +78,51 @@ describe('ApplicationFormService', () => {
     expect(record.detail.requisition.costCenter).toBe('CC-124');
   });
 
-  it('uses loanAmountAllowed for maximum loan capacity when the API max field is zero', () => {
+  it('preserves zero maximum loan capacity and serializes it as maximumLoanCapacity', () => {
     const record = (service as any).mapApiItemToFullRecord({
       id: 7,
       employeeCode: 'Emp-00000001',
       remuneration: {
         loanAmountAllowed: '10000000.00',
         maximumLoanCapacity: '0.00',
+        maximumLoanAllowed: '5000',
       },
     });
     const payload = service.buildFlatEmployeeProfilePayload(record.detail);
     const serializedPayload = (service as any).serializeEmployeeProfilePayload(payload);
 
-    expect(record.detail.remuneration.loanAmountAllowed).toBe('10000000.00');
-    expect(record.detail.remuneration.maximumLoanCapacity).toBe('10000000.00');
-    expect(payload.loanAmountAllowed).toBe(10000000);
-    expect(payload.maximumLoanCapacity).toBe(10000000);
-    expect(serializedPayload.remuneration.loanAmountAllowed).toBe(10000000);
-    expect(serializedPayload.remuneration.maximumLoanCapacity).toBe(10000000);
+    expect(record.detail.remuneration.maximumLoanCapacity).toBe('0.00');
+    expect(payload.maximumLoanCapacity).toBe('0.00');
+    expect(serializedPayload.maximumLoanCapacity).toBe('0.00');
+    expect(serializedPayload).not.toHaveProperty('loanAmountAllowed');
+    expect(serializedPayload).not.toHaveProperty('maximumLoanAllowed');
+    expect(serializedPayload.remuneration.maximumLoanCapacity).toBe('0.00');
+    expect(serializedPayload.remuneration).not.toHaveProperty('loanAmountAllowed');
+    expect(serializedPayload.remuneration).not.toHaveProperty('maximumLoanAllowed');
+  });
+
+  it('serializes the edited maximum loan capacity instead of a stale zero legacy value', () => {
+    const record = (service as any).mapApiItemToFullRecord({
+      id: 7,
+      employeeCode: 'Emp-00000001',
+      remuneration: {
+        loanAmountAllowed: '0.00',
+        maximumLoanCapacity: '0.00',
+      },
+    });
+    record.detail.remuneration.maximumLoanCapacity = '5000';
+
+    const payload = service.buildFlatEmployeeProfilePayload(record.detail);
+    service.updateEmployeeProfile(7, payload).subscribe();
+
+    const httpMock = TestBed.inject(HttpTestingController);
+    const request = httpMock.expectOne((req) => req.url.endsWith('/employee-profile-update/7'));
+
+    expect(request.request.body.maximumLoanCapacity).toBe('5000');
+    expect(request.request.body.remuneration.maximumLoanCapacity).toBe('5000');
+    expect(request.request.body).not.toHaveProperty('loanAmountAllowed');
+    expect(request.request.body.remuneration).not.toHaveProperty('loanAmountAllowed');
+    request.flush({});
   });
 
   it('maps shift and overtime applicability aliases to the employee profile flags', () => {

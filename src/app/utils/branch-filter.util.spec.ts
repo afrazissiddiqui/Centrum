@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { filterRecordsBySessionBranches, getAllowedBranches } from './branch-filter.util';
 
 describe('branch filter utilities', () => {
@@ -21,5 +22,15 @@ describe('branch filter utilities', () => {
     );
 
     expect(filtered).toEqual([{ branch: 'FSD' }]);
+  });
+
+  it('keeps a leave record stored with a zero-padded location branch ID', () => {
+    const filtered = filterRecordsBySessionBranches(
+      [{ Location: '02', EmployeeId: 'Emp-00000011' }],
+      (record) => record.Location,
+      { is_admin: false, branch: '2' },
+    );
+
+    expect(filtered).toEqual([{ Location: '02', EmployeeId: 'Emp-00000011' }]);
   });
 });

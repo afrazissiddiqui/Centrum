@@ -230,6 +230,9 @@
       } @else {
         <span>Company public holidays are shown alongside employee schedule events.</span>
       }
+      @if (leaveCalendarLoadError()) {
+        <span role="status">Your leave applications could not be loaded.</span>
+      }
     </footer>
   </section>
 

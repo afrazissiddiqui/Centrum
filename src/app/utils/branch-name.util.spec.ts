@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { formatBranchNameForDisplay, resolveBranchNameFromBplId } from './branch-name.util';
 
 describe('resolveBranchNameFromBplId', () => {
@@ -7,6 +8,10 @@ describe('resolveBranchNameFromBplId', () => {
 
   it('maps BPLID 2 to AHCP_HO', () => {
     expect(resolveBranchNameFromBplId('2')).toBe('AHCP_HO');
+  });
+
+  it('maps zero-padded branch IDs to the same branch', () => {
+    expect(resolveBranchNameFromBplId('02')).toBe('AHCP_HO');
   });
 
   it('maps BPLID 3 to AHCP_Faisalabad', () => {

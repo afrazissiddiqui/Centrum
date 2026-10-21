@@ -35,6 +35,13 @@ export function resolveBranchNameFromBplId(value: string | number | undefined | 
     return branchNames[normalized];
   }
 
+  if (/^\d+$/.test(normalized)) {
+    const numericBranch = branchNames[String(Number(normalized))];
+    if (numericBranch) {
+      return numericBranch;
+    }
+  }
+
   const prefix = normalized.split(/[-_\s]/, 1)[0];
   if (prefix && branchNames[prefix]) {
     return branchNames[prefix];

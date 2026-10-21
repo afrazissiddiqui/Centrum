@@ -2,6 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { of } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
+import { ApplicationFormRecord, ApplicationFormService } from '../../services/application-form.service';
+import { LeaveApplicationRecord, LeaveApplicationService } from '../../services/leave-application.service';
 import { PermissionService } from '../../services/permission.service';
 import { PublicHolidayRecord, PublicHolidayService } from '../../services/public-holiday.service';
 import { dashboardComponent } from './dashboard';
@@ -9,16 +11,36 @@ import { dashboardComponent } from './dashboard';
 describe('Dashboard', () => {
   let component: dashboardComponent;
   let fixture: ComponentFixture<dashboardComponent>;
-  let sessionUser: { name: string; is_admin: boolean };
+  let sessionUser: { id: number; name: string; email: string; is_admin: boolean };
+  let leaveApplications: LeaveApplicationRecord[];
+  let signedInEmployee: ApplicationFormRecord;
 
   beforeEach(async () => {
-    sessionUser = { name: 'Alex Wong', is_admin: false };
+    sessionUser = { id: 42, name: 'Alex Wong', email: 'alex@example.com', is_admin: false };
+    leaveApplications = [];
+    signedInEmployee = {
+      EmployeeCode: 'EMP-00000042',
+      EmployeeName: 'Alex Wong',
+      detail: {
+        loginDetails: { userId: 'alex.wong', employeeCode: 'EMP-00000042' },
+      },
+    } as ApplicationFormRecord;
     await TestBed.configureTestingModule({
       imports: [dashboardComponent],
       providers: [
         { provide: Router, useValue: { navigateByUrl: () => Promise.resolve(true) } },
-        { provide: AuthService, useValue: { getSessionUser: () => sessionUser } },
+        { provide: AuthService, useValue: {
+          getSessionUser: () => sessionUser,
+          getSessionUserId: () => 'alex.wong',
+        } },
         { provide: PermissionService, useValue: { canAccess: () => true } },
+        { provide: ApplicationFormService, useValue: {
+          fetchEmployeeProfiles: () => of([signedInEmployee]),
+          getSignedInUserRecord: () => signedInEmployee,
+        } },
+        { provide: LeaveApplicationService, useValue: {
+          fetchLeaveApplications: () => of(leaveApplications),
+        } },
         {
           provide: PublicHolidayService,
           useValue: {
@@ -100,6 +122,58 @@ describe('Dashboard', () => {
       location: 'Al Hafiz',
       description: 'Pakistan Day',
     });
+
+  });
+
+  it('shows every date in the signed-in employee leave request and hides other employees', () => {
+    leaveApplications = [
+      {
+        Id: 15,
+        EmployeeId: 'Emp-00000042',
+        EmployeeName: 'Alex Wong',
+        LeaveType: 'Annual Leave',
+        RequestStatus: 'Submitted',
+        FromDate: '2026-10-10',
+        ToDate: '2026-10-20',
+        CauseOfLeave: '',
+        Remarks: '',
+      },
+      {
+        Id: 16,
+        EmployeeId: 'EMP-00000043',
+        EmployeeName: 'Another employee',
+        LeaveType: 'Sick Leave',
+        RequestStatus: 'Approved',
+        FromDate: '2026-10-12',
+        ToDate: '2026-10-12',
+        CauseOfLeave: '',
+        Remarks: '',
+      },
+    ] as LeaveApplicationRecord[];
+
+    component.ngOnInit();
+
+    const leaveEvents = component.calendarEvents().filter((event) =>
+      event.category === 'pending' || event.category === 'approved',
+    );
+    expect(leaveEvents).toHaveSize(11);
+    expect(leaveEvents[0].title).toBe('Annual Leave');
+    expect(leaveEvents[0].date).toBe('2026-10-10');
+    expect(leaveEvents[0].category).toBe('pending');
+    expect(leaveEvents[10].title).toBe('Annual Leave');
+    expect(leaveEvents[10].date).toBe('2026-10-20');
+    expect(leaveEvents[10].category).toBe('pending');
+    expect(leaveEvents.some((event) => event.title === 'Sick Leave')).toBe(false);
+  });
+
+  it('resolves the employee profile using the authenticated portal user ID', () => {
+    const applicationFormService = TestBed.inject(ApplicationFormService);
+    const profileLookup = spyOn(applicationFormService, 'getSignedInUserRecord')
+      .and.returnValue(signedInEmployee);
+
+    component.ngOnInit();
+
+    expect(profileLookup).toHaveBeenCalledWith('42', 'Alex Wong');
   });
 
   it('marks every Sunday as a weekly day off in calendar views', () => {

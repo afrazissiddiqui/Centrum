@@ -25,6 +25,8 @@ import {
   rosterUnannouncedLeaveApplicationBalance,
   rosterUnannouncedLeaveBalance,
   rosterUnannouncedLeaveDates,
+  nonShiftUnannouncedLeaveDates,
+  trackedEmployeeUnannouncedLeaveDates,
   rosterPeriodForDate,
   rosterDaysForMonthHalf,
   rosterShiftInitial,
@@ -483,6 +485,33 @@ describe('rosterUnannouncedLeaveDates', () => {
       [],
       new Date(2026, 9, 16),
     )).toEqual(['2026-10-14']);
+  });
+});
+
+describe('non-shift unannounced leave detection', () => {
+  it('flags missing punch-ins and punch-outs for employees without shift applicability while excluding holidays', () => {
+    const attendance = new Map<string, AttendanceDailyRecord>([
+      ['emp-00000099|2026-10-14', { PunchIn: '', PunchOut: '' } as AttendanceDailyRecord],
+      ['emp-00000099|2026-10-15', { PunchIn: '2026-10-15T09:00:00', PunchOut: '' } as AttendanceDailyRecord],
+      ['emp-00000099|2026-10-16', { PunchIn: '', PunchOut: '2026-10-16T18:00:00' } as AttendanceDailyRecord],
+    ]);
+
+    expect(nonShiftUnannouncedLeaveDates(
+      'EMP-00000099',
+      ['2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17'],
+      attendance,
+      ['2026-10-14'],
+      new Date(2026, 9, 17),
+    )).toEqual([]);
+
+    expect(trackedEmployeeUnannouncedLeaveDates(
+      { EmployeeCode: 'EMP-00000099', detail: { hrSettings: { attendanceShiftManagement: 'No' } } },
+      ['2026-10-14', '2026-10-17', '2026-10-18'],
+      attendance,
+      [],
+      new Date(2026, 9, 18),
+      ['2026-10-14'],
+    )).toEqual(['2026-10-17']);
   });
 });
 

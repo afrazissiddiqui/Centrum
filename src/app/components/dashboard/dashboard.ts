@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { map, switchMap } from 'rxjs';
 import {
   getNavigableHrMenuActions,
   HrMenuAction,
@@ -10,6 +11,8 @@ import {
 import { AuthService } from '../../services/auth.service';
 import { PermissionService } from '../../services/permission.service';
 import { PublicHolidayService } from '../../services/public-holiday.service';
+import { ApplicationFormService, canonicalizeEmployeeCodeValue } from '../../services/application-form.service';
+import { LeaveApplicationRecord, LeaveApplicationService } from '../../services/leave-application.service';
 
 export type CompanyCalendarEventCategory = 'approved' | 'pending' | 'remote' | 'holiday' | 'dayoff' | 'office';
 
@@ -74,6 +77,77 @@ function dateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function normalizeDashboardEmployeeId(value: string): string {
+  const normalized = canonicalizeEmployeeCodeValue(value).trim().toLowerCase();
+  const numericCode = normalized.match(/^(?:emp[-\s]?)?(\d+)$/)?.[1];
+  return numericCode ? `emp-${numericCode.padStart(8, '0')}` : normalized;
+}
+
+function dashboardDateKey(value: string): string | null {
+  const datePart = value.trim().split(/[T ]/, 1)[0] ?? '';
+  const isoMatch = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const dmyMatch = datePart.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  const year = Number(isoMatch?.[1] ?? dmyMatch?.[3]);
+  const month = Number(isoMatch?.[2] ?? dmyMatch?.[2]);
+  const day = Number(isoMatch?.[3] ?? dmyMatch?.[1]);
+  if (!year || !month || !day) {
+    return null;
+  }
+  const date = new Date(year, month - 1, day, 12);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+  return dateKey(date);
+}
+
+export function dashboardLeaveEvents(
+  applications: LeaveApplicationRecord[],
+  employeeIds: Iterable<string>,
+): CompanyCalendarEvent[] {
+  const employeeIdSet = new Set(
+    Array.from(employeeIds, normalizeDashboardEmployeeId).filter(Boolean),
+  );
+  if (!employeeIdSet.size) {
+    return [];
+  }
+
+  const events: CompanyCalendarEvent[] = [];
+  applications.forEach((application, applicationIndex) => {
+    if (!employeeIdSet.has(normalizeDashboardEmployeeId(application.EmployeeId))) {
+      return;
+    }
+    if (/reject|cancel|withdraw|void|delete|declin/i.test(application.RequestStatus)) {
+      return;
+    }
+
+    const fromDate = dashboardDateKey(application.FromDate);
+    const toDate = dashboardDateKey(application.ToDate);
+    if (!fromDate || !toDate || fromDate > toDate) {
+      return;
+    }
+
+    const category: CompanyCalendarEventCategory = /approv|accept|confirm/i.test(application.RequestStatus)
+      ? 'approved'
+      : 'pending';
+    const title = application.LeaveType.trim() || 'Leave';
+    const cursor = new Date(`${fromDate}T12:00:00`);
+    const lastDate = new Date(`${toDate}T12:00:00`);
+    while (cursor <= lastDate) {
+      const date = dateKey(cursor);
+      events.push({
+        id: `leave-${application.Id || applicationIndex}-${date}`,
+        title,
+        date,
+        category,
+        description: application.CauseOfLeave || application.Remarks || undefined,
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  });
+
+  return events;
+}
+
 @Component({
   selector: 'app-dashboard',
   imports: [CommonModule, FormsModule],
@@ -87,6 +161,8 @@ export class dashboardComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly permissionService = inject(PermissionService);
   private readonly publicHolidayService = inject(PublicHolidayService);
+  private readonly applicationFormService = inject(ApplicationFormService);
+  private readonly leaveApplicationService = inject(LeaveApplicationService);
   private readonly today = new Date();
   private readonly hour = this.today.getHours();
 
@@ -114,6 +190,7 @@ export class dashboardComponent implements OnInit {
   readonly employeeServiceLabel = 'Employee Self-Service (ESS)';
   readonly calendarEvents = signal<CompanyCalendarEvent[]>([]);
   readonly holidayLoadError = signal(false);
+  readonly leaveCalendarLoadError = signal(false);
   readonly holidayDialogOpen = signal(false);
   readonly holidayDate = signal(dateKey(this.today));
   readonly holidayDescription = signal('');
@@ -207,6 +284,47 @@ export class dashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadPublicHolidays();
+    this.loadEmployeeLeaveEvents();
+  }
+
+  private loadEmployeeLeaveEvents(): void {
+    this.applicationFormService.fetchEmployeeProfiles().pipe(
+      switchMap(() => {
+        const sessionUser = this.authService.getSessionUser();
+        const identityCandidates = [
+          sessionUser?.id === undefined ? '' : String(sessionUser.id),
+          sessionUser?.email ?? '',
+          this.authService.getSessionUserId() ?? '',
+        ].filter((value, index, values) => value.trim() && values.indexOf(value) === index);
+        const employee = identityCandidates
+          .map((identity) => this.applicationFormService.getSignedInUserRecord(identity, sessionUser?.name))
+          .find((record) => record !== undefined);
+        if (!employee) {
+          throw new Error('No employee profile matches the signed-in account.');
+        }
+        const employeeIds = [
+          employee.EmployeeCode,
+          employee.detail?.loginDetails.employeeCode ?? '',
+          employee.userId ?? '',
+          employee.detail?.loginDetails.userId ?? '',
+        ];
+        return this.leaveApplicationService.fetchLeaveApplications().pipe(
+          map((applications) => dashboardLeaveEvents(applications, employeeIds)),
+        );
+      }),
+    ).subscribe({
+      next: (leaveEvents) => {
+        this.leaveCalendarLoadError.set(false);
+        this.calendarEvents.update((events) => [
+          ...events.filter((event) => !event.id.startsWith('leave-')),
+          ...leaveEvents,
+        ]);
+      },
+      error: (error: unknown) => {
+        console.error('Failed to load the signed-in employee leave calendar.', error);
+        this.leaveCalendarLoadError.set(true);
+      },
+    });
   }
 
   openHolidayDialog(): void {

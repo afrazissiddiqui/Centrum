@@ -402,7 +402,6 @@ export interface EmployeeProfileAddPayload {
   taxPercentage: number | string | null;
   dateOfJoining: string;
   advancePercentAllowed: number | string;
-  loanAmountAllowed: number | string | null;
   maximumLoanCapacity: number | string | null;
   maximumAdvanceCapacity: number | string | null;
   overTimeApplicable: boolean;
@@ -832,6 +831,8 @@ export class ApplicationFormService {
     const login = detail.loginDetails;
     const hr = detail.hrSettings;
     const assets = detail.assets;
+    const maximumLoanCapacity =
+      remuneration.maximumLoanCapacity.trim() || remuneration.loanAmountAllowed;
     const primaryLeave = detail.leaveManagement[0] ?? {
       leaveType: '',
       leavesAllocated: '',
@@ -962,12 +963,7 @@ export class ApplicationFormService {
       taxPercentage: toNullableApiNumber(remuneration.taxPercentage),
       dateOfJoining: toApiDate(remuneration.dateOfJoining),
       advancePercentAllowed: toApiNumber(remuneration.advancePercentAllowed),
-      loanAmountAllowed: toNullableApiNumber(
-        remuneration.loanAmountAllowed || remuneration.maximumLoanCapacity,
-      ),
-      maximumLoanCapacity: toNullableApiNumber(
-        remuneration.loanAmountAllowed || remuneration.maximumLoanCapacity,
-      ),
+      maximumLoanCapacity: maximumLoanCapacity.trim() || null,
       maximumAdvanceCapacity: toNullableApiNumber(remuneration.maximumAdvanceCapacity),
       overTimeApplicable: toApiFlag(remuneration.overTimeApplicable),
       allowancesApplicable: toApiFlag(remuneration.allowancesApplicable),
@@ -1169,7 +1165,6 @@ export class ApplicationFormService {
       dateOfJoining: payload.dateOfJoining,
       cashSalaryPercentage: payload.cashSalaryPercentage,
       advancePercentAllowed: payload.advancePercentAllowed,
-      loanAmountAllowed: payload.loanAmountAllowed,
       maximumLoanCapacity: payload.maximumLoanCapacity,
       maximumAdvanceCapacity: payload.maximumAdvanceCapacity,
       overTimeApplicable: payload.overTimeApplicable,
@@ -2190,6 +2185,11 @@ export class ApplicationFormService {
 
     const overTimeRaw = pickRem('overTimeApplicable', 'over_time_applicable');
     const overTimeApplicable = this.yesNoFromApi(overTimeRaw);
+    const apiMaximumLoanCapacity = pickRem('maximumLoanCapacity', 'maximum_loan_capacity');
+    const maximumLoanAllowed = pickRem('maximumLoanAllowed', 'maximum_loan_allowed');
+    const legacyLoanAmountAllowed = pickRem('loanAmountAllowed', 'loan_amount_allowed');
+    const maximumLoanCapacity =
+      apiMaximumLoanCapacity || maximumLoanAllowed || legacyLoanAmountAllowed;
 
     const roleSalary =
       pick('roleSalary', 'role_salary') || pick('roleAndSalary', 'role_and_salary');
@@ -2276,9 +2276,7 @@ export class ApplicationFormService {
           pickRem('taxArrangementPercentage', 'tax_arrangement_percentage'),
         dateOfJoining: formatDateForInput(pickRem('dateOfJoining', 'date_of_joining')),
         advancePercentAllowed: pickRem('advancePercentAllowed', 'advance_percent_allowed'),
-        loanAmountAllowed:
-          pickRem('loanAmountAllowed', 'loan_amount_allowed') ||
-          pickRem('maximumLoanCapacity', 'maximum_loan_capacity'),
+        loanAmountAllowed: maximumLoanCapacity,
         overTimeApplicable,
         leaveType: pickRem('leaveType', 'leave_type'),
         leaveDays: asNumberString(pickRem('leaveDays', 'leave_days')),
@@ -2289,10 +2287,7 @@ export class ApplicationFormService {
         fuelAllowances: asNumberString(pickRem('fuelAllowances', 'fuel_allowances')),
         mobileAllowances: asNumberString(pickRem('mobileAllowances', 'mobile_allowances')),
         carAllowances: asNumberString(pickRem('carAllowances', 'car_allowances')),
-        maximumLoanCapacity: asNumberString(
-          pickRem('loanAmountAllowed', 'loan_amount_allowed') ||
-          pickRem('maximumLoanCapacity', 'maximum_loan_capacity'),
-        ),
+        maximumLoanCapacity: asNumberString(maximumLoanCapacity),
         maximumAdvanceCapacity: asNumberString(
           this.resolveMaximumAdvanceCapacityValue(
             pickRem('maximumAdvanceCapacity', 'maximum_advance_capacity'),
@@ -2428,7 +2423,8 @@ export class ApplicationFormService {
       return undefined;
     }
 
-    return this.applicationRecords().find((record) => {
+    const records = this.applicationRecords();
+    const exactMatch = records.find((record) => {
       const employeeName = record.EmployeeName?.trim().toLowerCase() ?? '';
       const detailName = record.detail?.personalInfo?.personName?.trim().toLowerCase() ?? '';
       const loginName = record.detail?.loginDetails?.employeeName?.trim().toLowerCase() ?? '';
@@ -2445,6 +2441,22 @@ export class ApplicationFormService {
         employeeCode === normalized
       );
     });
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    if (normalized.split(/\s+/).length !== 1) {
+      return undefined;
+    }
+
+    const firstNameMatches = records.filter((record) =>
+      [
+        record.EmployeeName,
+        record.detail?.personalInfo?.personName,
+        record.detail?.loginDetails?.employeeName,
+      ].some((name) => name?.trim().toLowerCase().split(/\s+/)[0] === normalized),
+    );
+    return firstNameMatches.length === 1 ? firstNameMatches[0] : undefined;
   }
 
   updateLoginPassword(sessionUserId: string, newPassword: string): boolean {

@@ -1722,6 +1722,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
       education: this.educationSections().map((row) => ({ ...row })),
       pastExperience: this.pastExperienceSections().map((row) => ({ ...row })),
     });
+    payload.maximumLoanCapacity = this.maximumLoanCapacity().trim() || null;
 
     console.debug('Employee profile API payload', payload);
 

@@ -37,7 +37,7 @@
         <h3>Salary &amp; remuneration</h3>
         <div class="view-profile-grid">
           <div class="view-profile-item"><span class="view-profile-label">Salary</span><span>{{ displaySalary() }}</span></div>
-          <div class="view-profile-item"><span class="view-profile-label">Maximum Loan Capacity</span><span>{{ record.detail?.remuneration?.loanAmountAllowed || record.detail?.remuneration?.maximumLoanCapacity || '—' }}</span></div>
+          <div class="view-profile-item"><span class="view-profile-label">Maximum Loan Capacity</span><span>{{ record.detail?.remuneration?.maximumLoanCapacity || '—' }}</span></div>
           <div class="view-profile-item"><span class="view-profile-label">Medical allowances</span><span>{{ record.detail?.remuneration?.medicalAllowances || '—' }}</span></div>
           <div class="view-profile-item"><span class="view-profile-label">Total leaves</span><span>{{ record.detail?.remuneration?.totalLeaves || '—' }}</span></div>
           <div class="view-profile-item"><span class="view-profile-label">Employment type</span><span>{{ field(record, r => r.EmploymentType) }}</span></div>
