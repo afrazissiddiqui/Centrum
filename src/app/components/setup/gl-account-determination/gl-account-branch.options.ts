@@ -44,6 +44,15 @@ export function resolveBranchCode(codeOrName: string): string {
   if (byCode) {
     return byCode.code;
   }
+  if (/^\d+$/.test(trimmed)) {
+    const normalizedCode = String(Number(trimmed));
+    const byNormalizedCode = GL_ACCOUNT_BRANCH_OPTIONS.find(
+      (option) => option.code === normalizedCode,
+    );
+    if (byNormalizedCode) {
+      return byNormalizedCode.code;
+    }
+  }
   const normalizedName = trimmed.replace(/\s+/g, '_').replace(/^AHCP_\s*/i, 'AHCP_');
   const byName = GL_ACCOUNT_BRANCH_OPTIONS.find(
     (option) => option.name === trimmed || option.name === normalizedName,

@@ -906,9 +906,7 @@ export class ApplicationFormService {
     };
 
     const reportingManager = personal.reportingManager || detail.requisition.hiringManager;
-    const branchCode = resolveBranchCode(
-      personal.branchLocation || detail.requisition.location || '',
-    );
+    const branchCode = resolveBranchCode(personal.branchLocation);
     const educationSource = options.education ?? detail.education ?? [];
     const experienceSource = options.pastExperience ?? detail.pastExperience ?? [];
     const educationRows = this.filterEducationRows(educationSource);
@@ -2249,11 +2247,7 @@ export class ApplicationFormService {
         roleSalary,
         workGradeLevel:
           pick('workGradeLevel', 'work_grade_level') || roleSalary || salaryStructure,
-        branchLocation: resolveBranchCode(
-          pick('branchLocation', 'branch_location') ||
-            pick('branch', 'branch') ||
-            pick('location', 'location'),
-        ),
+        branchLocation: resolveBranchCode(pick('branchLocation', 'branch_location')),
         costCenter: pickRem('costCenter', 'cost_center') || pick('costCenter', 'cost_center'),
         reportingManager:
           pick('reportingManager', 'reporting_manager') ||
@@ -2363,8 +2357,7 @@ export class ApplicationFormService {
         company: summary.EmployeeNature !== '—' ? summary.EmployeeNature : '',
         department: summary.Department !== '—' ? summary.Department : '',
         division: summary.EmploymentType !== '—' ? summary.EmploymentType : '',
-        location:
-          pick('branchLocation', 'branch_location') || pick('branch', 'branch') || pick('location', 'location'),
+        location: pick('branchLocation', 'branch_location'),
         costCenter: pickRem('costCenter', 'cost_center') || pick('costCenter', 'cost_center'),
       },
       assets: this.mapApiAssets(item),

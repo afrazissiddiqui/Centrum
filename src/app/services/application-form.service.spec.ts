@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ApplicationFormService } from './application-form.service';
+import { glAccountBranchLabel } from '../components/setup/gl-account-determination/gl-account-branch.options';
 
 describe('ApplicationFormService', () => {
   let service: ApplicationFormService;
@@ -76,6 +77,38 @@ describe('ApplicationFormService', () => {
 
     expect(record.detail.personalInfo.costCenter).toBe('CC-124');
     expect(record.detail.requisition.costCenter).toBe('CC-124');
+  });
+
+  it('uses branchLocation, not branchName, for the profile Branch dropdown', () => {
+    const expectedBranches = [
+      ['1', '1', 'AHCP_Peshawar'],
+      ['02', '2', 'AHCP_HO'],
+      ['3', '3', 'AHCP_Faisalabad'],
+    ];
+
+    for (const [responseBranch, dropdownBranch, expectedLabel] of expectedBranches) {
+      const record = (service as any).mapApiItemToFullRecord({
+        branchLocation: responseBranch,
+        branchName: null,
+      });
+
+      expect(record.detail.personalInfo.branchLocation).toBe(dropdownBranch);
+      expect(glAccountBranchLabel(record.detail.personalInfo.branchLocation)).toBe(expectedLabel);
+      expect(service.buildFlatEmployeeProfilePayload(record.detail).branchLocation).toBe(dropdownBranch);
+    }
+  });
+
+  it('posts only branchLocation even when requisition location is set', () => {
+    const record = (service as any).mapApiItemToFullRecord({
+      personalInfo: { branchLocation: '' },
+      branchLocation: '',
+      branchName: null,
+    });
+    record.detail.requisition.location = '3';
+    const payload = service.buildFlatEmployeeProfilePayload(record.detail);
+
+    expect(record.detail.personalInfo.branchLocation).toBe('');
+    expect(payload.branchLocation).toBe('');
   });
 
   it('preserves zero maximum loan capacity and serializes it as maximumLoanCapacity', () => {

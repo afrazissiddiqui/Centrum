@@ -1949,12 +1949,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
       '',
     );
     this.branchLocation.set(
-      this.resolveBranchCode(
-        this.firstNonEmpty(
-          detail.personalInfo.branchLocation,
-          detail.requisition.location,
-        ),
-      ),
+      this.resolveBranchCode(detail.personalInfo.branchLocation),
     );
     this.costCenter.set(
       detail.personalInfo.costCenter || detail.requisition.costCenter || '',
