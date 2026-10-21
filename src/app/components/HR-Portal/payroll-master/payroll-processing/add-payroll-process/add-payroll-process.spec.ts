@@ -12,8 +12,8 @@ import {
 import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
 
 describe('computeOvertimeRate', () => {
-  it('calculates the hourly rate from gross salary using the daily-rate formula', () => {
-    expect(computeOvertimeRate(30000)).toBe(10.27);
+  it('calculates the hourly rate from annualized gross salary', () => {
+    expect(computeOvertimeRate(30000)).toBe(123.29);
   });
 
   it('returns zero for non-positive gross salary', () => {
@@ -22,7 +22,7 @@ describe('computeOvertimeRate', () => {
   });
 
   it('calculates overtime pay from the hourly rate and overtime hours', () => {
-    expect(computeOvertimeAmount(computeOvertimeRate(30000), 5)).toBe(51.35);
+    expect(computeOvertimeAmount(computeOvertimeRate(30000), 5)).toBe(616.45);
   });
 });
 
