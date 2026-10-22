@@ -49,8 +49,18 @@
 
     <section class="roster-table-panel" aria-label="Employee shift roster">
       <div
+        class="roster-sticky-header"
+        [class.table-scroll--whole-month]="selectedMonthHalf() === 'Whole Month'"
+        aria-hidden="true"
+      >
+        <table class="roster-table">
+          <thead><tr><th class="employee-column"><label><input type="checkbox" tabindex="-1" [checked]="allVisibleSelected()" /> Staff Member ({{ activeCount() }})</label></th><th class="role-column">Role / Hub</th><th class="paid-leaves-column"><span>Paid Leaves</span><strong>{{ monthLabel() }}</strong></th><th class="days-off-column"><span>Days Off</span><strong>{{ monthLabel() }}</strong></th><th class="menu-column"></th><th *ngFor="let day of visibleDays()" [class.today-column]="day.isToday" [class.weekend-column]="day.isHoliday"><span>{{ day.weekday }}</span><strong>{{ day.date | number:'2.0-0' }}</strong></th></tr></thead>
+        </table>
+      </div>
+      <div
         class="table-scroll"
         [class.table-scroll--whole-month]="selectedMonthHalf() === 'Whole Month'"
+        (scroll)="syncRosterHeader($event)"
         role="region"
         aria-label="Scrollable employee roster by day"
         tabindex="0"

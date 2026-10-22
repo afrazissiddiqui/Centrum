@@ -2705,6 +2705,15 @@ export class EmployeeRosterComponent implements OnInit {
     this.assignShift('OFF');
   }
 
+  syncRosterHeader(event: Event): void {
+    const tableScroll = event.currentTarget;
+    if (!(tableScroll instanceof HTMLElement)) {
+      return;
+    }
+
+    tableScroll.parentElement?.style.setProperty('--roster-scroll-left', `${tableScroll.scrollLeft}px`);
+  }
+
   applyRotation(): void {
     const selected = this.selectedEmployees();
     if (!selected.size) {
