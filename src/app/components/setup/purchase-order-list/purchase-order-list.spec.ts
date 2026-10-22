@@ -107,4 +107,42 @@ describe('PurchaseOrderListComponent', () => {
     });
   });
 
+  it('builds a printable purchase request with escaped document and line-item content', () => {
+    const component = Object.create(PurchaseOrderListComponent.prototype) as any;
+    component.formatAmount = PurchaseOrderListComponent.prototype.formatAmount;
+    component.statusLabel = PurchaseOrderListComponent.prototype.statusLabel;
+    component.normalizeStatus = PurchaseOrderListComponent.prototype['normalizeStatus'];
+
+    const document = PurchaseOrderListComponent.prototype['buildPurchaseRequestPrintDocument'].call(component, {
+      docNum: 'PR-<100>',
+      docDate: '22/10/2026',
+      docType: 'I',
+      vendor: 'Vendor & Sons',
+      warehouse: 'WH-1',
+      itemCount: 1,
+      total: 25,
+      status: 'O',
+      remarks: '',
+      items: [{
+        itemCode: 'ITEM-1',
+        itemDescription: '<script>alert(1)</script>',
+        vendor: '',
+        department: '',
+        glAccount: '',
+        taxCode: '',
+        requiredDate: '',
+        warehouse: '',
+        remarks: '',
+        quantity: 1,
+        unitPrice: 25,
+        lineTotal: 25,
+      }],
+    });
+
+    expect(document).toContain('Purchase Request #PR-&lt;100&gt;');
+    expect(document).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(document).toContain('Vendor &amp; Sons');
+    expect(document).not.toContain('<script>alert(1)</script>');
+  });
+
 });

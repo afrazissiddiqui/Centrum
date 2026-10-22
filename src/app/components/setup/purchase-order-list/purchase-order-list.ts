@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { MiscellaneousLayoutService } from '../../miscellaneous/miscellaneous-layout.service';
 import { OpenBaseDocumentsService, type OpenBaseDocument } from '../../gate-pass/open-base-documents.service';
 import { displayDateSlash } from '../../../utils/date-format.util';
+import { AlertService } from '../../../services/alert.service';
 
 interface PurchaseOrderListColumn {
   key: 'docNum' | 'docDate' | 'vendor' | 'warehouse' | 'itemCount' | 'status';
@@ -50,6 +51,7 @@ export class PurchaseOrderListComponent implements OnInit {
   private readonly router = inject(Router);
   protected readonly layout = inject(MiscellaneousLayoutService);
   private readonly openBaseDocumentsService = inject(OpenBaseDocumentsService);
+  private readonly alertService = inject(AlertService);
 
   readonly searchText = signal('');
   readonly currentPage = signal(1);
@@ -249,6 +251,105 @@ export class PurchaseOrderListComponent implements OnInit {
   viewDetails(row: PurchaseOrderListItem): void {
     this.selectedRow.set(row);
     this.showDetailDialog.set(true);
+  }
+
+  printRequest(row: PurchaseOrderListItem): void {
+    const printWindow = window.open('', '_blank', 'width=1000,height=800');
+    if (!printWindow) {
+      this.alertService.warning('Print', 'Your browser blocked the print window. Please allow pop-ups and try again.');
+      return;
+    }
+
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
+    printWindow.document.write(this.buildPurchaseRequestPrintDocument(row));
+    printWindow.document.close();
+  }
+
+  private buildPurchaseRequestPrintDocument(row: PurchaseOrderListItem): string {
+    const escapeHtml = (value: string | number | null | undefined): string =>
+      String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    const displayValue = (value: string | number | null | undefined): string =>
+      escapeHtml(value === null || value === undefined || value === '' ? '—' : value);
+    const headers = row.docType === 'S'
+      ? ['Sr. No', 'Description', 'Vendor', 'Department', 'GL Account', 'Tax Code', 'Required Date', 'Warehouse', 'Remarks', 'Total']
+      : ['Sr. No', 'Item Code', 'Description', 'Vendor', 'Department', 'Tax Code', 'Required Date', 'Warehouse', 'Remarks', 'Quantity', 'Unit Price', 'Batch', 'Line Total'];
+    const itemRows = row.items.map((item, index) => {
+      const values = row.docType === 'S'
+        ? [
+            index + 1,
+            item.itemDescription,
+            item.vendor || row.vendor,
+            item.department,
+            item.glAccount,
+            item.taxCode,
+            item.requiredDate,
+            item.warehouse || row.warehouse,
+            item.remarks || row.remarks,
+            this.formatAmount(item.lineTotal),
+          ]
+        : [
+            index + 1,
+            item.itemCode,
+            item.itemDescription,
+            item.vendor || row.vendor,
+            item.department,
+            item.taxCode,
+            item.requiredDate,
+            item.warehouse || row.warehouse,
+            item.remarks || row.remarks,
+            item.quantity,
+            this.formatAmount(item.unitPrice),
+            item.batchNumber,
+            this.formatAmount(item.lineTotal),
+          ];
+      return `<tr>${values.map((value) => `<td>${displayValue(value)}</td>`).join('')}</tr>`;
+    }).join('');
+
+    return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Purchase Request #${escapeHtml(row.docNum)}</title>
+  <style>
+    body { color: #172b4d; font: 12px Arial, sans-serif; margin: 24px; }
+    h1 { font-size: 20px; margin: 0 0 18px; }
+    h2 { font-size: 15px; margin: 24px 0 10px; }
+    .details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .detail { border-bottom: 1px solid #d8dee8; padding: 6px 0; }
+    .detail strong { color: #53647b; display: block; font-size: 10px; margin-bottom: 4px; }
+    .remarks { margin-top: 12px; }
+    table { border-collapse: collapse; font-size: 10px; width: 100%; }
+    th, td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; vertical-align: top; }
+    th { background: #eef3fb; }
+    tfoot td { font-weight: 700; }
+    @media print { body { margin: 12mm; } }
+  </style>
+</head>
+<body>
+  <h1>Purchase Request #${escapeHtml(row.docNum)}</h1>
+  <div class="details">
+    <div class="detail"><strong>Posting Date</strong>${displayValue(row.docDate)}</div>
+    <div class="detail"><strong>Vendor</strong>${displayValue(row.vendor)}</div>
+    <div class="detail"><strong>Warehouse</strong>${displayValue(row.warehouse)}</div>
+    <div class="detail"><strong>Status</strong>${escapeHtml(this.statusLabel(row.status))}</div>
+  </div>
+  <div class="remarks"><strong>Remarks:</strong> ${displayValue(row.remarks)}</div>
+  <h2>Line Items (${row.items.length})</h2>
+  <table>
+    <thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead>
+    <tbody>${itemRows || `<tr><td colspan="${headers.length}">No line items</td></tr>`}</tbody>
+    <tfoot><tr><td colspan="${headers.length - 1}">Total</td><td>${this.formatAmount(row.total)}</td></tr></tfoot>
+  </table>
+</body>
+</html>`;
   }
 
   closeDetailDialog(): void {
