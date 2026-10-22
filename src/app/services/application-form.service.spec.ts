@@ -81,9 +81,9 @@ describe('ApplicationFormService', () => {
 
   it('uses branchLocation, not branchName, for the profile Branch dropdown', () => {
     const expectedBranches = [
-      ['1', '1', 'AHCP_Peshawar'],
+      ['1', '3', 'AHCP_Faisalabad'],
       ['02', '2', 'AHCP_HO'],
-      ['3', '3', 'AHCP_Faisalabad'],
+      ['3', '1', 'AHCP_Peshawar'],
     ];
 
     for (const [responseBranch, dropdownBranch, expectedLabel] of expectedBranches) {

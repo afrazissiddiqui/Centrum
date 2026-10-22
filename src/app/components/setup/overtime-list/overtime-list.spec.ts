@@ -312,6 +312,20 @@ describe('OvertimeListComponent', () => {
     expect(component.filteredRecords().map((record) => record.id)).toEqual(['1']);
   });
 
+  it('shows a month filter and filters records independently by the selected month', () => {
+    const component = fixture.componentInstance;
+    component.records.set([
+      { id: '1', values: { employee_code: 'EMP-001', overtime_date: '2026-10-01' } },
+      { id: '2', values: { employee_code: 'EMP-002', overtime_date: '2026-10-31' } },
+      { id: '3', values: { employee_code: 'EMP-003', overtime_date: '2026-11-01' } },
+    ]);
+
+    expect(fixture.nativeElement.querySelector('input[name="overtime-month"]')).not.toBeNull();
+    component.onMonthChange('2026-10');
+
+    expect(component.filteredRecords().map((record) => record.id)).toEqual(['1', '2']);
+  });
+
   it('filters records inclusively within a date range', () => {
     const component = fixture.componentInstance;
     component.records.set([

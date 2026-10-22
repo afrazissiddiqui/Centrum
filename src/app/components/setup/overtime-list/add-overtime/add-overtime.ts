@@ -58,6 +58,7 @@ export class AddOvertimeComponent implements OnInit {
   readonly selectedMonth = signal(this.localDateValue(new Date()).slice(0, 7));
   readonly employees = signal<OvertimeEmployee[]>([]);
   readonly selectedEmployeeKeys = signal<ReadonlySet<string>>(new Set());
+  readonly postErrors = signal<Record<string, string>>({});
   readonly currentPage = signal(1);
   readonly pageSize = signal(25);
   readonly pageSizeOptions = [10, 25, 50, 100];
@@ -119,7 +120,9 @@ export class AddOvertimeComponent implements OnInit {
     Math.min(this.activePage() * this.pageSize(), this.filteredEmployees().length),
   );
   readonly filteredSelectableEmployees = computed(() =>
-    this.filteredEmployees().filter((employee) => employee.flag === '0'),
+    this.filteredEmployees().filter((employee) =>
+      employee.flag === '0' && this.hasOvertimeHours(employee),
+    ),
   );
   readonly allVisibleSelected = computed(() => {
     const visible = this.filteredSelectableEmployees();
@@ -147,6 +150,7 @@ export class AddOvertimeComponent implements OnInit {
       return;
     }
     this.selectedMonth.set(value);
+    this.postErrors.set({});
     this.currentPage.set(1);
     this.applyPostedEmployeeFlags(value);
     this.employees.update((employees) => employees.map((employee) => ({
@@ -186,6 +190,43 @@ export class AddOvertimeComponent implements OnInit {
       return '—';
     }
     return this.formatDuration(Math.max(0, workingMinutes - shiftMinutes));
+  }
+
+  hasOvertimeHours(employee: OvertimeEmployee): boolean {
+    const overtimeMinutes = this.durationToMinutes(this.overtimeHours(employee));
+    return overtimeMinutes !== null && overtimeMinutes > 0;
+  }
+
+  postEligibilityMessage(employee: OvertimeEmployee): string {
+    const postError = this.postErrors()[this.employeeKey(employee)];
+    if (postError) {
+      return postError;
+    }
+    if (employee.flag === '1') {
+      return 'Already posted for this month';
+    }
+    if (this.hoursLoading() && (!employee.workingHours || !employee.shiftHours)) {
+      return 'Waiting for monthly hours';
+    }
+
+    const workingMinutes = this.durationToMinutes(employee.workingHours);
+    const shiftMinutes = this.durationToMinutes(employee.shiftHours);
+    if (workingMinutes === null || shiftMinutes === null) {
+      return 'Monthly working or shift hours unavailable';
+    }
+    if (!this.hasOvertimeHours(employee)) {
+      return 'No overtime hours for selected month';
+    }
+    if (!this.shiftIdForMonth(employee, this.selectedMonth())) {
+      return 'No shift assignment found for selected month';
+    }
+
+    const basicSalary = employee.detail?.remuneration?.basicSalary ?? '';
+    const grossSalary = Number(basicSalary.replace(/,/g, '').trim());
+    if ((!Number.isFinite(grossSalary) || grossSalary <= 0) && !employee.apiId) {
+      return 'Gross salary unavailable';
+    }
+    return 'Ready to post';
   }
 
   private formatDuration(totalMinutes: number): string {
@@ -242,6 +283,11 @@ export class AddOvertimeComponent implements OnInit {
       }
       return nextSelectedKeys;
     });
+    this.postErrors.update((errors) => {
+      const nextErrors = { ...errors };
+      delete nextErrors[key];
+      return nextErrors;
+    });
   }
 
   goToList(): void {
@@ -250,7 +296,9 @@ export class AddOvertimeComponent implements OnInit {
 
   postSelectedEmployees(): void {
     const employeesToPost = this.employees().filter((employee) =>
-      employee.flag === '0' && this.selectedEmployeeKeys().has(this.employeeKey(employee)),
+      employee.flag === '0' &&
+      this.selectedEmployeeKeys().has(this.employeeKey(employee)) &&
+      this.hasOvertimeHours(employee),
     );
     if (!employeesToPost.length || this.posting()) {
       return;
@@ -372,6 +420,9 @@ export class AddOvertimeComponent implements OnInit {
       this.posting.set(false);
 
       const failedResults = results.filter((result) => !result.success);
+      this.postErrors.set(Object.fromEntries(
+        failedResults.map((result) => [this.employeeKey(result.employee), result.errorMessage]),
+      ));
       if (failedResults.length) {
         const failedDetails = failedResults
           .map((result) => `${result.employee.EmployeeName}: ${result.errorMessage}`)
@@ -601,6 +652,7 @@ export class AddOvertimeComponent implements OnInit {
       workingHours: hasWorkingHours ? this.formatDuration(totalWorkingMinutes) : null,
       shiftHours: hasShiftHours ? this.formatDuration(totalShiftMinutes) : null,
       calculatedOvertimeHours: hasShiftHours
+      && hasWorkingHours
         ? this.formatDuration(Math.max(0, totalWorkingMinutes - totalShiftMinutes))
         : null,
     };

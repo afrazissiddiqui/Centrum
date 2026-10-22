@@ -113,6 +113,16 @@
               aria-label="Search employees by name or code"
             >
           </label>
+          <label class="toolbar-field">
+            <span>Month</span>
+            <input
+              type="month"
+              [ngModel]="selectedMonth()"
+              (ngModelChange)="onMonthChange($event)"
+              name="overtime-month"
+              aria-label="Filter overtime by month"
+            >
+          </label>
           @if (dateFilterMode() === 'specific') {
             <label class="toolbar-field">
               <span class="visually-hidden">Select overtime date</span>

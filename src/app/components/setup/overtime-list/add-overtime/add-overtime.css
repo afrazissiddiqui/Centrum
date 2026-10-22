@@ -222,6 +222,16 @@
   font-size: 14px;
 }
 
+.add-overtime-post-reason--blocked {
+  color: #b42318 !important;
+  font-weight: 600;
+}
+
+.add-overtime-post-reason--ready {
+  color: #1a6d4e !important;
+  font-weight: 600;
+}
+
 .add-overtime-table__selection-heading,
 .add-overtime-table__selection-cell {
   text-align: center !important;

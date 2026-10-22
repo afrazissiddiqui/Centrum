@@ -55,6 +55,7 @@ export class OvertimeListComponent implements OnInit {
   readonly searchText = signal('');
   readonly dateFilterMode = signal<OvertimeDateFilterMode>('all');
   readonly todayDate = toLocalDateInputValue(new Date());
+  readonly selectedMonth = signal('');
   readonly specificDate = signal('');
   readonly dateFrom = signal('');
   readonly dateTo = signal('');
@@ -71,6 +72,8 @@ export class OvertimeListComponent implements OnInit {
     return this.records().filter((record) => {
       const overtimeDate = this.overtimeDateValue(record);
       const dateMatches = this.dateMatches(overtimeDate);
+      const selectedMonth = this.selectedMonth();
+      const monthMatches = !selectedMonth || overtimeDate.startsWith(`${selectedMonth}-`);
       const employeeQuery = this.employeeSearchText().trim().toLocaleLowerCase();
       const employeeCode = this.employeeValue(record, ['employeecode', 'employeeid']).toLocaleLowerCase();
       const employeeName = this.employeeValue(record, ['employeename']).toLocaleLowerCase();
@@ -80,7 +83,7 @@ export class OvertimeListComponent implements OnInit {
       const searchMatches = !query || Object.entries(record.values).some(([key, value]) =>
         !this.isHiddenListField(key) && this.formatValue(value).toLocaleLowerCase().includes(query),
       );
-      return dateMatches && employeeMatches && searchMatches;
+      return dateMatches && monthMatches && employeeMatches && searchMatches;
     });
   });
 
@@ -289,6 +292,11 @@ export class OvertimeListComponent implements OnInit {
       this.dateFilterMode.set(value);
       this.currentPage.set(1);
     }
+  }
+
+  onMonthChange(value: string): void {
+    this.selectedMonth.set(value);
+    this.currentPage.set(1);
   }
 
   onSpecificDateChange(value: string): void {

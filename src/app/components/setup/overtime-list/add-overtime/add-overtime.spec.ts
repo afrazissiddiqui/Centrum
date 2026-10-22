@@ -434,6 +434,42 @@ describe('AddOvertimeComponent', () => {
     expect(fixture.componentInstance.employees()[0].flag).toBe('0');
   });
 
+  it('does not allow zero-overtime employees to be selected or posted', () => {
+    const component = fixture.componentInstance;
+    const employee = {
+      ...component.employees()[0],
+      workingHours: '8h',
+      shiftHours: '8h',
+      calculatedOvertimeHours: '0h',
+    };
+    component.employees.set([employee]);
+    fixture.detectChanges();
+
+    const checkbox = fixture.nativeElement.querySelector('tbody input[type="checkbox"]') as HTMLInputElement;
+    expect(checkbox.disabled).toBe(true);
+    expect(component.filteredSelectableEmployees()).toHaveSize(0);
+    expect(fixture.nativeElement.textContent).toContain('No overtime hours for selected month');
+
+    component.selectedEmployeeKeys.set(new Set([employee.EmployeeCode]));
+    component.postSelectedEmployees();
+
+    expect(overtimeListService.postOvertimeEmployee).not.toHaveBeenCalled();
+  });
+
+  it('shows a failure reason beside an employee when the API rejects the post', () => {
+    const component = fixture.componentInstance;
+    const employee = {
+      ...component.employees()[0],
+      workingHours: '10h',
+      shiftHours: '8h',
+      calculatedOvertimeHours: '2h',
+    };
+    component.employees.set([employee]);
+    component.postErrors.set({ [employee.EmployeeCode]: 'Post failed: Shift is closed.' });
+
+    expect(component.postEligibilityMessage(employee)).toBe('Post failed: Shift is closed.');
+  });
+
   it('does not post an employee when gross salary is missing', () => {
     const employee = fixture.componentInstance.employees()[0];
     fixture.componentInstance.employees.set([{

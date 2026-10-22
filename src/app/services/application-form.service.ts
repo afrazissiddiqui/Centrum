@@ -10,6 +10,28 @@ import {
   resolveBranchCode,
 } from '../components/setup/gl-account-determination/gl-account-branch.options';
 
+const APPLICATION_PROFILE_BRANCH_API_CODES: Record<string, string> = {
+  '1': '3',
+  '2': '2',
+  '3': '1',
+};
+
+function resolveApplicationProfileBranchCode(branchLocation: string): string {
+  const dropdownCode = resolveBranchCode(branchLocation);
+  return APPLICATION_PROFILE_BRANCH_API_CODES[dropdownCode] ?? dropdownCode;
+}
+
+function resolveApplicationProfileDropdownBranch(apiBranchLocation: string): string {
+  const trimmed = apiBranchLocation.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const apiCode = String(Number(trimmed));
+    const dropdownCode = Object.entries(APPLICATION_PROFILE_BRANCH_API_CODES)
+      .find(([, profileApiCode]) => profileApiCode === apiCode)?.[0];
+    return dropdownCode ?? trimmed;
+  }
+  return resolveBranchCode(trimmed);
+}
+
 /** Extended payload captured from Create Application Form — shown in Application Form view modal only. */
 export interface ApplicationFormPersonalInfo {
   personName: string;
@@ -906,7 +928,7 @@ export class ApplicationFormService {
     };
 
     const reportingManager = personal.reportingManager || detail.requisition.hiringManager;
-    const branchCode = resolveBranchCode(personal.branchLocation);
+    const branchCode = resolveApplicationProfileBranchCode(personal.branchLocation);
     const educationSource = options.education ?? detail.education ?? [];
     const experienceSource = options.pastExperience ?? detail.pastExperience ?? [];
     const educationRows = this.filterEducationRows(educationSource);
@@ -2247,7 +2269,9 @@ export class ApplicationFormService {
         roleSalary,
         workGradeLevel:
           pick('workGradeLevel', 'work_grade_level') || roleSalary || salaryStructure,
-        branchLocation: resolveBranchCode(pick('branchLocation', 'branch_location')),
+        branchLocation: resolveApplicationProfileDropdownBranch(
+          pick('branchLocation', 'branch_location'),
+        ),
         costCenter: pickRem('costCenter', 'cost_center') || pick('costCenter', 'cost_center'),
         reportingManager:
           pick('reportingManager', 'reporting_manager') ||

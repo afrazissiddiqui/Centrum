@@ -84,16 +84,17 @@
             <th scope="col">Shift Applicable</th>
             <th scope="col">Overtime Applicable</th>
             <th scope="col">Status</th>
+            <th scope="col">Post Eligibility</th>
           </tr>
         </thead>
         <tbody>
           @if (loading()) {
             <tr>
-              <td colspan="11" class="add-overtime-empty">Loading eligible employees...</td>
+              <td colspan="12" class="add-overtime-empty">Loading eligible employees...</td>
             </tr>
           } @else if (!filteredEmployees().length) {
             <tr>
-              <td colspan="11" class="add-overtime-empty">
+              <td colspan="12" class="add-overtime-empty">
                 {{ searchText().trim() || selectedDepartment() ? 'No employees match your filters.' : 'No eligible employees to display.' }}
               </td>
             </tr>
@@ -105,7 +106,7 @@
                     type="checkbox"
                     [checked]="selectedEmployeeKeys().has(employeeKey(employee))"
                     [attr.aria-label]="'Select ' + employee.EmployeeName"
-                    [disabled]="employee.flag === '1' || posting()"
+                    [disabled]="employee.flag === '1' || posting() || !hasOvertimeHours(employee)"
                     (change)="toggleEmployeeSelection(employee, $event)"
                   />
                 </td>
@@ -127,6 +128,10 @@
                 <td>Yes</td>
                 <td>Yes</td>
                 <td>{{ employee.overtimeStatus }}</td>
+                <td
+                  [class.add-overtime-post-reason--blocked]="postEligibilityMessage(employee) !== 'Ready to post'"
+                  [class.add-overtime-post-reason--ready]="postEligibilityMessage(employee) === 'Ready to post'"
+                >{{ postEligibilityMessage(employee) }}</td>
               </tr>
             }
           }
