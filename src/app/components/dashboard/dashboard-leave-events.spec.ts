@@ -1,9 +1,23 @@
 import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
+import { ApplicationFormRecord } from '../../services/application-form.service';
 import { LeaveApplicationRecord } from '../../services/leave-application.service';
-import { dashboardLeaveEvents } from './dashboard';
+import { dashboardEmployeeCode, dashboardLeaveEvents } from './dashboard';
 
 describe('dashboardLeaveEvents', () => {
+  it('uses the employee code associated with the signed-in profile login', () => {
+    const employee = {
+      EmployeeCode: 'Emp-00000011',
+      detail: {
+        loginDetails: {
+          employeeCode: 'Emp-00000030',
+        },
+      },
+    } as ApplicationFormRecord;
+
+    expect(dashboardEmployeeCode(employee)).toBe('Emp-00000011');
+  });
+
   it('expands the signed-in employee leave request to every inclusive date', () => {
     const applications = [
       {
@@ -32,9 +46,9 @@ describe('dashboardLeaveEvents', () => {
       },
     ] as LeaveApplicationRecord[];
 
-    const events = dashboardLeaveEvents(applications, ['EMP-00000042']);
+    const events = dashboardLeaveEvents(applications);
 
-    expect(events).toHaveLength(11);
+    expect(events).toHaveLength(12);
     expect(events[0]).toMatchObject({
       date: '2026-10-10',
       title: 'Annual Leave',
@@ -44,6 +58,11 @@ describe('dashboardLeaveEvents', () => {
       date: '2026-10-20',
       title: 'Annual Leave',
       category: 'pending',
+    });
+    expect(events[11]).toMatchObject({
+      date: '2026-10-12',
+      title: 'Sick Leave',
+      category: 'approved',
     });
   });
 
@@ -57,7 +76,7 @@ describe('dashboardLeaveEvents', () => {
         FromDate: '01/10/2026',
         ToDate: '2026-10-10T00:00:00.000000Z',
       },
-    ] as LeaveApplicationRecord[], ['Emp-00000011']);
+    ] as LeaveApplicationRecord[]);
 
     expect(events).toHaveLength(10);
     expect(events[0]).toMatchObject({
@@ -69,5 +88,22 @@ describe('dashboardLeaveEvents', () => {
       date: '2026-10-10',
       category: 'pending',
     });
+  });
+
+  it('displays employee-scoped leave when the API response omits employee id', () => {
+    const events = dashboardLeaveEvents([{
+      Id: 19,
+      EmployeeId: '—',
+      LeaveType: 'Annual Leave',
+      RequestStatus: 'Submitted',
+      FromDate: '2026-10-12',
+      ToDate: '2026-10-14',
+    } as LeaveApplicationRecord]);
+
+    expect(events.map((event) => event.date)).toEqual([
+      '2026-10-12',
+      '2026-10-13',
+      '2026-10-14',
+    ]);
   });
 });

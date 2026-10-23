@@ -5,7 +5,8 @@ export const BIOMETRICS_API_BASE_URL = resolveBiometricsApiBaseUrl();
 export const BIOMETRICS_API_KEY = 'ak_07dd2f9ab665fbad693682fa';
 
 function resolveBiometricsApiBaseUrl(): string {
-  if (typeof window === 'undefined') {
+  if (typeof window === 'undefined') 
+  {
     return 'http://pioneerattendance.com:3002/api';
   }
 

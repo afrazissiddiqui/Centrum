@@ -106,7 +106,7 @@
                     type="checkbox"
                     [checked]="selectedEmployeeKeys().has(employeeKey(employee))"
                     [attr.aria-label]="'Select ' + employee.EmployeeName"
-                    [disabled]="employee.flag === '1' || posting() || !hasOvertimeHours(employee)"
+                    [disabled]="posting() || !isSelectableForPosting(employee)"
                     (change)="toggleEmployeeSelection(employee, $event)"
                   />
                 </td>

@@ -121,7 +121,7 @@ export class AddOvertimeComponent implements OnInit {
   );
   readonly filteredSelectableEmployees = computed(() =>
     this.filteredEmployees().filter((employee) =>
-      employee.flag === '0' && this.hasOvertimeHours(employee),
+      this.isSelectableForPosting(employee),
     ),
   );
   readonly allVisibleSelected = computed(() => {
@@ -195,6 +195,14 @@ export class AddOvertimeComponent implements OnInit {
   hasOvertimeHours(employee: OvertimeEmployee): boolean {
     const overtimeMinutes = this.durationToMinutes(this.overtimeHours(employee));
     return overtimeMinutes !== null && overtimeMinutes > 0;
+  }
+
+  isSelectableForPosting(employee: OvertimeEmployee): boolean {
+    return employee.flag === '0' &&
+      this.durationToMinutes(employee.workingHours) !== null &&
+      this.durationToMinutes(employee.shiftHours) !== null &&
+      this.hasOvertimeHours(employee) &&
+      this.shiftIdForMonth(employee, this.selectedMonth()) !== null;
   }
 
   postEligibilityMessage(employee: OvertimeEmployee): string {
@@ -298,7 +306,7 @@ export class AddOvertimeComponent implements OnInit {
     const employeesToPost = this.employees().filter((employee) =>
       employee.flag === '0' &&
       this.selectedEmployeeKeys().has(this.employeeKey(employee)) &&
-      this.hasOvertimeHours(employee),
+      this.isSelectableForPosting(employee),
     );
     if (!employeesToPost.length || this.posting()) {
       return;
@@ -379,7 +387,7 @@ export class AddOvertimeComponent implements OnInit {
         employee_code: employee.EmployeeCode,
         employee_name: employee.EmployeeName,
         overtime_date: overtimeDate,
-        shift_id: shiftId,
+        shift_id: String(shiftId),
         working_hours: workingMinutes / 60,
         shift_hours: shiftMinutes / 60,
         overtime_hours: overtimeMinutes / 60,
@@ -527,7 +535,7 @@ export class AddOvertimeComponent implements OnInit {
       : null;
   }
 
-  private shiftIdForMonth(employee: OvertimeEmployee, month: string): string | null {
+  private shiftIdForMonth(employee: OvertimeEmployee, month: string): number | null {
     const [year, monthNumber] = month.split('-').map(Number);
     const fromDate = `${month}-01`;
     const toDate = this.localDateValue(new Date(year, monthNumber, 0));
@@ -541,9 +549,35 @@ export class AddOvertimeComponent implements OnInit {
       .filter((assignment) => assignment.date >= fromDate && assignment.date <= toDate && assignment.shift)
       .sort((left, right) => left.date.localeCompare(right.date));
 
-    return assignments.find((assignment) => assignment.date === fromDate)?.shift
-      ?? assignments[0]?.shift
-      ?? null;
+    for (const assignment of assignments) {
+      const shift = assignment.shift.trim();
+      const normalizedShift = shift.toLocaleLowerCase();
+      if (['off', 'day off', 'scheduled day off', 'hol', 'holiday', 'l', 'leave'].includes(normalizedShift)) {
+        continue;
+      }
+
+      const directId = Number(shift);
+      if (Number.isSafeInteger(directId) && directId > 0) {
+        return directId;
+      }
+
+      const shiftAllocation = this.shiftAllocations.find((record) =>
+        [record.code, record.shift, record.name]
+          .some((value) => value.trim().toLocaleLowerCase() === normalizedShift),
+      );
+      const workstation = this.workstations.find((record) =>
+        [record.code, record.shift, record.name, record.description]
+          .some((value) => value.trim().toLocaleLowerCase() === normalizedShift),
+      );
+      for (const candidateId of [shiftAllocation?.id, workstation?.id]) {
+        const resolvedId = Number(candidateId);
+        if (Number.isSafeInteger(resolvedId) && resolvedId > 0) {
+          return resolvedId;
+        }
+      }
+    }
+
+    return null;
   }
 
   private loadMonthlyOvertime(): void {

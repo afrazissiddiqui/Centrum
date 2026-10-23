@@ -424,6 +424,96 @@ describe('AddOvertimeComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain('flag');
   });
 
+  it('skips holiday roster markers and posts using the next assigned shift ID', () => {
+    const month = fixture.componentInstance.selectedMonth();
+    workstationService.fetchWorkstations.and.returnValue(of([{
+      id: 7,
+      name: 'Morning',
+      code: 'M',
+      officeInTime: '08:00',
+      officeOutTime: '16:00',
+      inGraceMinutes: 0,
+      outGraceMinutes: 0,
+      shift: 'Morning',
+      description: 'Morning Shift',
+      status: 1,
+    }]));
+    applicationFormService.fetchEmployeeRosterList.and.returnValue(of([
+      {
+        employee_id: 'EMP-001',
+        employee_name: 'Ayesha Khan',
+        department: 'Finance',
+        designation: 'Analyst',
+        employment_status: 'Active',
+        shift_date: `${month}-01`,
+        shift: 'HOL',
+        role: '',
+        hub: '',
+        note: null,
+      },
+      {
+        employee_id: 'EMP-001',
+        employee_name: 'Ayesha Khan',
+        department: 'Finance',
+        designation: 'Analyst',
+        employment_status: 'Active',
+        shift_date: `${month}-02`,
+        shift: 'M',
+        role: '',
+        hub: '',
+        note: null,
+      },
+    ]));
+    fixture.componentInstance.ngOnInit();
+    fixture.componentInstance.employees.update((employees) => employees.map((employee) => ({
+      ...employee,
+      workingHours: '10h 30m',
+      shiftHours: '8h',
+      calculatedOvertimeHours: '2h 30m',
+    })));
+    fixture.componentInstance.selectedEmployeeKeys.set(new Set(['EMP-001']));
+
+    fixture.componentInstance.postSelectedEmployees();
+
+    expect(overtimeListService.postOvertimeEmployee.calls.mostRecent().args[0][0].shift_id).toBe('7');
+  });
+
+  it('excludes employees with only holiday assignments from posting selection', () => {
+    const month = fixture.componentInstance.selectedMonth();
+    applicationFormService.fetchEmployeeRosterList.and.returnValue(of([{
+      employee_id: 'EMP-001',
+      employee_name: 'Ayesha Khan',
+      department: 'Finance',
+      designation: 'Analyst',
+      employment_status: 'Active',
+      shift_date: `${month}-01`,
+      shift: 'HOL',
+      role: '',
+      hub: '',
+      note: null,
+    }]));
+    fixture.componentInstance.ngOnInit();
+    fixture.componentInstance.employees.update((employees) => employees.map((employee) => ({
+      ...employee,
+      workingHours: '10h 30m',
+      shiftHours: '0h',
+      calculatedOvertimeHours: '10h 30m',
+    })));
+    fixture.detectChanges();
+    const employee = fixture.componentInstance.employees()[0];
+    const checkbox = fixture.nativeElement.querySelector('tbody input[type="checkbox"]') as HTMLInputElement;
+    const selectAll = fixture.nativeElement.querySelector(
+      '.add-overtime-table__selection-toggle input[type="checkbox"]',
+    ) as HTMLInputElement;
+
+    expect(fixture.componentInstance.isSelectableForPosting(employee)).toBe(false);
+    expect(checkbox.disabled).toBe(true);
+    expect(selectAll.disabled).toBe(true);
+    expect(fixture.componentInstance.postEligibilityMessage(employee)).toBe('No shift assignment found for selected month');
+    fixture.componentInstance.postSelectedEmployees();
+    expect(overtimeListService.postOvertimeEmployee).not.toHaveBeenCalled();
+  });
+
   it('does not post default hour values when the selected row has no monthly hours', () => {
     const employee = fixture.componentInstance.employees()[0];
     fixture.componentInstance.selectedEmployeeKeys.set(new Set([employee.EmployeeCode]));

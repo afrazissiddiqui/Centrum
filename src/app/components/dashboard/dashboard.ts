@@ -2,7 +2,6 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { map, switchMap } from 'rxjs';
 import {
   getNavigableHrMenuActions,
   HrMenuAction,
@@ -11,7 +10,7 @@ import {
 import { AuthService } from '../../services/auth.service';
 import { PermissionService } from '../../services/permission.service';
 import { PublicHolidayService } from '../../services/public-holiday.service';
-import { ApplicationFormService, canonicalizeEmployeeCodeValue } from '../../services/application-form.service';
+import { ApplicationFormRecord, ApplicationFormService } from '../../services/application-form.service';
 import { LeaveApplicationRecord, LeaveApplicationService } from '../../services/leave-application.service';
 
 export type CompanyCalendarEventCategory = 'approved' | 'pending' | 'remote' | 'holiday' | 'dayoff' | 'office';
@@ -46,6 +45,15 @@ export interface DashboardMilestone {
   detail?: string;
 }
 
+export function dashboardEmployeeCode(employee: ApplicationFormRecord | undefined): string {
+  const profileEmployeeCode = employee?.EmployeeCode?.trim();
+  if (profileEmployeeCode && profileEmployeeCode !== '—') {
+    return profileEmployeeCode;
+  }
+  const loginEmployeeCode = employee?.detail?.loginDetails.employeeCode?.trim();
+  return loginEmployeeCode && loginEmployeeCode !== '—' ? loginEmployeeCode : '';
+}
+
 interface CalendarDay {
   date: Date;
   isCurrentMonth: boolean;
@@ -77,12 +85,6 @@ function dateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function normalizeDashboardEmployeeId(value: string): string {
-  const normalized = canonicalizeEmployeeCodeValue(value).trim().toLowerCase();
-  const numericCode = normalized.match(/^(?:emp[-\s]?)?(\d+)$/)?.[1];
-  return numericCode ? `emp-${numericCode.padStart(8, '0')}` : normalized;
-}
-
 function dashboardDateKey(value: string): string | null {
   const datePart = value.trim().split(/[T ]/, 1)[0] ?? '';
   const isoMatch = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -102,20 +104,9 @@ function dashboardDateKey(value: string): string | null {
 
 export function dashboardLeaveEvents(
   applications: LeaveApplicationRecord[],
-  employeeIds: Iterable<string>,
 ): CompanyCalendarEvent[] {
-  const employeeIdSet = new Set(
-    Array.from(employeeIds, normalizeDashboardEmployeeId).filter(Boolean),
-  );
-  if (!employeeIdSet.size) {
-    return [];
-  }
-
   const events: CompanyCalendarEvent[] = [];
   applications.forEach((application, applicationIndex) => {
-    if (!employeeIdSet.has(normalizeDashboardEmployeeId(application.EmployeeId))) {
-      return;
-    }
     if (/reject|cancel|withdraw|void|delete|declin/i.test(application.RequestStatus)) {
       return;
     }
@@ -168,6 +159,8 @@ export class dashboardComponent implements OnInit {
   private readonly leaveApplicationService = inject(LeaveApplicationService);
   private readonly today = new Date();
   private readonly hour = this.today.getHours();
+  private leaveEmployeeCode = '';
+  private leaveCalendarRequestId = 0;
 
   readonly menuActions = computed(() =>
     getNavigableHrMenuActions()
@@ -291,43 +284,90 @@ export class dashboardComponent implements OnInit {
   }
 
   private loadEmployeeLeaveEvents(): void {
-    this.applicationFormService.fetchEmployeeProfiles().pipe(
-      switchMap(() => {
+    this.applicationFormService.fetchEmployeeProfiles().subscribe({
+      next: () => {
         const sessionUser = this.authService.getSessionUser();
         const identityCandidates = [
           sessionUser?.id === undefined ? '' : String(sessionUser.id),
           sessionUser?.email ?? '',
           this.authService.getSessionUserId() ?? '',
         ].filter((value, index, values) => value.trim() && values.indexOf(value) === index);
-        const employee = identityCandidates
-          .map((identity) => this.applicationFormService.getSignedInUserRecord(identity, sessionUser?.name))
-          .find((record) => record !== undefined);
-        if (!employee) {
-          throw new Error('No employee profile matches the signed-in account.');
-        }
-        const employeeIds = [
-          employee.EmployeeCode,
-          employee.detail?.loginDetails.employeeCode ?? '',
-          employee.userId ?? '',
-          employee.detail?.loginDetails.userId ?? '',
-        ];
-        return this.leaveApplicationService.fetchLeaveApplicationsForEmployee(employeeIds).pipe(
-          map((applications) => dashboardLeaveEvents(applications, employeeIds)),
+        const employeeByName = this.applicationFormService.getSignedInUserRecord(
+          null,
+          sessionUser?.name,
         );
-      }),
+        const employee = employeeByName ?? identityCandidates
+          .map((identity) => this.applicationFormService.getSignedInUserRecord(identity))
+          .find((record) => record !== undefined);
+        const employeeCode = dashboardEmployeeCode(employee);
+        if (!employee || !employeeCode || employeeCode === '—') {
+          console.error('No employee profile with an employee code matches the signed-in account.');
+          this.leaveCalendarLoadError.set(true);
+          return;
+        }
+        this.leaveEmployeeCode = employeeCode;
+        this.loadLeaveEventsForVisiblePeriod();
+      },
+      error: (error: unknown) => {
+        console.error('Failed to load the signed-in employee profile for the leave calendar.', error);
+        this.leaveCalendarLoadError.set(true);
+      },
+    });
+  }
+
+  private loadLeaveEventsForVisiblePeriod(): void {
+    if (!this.leaveEmployeeCode) {
+      return;
+    }
+    const requestId = ++this.leaveCalendarRequestId;
+    const [fromDate, toDate] = this.leaveCalendarDateRange();
+    this.leaveApplicationService.fetchLeaveApplicationsForEmployee(
+      this.leaveEmployeeCode,
+      fromDate,
+      toDate,
     ).subscribe({
-      next: (leaveEvents) => {
+      next: (applications) => {
+        if (requestId !== this.leaveCalendarRequestId) {
+          return;
+        }
         this.leaveCalendarLoadError.set(false);
+        const leaveEvents = dashboardLeaveEvents(applications);
         this.calendarEvents.update((events) => [
           ...events.filter((event) => !event.id.startsWith('leave-')),
           ...leaveEvents,
         ]);
       },
       error: (error: unknown) => {
+        if (requestId !== this.leaveCalendarRequestId) {
+          return;
+        }
         console.error('Failed to load the signed-in employee leave calendar.', error);
         this.leaveCalendarLoadError.set(true);
       },
     });
+  }
+
+  private leaveCalendarDateRange(): [string, string] {
+    switch (this.activeView()) {
+      case 'week': {
+        const start = firstDayOfWeek(this.selectedDate());
+        return [
+          dateKey(start),
+          dateKey(calendarDate(start.getFullYear(), start.getMonth(), start.getDate() + 6)),
+        ];
+      }
+      case 'day': {
+        const date = dateKey(this.selectedDate());
+        return [date, date];
+      }
+      default: {
+        const month = this.monthAnchor();
+        return [
+          dateKey(firstOfMonth(month)),
+          dateKey(calendarDate(month.getFullYear(), month.getMonth() + 1, 0)),
+        ];
+      }
+    }
   }
 
   openHolidayDialog(): void {
@@ -384,6 +424,7 @@ export class dashboardComponent implements OnInit {
         ]);
         this.selectedDate.set(holidayDate);
         this.monthAnchor.set(firstOfMonth(holidayDate));
+        this.loadLeaveEventsForVisiblePeriod();
         this.holidaySaving.set(false);
         this.holidayDialogOpen.set(false);
         this.holidayCreateSuccess.set(`${description} was added to the calendar.`);
@@ -474,6 +515,7 @@ export class dashboardComponent implements OnInit {
         );
     this.monthAnchor.set(firstOfMonth(nextDate));
     this.selectedDate.set(nextDate);
+    this.loadLeaveEventsForVisiblePeriod();
   }
 
   goToToday(): void {
@@ -484,13 +526,30 @@ export class dashboardComponent implements OnInit {
       this.today.getDate(),
       12,
     ));
+    this.loadLeaveEventsForVisiblePeriod();
   }
 
   selectDate(date: Date): void {
+    const previousMonth = this.monthAnchor();
     this.selectedDate.set(date);
     if (date.getMonth() !== this.monthAnchor().getMonth() || date.getFullYear() !== this.monthAnchor().getFullYear()) {
       this.monthAnchor.set(firstOfMonth(date));
     }
+    if (
+      this.activeView() !== 'month' ||
+      previousMonth.getMonth() !== this.monthAnchor().getMonth() ||
+      previousMonth.getFullYear() !== this.monthAnchor().getFullYear()
+    ) {
+      this.loadLeaveEventsForVisiblePeriod();
+    }
+  }
+
+  setCalendarView(view: CalendarView): void {
+    if (this.activeView() === view) {
+      return;
+    }
+    this.activeView.set(view);
+    this.loadLeaveEventsForVisiblePeriod();
   }
 
   eventCategoryLabel(category: CompanyCalendarEventCategory): string {

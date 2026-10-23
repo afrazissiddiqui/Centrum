@@ -126,31 +126,18 @@ describe('Dashboard', () => {
 
   });
 
-  it('shows every date in the signed-in employee leave request and hides other employees', () => {
-    leaveApplications = [
-      {
-        Id: 15,
-        EmployeeId: 'Emp-00000042',
-        EmployeeName: 'Alex Wong',
-        LeaveType: 'Annual Leave',
-        RequestStatus: 'Submitted',
-        FromDate: '2026-10-10',
-        ToDate: '2026-10-20',
-        CauseOfLeave: '',
-        Remarks: '',
-      },
-      {
-        Id: 16,
-        EmployeeId: 'EMP-00000043',
-        EmployeeName: 'Another employee',
-        LeaveType: 'Sick Leave',
-        RequestStatus: 'Approved',
-        FromDate: '2026-10-12',
-        ToDate: '2026-10-12',
-        CauseOfLeave: '',
-        Remarks: '',
-      },
-    ] as LeaveApplicationRecord[];
+  it('shows every date in the signed-in employee leave request', () => {
+    leaveApplications = [{
+      Id: 15,
+      EmployeeId: 'Emp-00000042',
+      EmployeeName: 'Alex Wong',
+      LeaveType: 'Annual Leave',
+      RequestStatus: 'Submitted',
+      FromDate: '2026-10-10',
+      ToDate: '2026-10-20',
+      CauseOfLeave: '',
+      Remarks: '',
+    }] as LeaveApplicationRecord[];
 
     component.ngOnInit();
 
@@ -164,7 +151,6 @@ describe('Dashboard', () => {
     expect(leaveEvents[10].title).toBe('Annual Leave');
     expect(leaveEvents[10].date).toBe('2026-10-20');
     expect(leaveEvents[10].category).toBe('pending');
-    expect(leaveEvents.some((event) => event.title === 'Sick Leave')).toBe(false);
   });
 
   it('renders Manzoor’s submitted Special Leave on each requested calendar day', () => {
@@ -191,6 +177,7 @@ describe('Dashboard', () => {
     component.selectedDate.set(new Date(2026, 9, 1, 12));
 
     component.ngOnInit();
+    fixture.detectChanges();
 
     const firstLeaveDay = component.calendarDays().find((day) => day.date.getDate() === 1 && day.date.getMonth() === 9);
     const lastLeaveDay = component.calendarDays().find((day) => day.date.getDate() === 10 && day.date.getMonth() === 9);
@@ -201,6 +188,7 @@ describe('Dashboard', () => {
       event.title === 'Special Leave' && event.category === 'pending',
     )).toBe(true);
     expect(component.calendarEvents().filter((event) => event.category === 'pending')).toHaveSize(10);
+    expect(fixture.nativeElement.querySelector('.calendar-event--leave strong')?.textContent).toContain('Special Leave');
   });
 
   it('resolves the employee profile using the authenticated portal user ID', () => {
@@ -211,6 +199,38 @@ describe('Dashboard', () => {
     component.ngOnInit();
 
     expect(profileLookup).toHaveBeenCalledWith('42', 'Alex Wong');
+  });
+
+  it('uses the signed-in name match and profile employee code for the leave request', () => {
+    const matchingEmployee = {
+      ...signedInEmployee,
+      EmployeeCode: 'Emp-00000011',
+      detail: {
+        ...signedInEmployee.detail!,
+        loginDetails: {
+          ...signedInEmployee.detail!.loginDetails,
+          employeeCode: 'Emp-00000030',
+        },
+      },
+    };
+    const portalIdMatch = {
+      ...signedInEmployee,
+      EmployeeCode: 'Emp-00000030',
+    };
+    const applicationFormService = TestBed.inject(ApplicationFormService);
+    spyOn(applicationFormService, 'getSignedInUserRecord').and.callFake((userId, name) => {
+      if (userId === null && name === sessionUser.name) {
+        return matchingEmployee;
+      }
+      return userId === String(sessionUser.id) ? portalIdMatch : undefined;
+    });
+    const leaveService = TestBed.inject(LeaveApplicationService);
+    const leaveRequest = spyOn(leaveService, 'fetchLeaveApplicationsForEmployee').and.returnValue(of([]));
+
+    component.ngOnInit();
+
+    expect(leaveRequest.calls.mostRecent().args[0]).toBe('Emp-00000011');
+    expect(applicationFormService.getSignedInUserRecord).toHaveBeenCalledWith(null, 'Alex Wong');
   });
 
   it('marks every Sunday as a weekly day off in calendar views', () => {

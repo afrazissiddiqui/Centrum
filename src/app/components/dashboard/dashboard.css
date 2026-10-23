@@ -865,6 +865,12 @@
   color: #fff;
 }
 
+.calendar-event--leave {
+  border-color: #176c51;
+  background: #20a47c;
+  color: #fff;
+}
+
 .calendar-event--dayoff {
   border-color: #8b4d5d;
   background: #a75d6f;

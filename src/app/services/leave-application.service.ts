@@ -1,8 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map, of, tap } from 'rxjs';
 import { apiUrl } from '../config/api.config';
-import { canonicalizeEmployeeCodeValue } from './application-form.service';
 import { AuthService } from './auth.service';
 import { filterRecordsBySessionBranches } from '../utils/branch-filter.util';
 import { formatSapApiFailureMessage } from '../utils/api-error.util';
@@ -122,19 +121,22 @@ export class LeaveApplicationService {
     );
   }
 
-  fetchLeaveApplicationsForEmployee(employeeIds: Iterable<string>): Observable<LeaveApplicationRecord[]> {
-    const employeeIdSet = new Set(
-      Array.from(employeeIds, (employeeId) => this.normalizeEmployeeId(employeeId)).filter(Boolean),
-    );
-    if (!employeeIdSet.size) {
+  fetchLeaveApplicationsForEmployee(
+    employeeCode: string,
+    fromDate: string,
+    toDate: string,
+  ): Observable<LeaveApplicationRecord[]> {
+    if (!employeeCode.trim()) {
       return of([]);
     }
 
-    return this.http.get<unknown>(LEAVE_APPLICATION_LIST_URL).pipe(
+    const params = new HttpParams()
+      .set('search', employeeCode)
+      .set('from_date', fromDate)
+      .set('to_date', toDate);
+
+    return this.http.get<unknown>(LEAVE_APPLICATION_LIST_URL, { params }).pipe(
       map((response) => this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item))),
-      map((records) => records.filter((record) =>
-        employeeIdSet.has(this.normalizeEmployeeId(record.EmployeeId)),
-      )),
       tap((records) => this.leaveList.set(records)),
     );
   }
@@ -187,6 +189,7 @@ export class LeaveApplicationService {
       'applications',
       'leave_applications',
       'leaveApplications',
+      'leave_application_list',
       'leaveApplicationList',
     ];
 
@@ -290,12 +293,6 @@ export class LeaveApplicationService {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  private normalizeEmployeeId(value: string): string {
-    const normalized = canonicalizeEmployeeCodeValue(value).trim().toLowerCase();
-    const numericCode = normalized.match(/^(?:emp[-\s]?)?(\d+)$/)?.[1];
-    return numericCode ? `emp-${numericCode.padStart(8, '0')}` : normalized;
-  }
-
   private mapDetailResponse(response: unknown): LeaveApplicationRecord {
     const responseRecord = this.asRecord(response);
     const wrappedRecord = this.asRecord(responseRecord['data']);
@@ -334,7 +331,16 @@ export class LeaveApplicationService {
 
     const headerInfo: LeaveApplicationHeaderInfo = {
       formNumber: this.pickString(sources, ['formNumber', 'form_number', 'FormNumber']),
-      employeeId: this.pickString(sources, ['employeeId', 'employee_id', 'employeeID', 'EmployeeID']),
+      employeeId: this.pickString(sources, [
+        'employeeId',
+        'employee_id',
+        'employeeID',
+        'EmployeeId',
+        'EmployeeID',
+        'employeeCode',
+        'employee_code',
+        'EmployeeCode',
+      ]),
       employeeName: this.pickString(sources, ['employeeName', 'employee_name', 'EmployeeName']),
       employeeCategory: this.pickString(sources, ['employeeCategory', 'employee_category']),
       employmentNature: this.pickString(sources, ['employmentNature', 'employment_nature']),

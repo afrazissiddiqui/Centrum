@@ -136,19 +136,19 @@
             type="button"
             [class.is-active]="activeView() === 'month'"
             [attr.aria-pressed]="activeView() === 'month'"
-            (click)="activeView.set('month')"
+            (click)="setCalendarView('month')"
           >Month View</button>
           <button
             type="button"
             [class.is-active]="activeView() === 'week'"
             [attr.aria-pressed]="activeView() === 'week'"
-            (click)="activeView.set('week')"
+            (click)="setCalendarView('week')"
           >Week View</button>
           <button
             type="button"
             [class.is-active]="activeView() === 'day'"
             [attr.aria-pressed]="activeView() === 'day'"
-            (click)="activeView.set('day')"
+            (click)="setCalendarView('day')"
           >Day View</button>
         </div>
       </div>
@@ -199,6 +199,7 @@
                   @for (event of day.events; track event.id) {
                     <article
                       [class]="'calendar-event calendar-event--' + event.category"
+                      [class.calendar-event--leave]="event.id.startsWith('leave-')"
                       [class.calendar-event--holiday-colored]="event.category === 'holiday'"
                       [style.--holiday-hue]="event.holidayColorIndex ? holidayHue(event.holidayColorIndex) : null"
                       [attr.aria-label]="eventCategoryLabel(event.category) + ': ' + event.title"

@@ -120,13 +120,18 @@ describe('LeaveApplicationService', () => {
     expect(submissionError).toEqual(new Error('Duplicate leave request.'));
   });
 
-  it('loads only the signed-in employee leave records without branch filtering', () => {
+  it('loads the employee-scoped leave records without branch or response-id filtering', () => {
     let records: LeaveApplicationRecord[] | undefined;
-    service.fetchLeaveApplicationsForEmployee(['Emp-00000011']).subscribe((result) => {
+    service.fetchLeaveApplicationsForEmployee('Emp-00000011', '2026-10-01', '2026-10-30').subscribe((result) => {
       records = result;
     });
 
-    const request = httpMock.expectOne((req) => req.url.endsWith('/leave-application-list'));
+    const request = httpMock.expectOne((req) =>
+      req.url.endsWith('/leave-application-list') &&
+      req.params.get('search') === 'Emp-00000011' &&
+      req.params.get('from_date') === '2026-10-01' &&
+      req.params.get('to_date') === '2026-10-30',
+    );
     expect(request.request.method).toBe('GET');
     request.flush({
       status: true,
@@ -155,13 +160,69 @@ describe('LeaveApplicationService', () => {
       ],
     });
 
-    expect(records?.length).toBe(1);
+    expect(records?.length).toBe(2);
     expect(records?.[0].EmployeeId).toBe('Emp-00000011');
     expect(records?.[0].EmployeeName).toBe('Manzoor Ahmad');
     expect(records?.[0].LeaveType).toBe('Special');
     expect(records?.[0].FromDate).toBe('01/10/2026');
     expect(records?.[0].ToDate).toBe('2026-10-10T00:00:00.000000Z');
     expect(records?.[0].RequestStatus).toBe('Submitted');
+  });
+
+  it('maps employee_code from leave list responses so searched requests are retained', () => {
+    let records: LeaveApplicationRecord[] | undefined;
+    service.fetchLeaveApplicationsForEmployee('Emp-00000011', '2026-10-01', '2026-10-30').subscribe((result) => {
+      records = result;
+    });
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/leave-application-list'));
+    request.flush({
+      status: true,
+      data: [
+        {
+          id: 2501,
+          employee_code: 'Emp-00000011',
+          employee_name: 'Manzoor Ahmad',
+          leave_type: 'Special',
+          from_date: '2026-10-01',
+          to_date: '2026-10-10',
+          request_status: 'Submitted',
+        },
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records?.[0]).toMatchObject({
+      EmployeeId: 'Emp-00000011',
+      LeaveType: 'Special',
+      FromDate: '2026-10-01',
+      ToDate: '2026-10-10',
+      RequestStatus: 'Submitted',
+    });
+  });
+
+  it('keeps employee-scoped API results when the response omits the employee code', () => {
+    let records: LeaveApplicationRecord[] | undefined;
+    service.fetchLeaveApplicationsForEmployee('Emp-00000011', '2026-10-01', '2026-10-30').subscribe((result) => {
+      records = result;
+    });
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/leave-application-list'));
+    request.flush({
+      status: true,
+      data: {
+        leave_application_list: [{
+          id: 2502,
+          leave_type: 'Annual',
+          from_date: '2026-10-12',
+          to_date: '2026-10-14',
+          request_status: 'Submitted',
+        }],
+      },
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records?.[0].EmployeeId).toBe('—');
   });
 
   it('maps the wrapped detail response data envelope for the modal view', () => {
