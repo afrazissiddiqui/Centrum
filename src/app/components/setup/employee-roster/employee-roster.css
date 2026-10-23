@@ -176,5 +176,5 @@ h1 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 22px;
 .table-scroll { max-height: none; overflow-x: auto; }
 .table-scroll .roster-table thead { opacity: 0; }
 .roster-table thead th { position: static; }
-.roster-sticky-header { position: sticky; top: 0; z-index: 40; height: 53px; margin-bottom: -53px; overflow: clip; pointer-events: none; }
+.roster-sticky-header { position: sticky; top: 0; z-index: 19; height: 53px; margin-bottom: -53px; overflow: clip; pointer-events: none; }
 .roster-sticky-header .roster-table { transform: translateX(calc(0px - var(--roster-scroll-left, 0px))); }
