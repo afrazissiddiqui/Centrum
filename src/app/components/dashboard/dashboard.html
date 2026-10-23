@@ -25,7 +25,11 @@
       <p>Welcome to your personal employee workspace. Manage your time off, personal schedule, and benefits.</p>
     </div>
     <div class="welcome-actions" aria-label="Employee self-service actions">
-      <button type="button" class="welcome-action welcome-action--primary" disabled title="Available when employee services are connected">
+      <button
+        type="button"
+        class="welcome-action welcome-action--primary"
+        (click)="createAbsenceRequest()"
+      >
         <ui5-icon name="add" aria-hidden="true"></ui5-icon>
         New Absence Request
       </button>
@@ -158,6 +162,7 @@
       <span class="calendar-legend__title">Calendar Legend:</span>
       <span class="legend-item"><i class="legend-swatch legend-swatch--approved"></i>My Approved Absence</span>
       <span class="legend-item"><i class="legend-swatch legend-swatch--pending"></i>My Pending Request</span>
+      <span class="legend-item"><i class="legend-swatch legend-swatch--leave"></i>Leave / Unannounced Leave</span>
       <span class="legend-item"><i class="legend-swatch legend-swatch--remote"></i>My Remote / WFH Day</span>
       <span class="legend-item"><i class="legend-swatch legend-swatch--holiday"></i>Statutory Holiday</span>
       <span class="legend-item"><i class="legend-swatch legend-swatch--dayoff"></i>Sunday Day Off</span>
@@ -233,6 +238,9 @@
       }
       @if (leaveCalendarLoadError()) {
         <span role="status">Your leave applications could not be loaded.</span>
+      }
+      @if (attendanceCalendarLoadError()) {
+        <span role="status">Attendance could not be loaded to identify unannounced leave.</span>
       }
     </footer>
   </section>

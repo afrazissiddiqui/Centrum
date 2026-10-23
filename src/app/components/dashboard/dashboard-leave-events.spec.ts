@@ -1,8 +1,10 @@
 import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
-import { ApplicationFormRecord } from '../../services/application-form.service';
+import { ApplicationFormRecord, EmployeeRosterListRecord } from '../../services/application-form.service';
+import { AttendanceDailyRecord } from '../../services/attendance-management.service';
 import { LeaveApplicationRecord } from '../../services/leave-application.service';
-import { dashboardEmployeeCode, dashboardLeaveEvents } from './dashboard';
+import { WorkstationRecord } from '../../services/workstation.service';
+import { dashboardEmployeeCode, dashboardLeaveEvents, dashboardUnannouncedLeaveEvents } from './dashboard';
 
 describe('dashboardLeaveEvents', () => {
   it('uses the employee code associated with the signed-in profile login', () => {
@@ -105,5 +107,47 @@ describe('dashboardLeaveEvents', () => {
       '2026-10-13',
       '2026-10-14',
     ]);
+  });
+
+  it('marks past scheduled roster days with no attendance as unannounced leave', () => {
+    const roster = [
+      { employee_id: 'Emp-00000011', shift_date: '2026-10-20', shift: 'DAY' },
+      { employee_id: 'Emp-00000011', shift_date: '2026-10-21', shift: 'DAY' },
+      { employee_id: 'Emp-00000011', shift_date: '2026-10-22', shift: 'OFF' },
+      { employee_id: 'Emp-00000011', shift_date: '2026-10-23', shift: 'DAY' },
+      { employee_id: 'Emp-00000011', shift_date: '2026-10-24', shift: 'DAY' },
+      { employee_id: 'Emp-00000012', shift_date: '2026-10-20', shift: 'DAY' },
+    ] as EmployeeRosterListRecord[];
+    const attendance = new Map<string, AttendanceDailyRecord>([
+      ['emp-00000011|2026-10-21', {} as AttendanceDailyRecord],
+    ]);
+    const workstations = [{
+      id: 4,
+      name: 'Day off',
+      code: 'OFF',
+      shift: 'OFF',
+      description: '',
+      officeInTime: '',
+      officeOutTime: '',
+      inGraceMinutes: 0,
+      outGraceMinutes: 0,
+      status: 1,
+    }] as WorkstationRecord[];
+
+    const events = dashboardUnannouncedLeaveEvents(
+      'Emp-00000011',
+      roster,
+      attendance,
+      workstations,
+      ['2026-10-23'],
+      new Date(2026, 9, 23, 12),
+    );
+
+    expect(events).toEqual([{
+      id: 'unannounced-leave-emp-00000011-2026-10-20',
+      title: 'Unannounced Leave',
+      date: '2026-10-20',
+      category: 'pending',
+    }]);
   });
 });

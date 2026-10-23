@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { forkJoin, of } from 'rxjs';
 import {
   getNavigableHrMenuActions,
   HrMenuAction,
@@ -10,8 +11,15 @@ import {
 import { AuthService } from '../../services/auth.service';
 import { PermissionService } from '../../services/permission.service';
 import { PublicHolidayService } from '../../services/public-holiday.service';
-import { ApplicationFormRecord, ApplicationFormService } from '../../services/application-form.service';
+import {
+  ApplicationFormRecord,
+  ApplicationFormService,
+  canonicalizeEmployeeCodeValue,
+  EmployeeRosterListRecord,
+} from '../../services/application-form.service';
 import { LeaveApplicationRecord, LeaveApplicationService } from '../../services/leave-application.service';
+import { AttendanceDailyRecord, AttendanceManagementService } from '../../services/attendance-management.service';
+import { WorkstationRecord, WorkstationService } from '../../services/workstation.service';
 
 export type CompanyCalendarEventCategory = 'approved' | 'pending' | 'remote' | 'holiday' | 'dayoff' | 'office';
 
@@ -142,6 +150,82 @@ export function dashboardLeaveEvents(
   return events;
 }
 
+export function dashboardUnannouncedLeaveEvents(
+  employeeCode: string,
+  roster: EmployeeRosterListRecord[],
+  attendance: ReadonlyMap<string, AttendanceDailyRecord>,
+  workstations: WorkstationRecord[],
+  excludedDates: Iterable<string>,
+  today = new Date(),
+): CompanyCalendarEvent[] {
+  const normalizeEmployeeCode = (value: string): string => {
+    const normalized = canonicalizeEmployeeCodeValue(value).trim().toLowerCase();
+    const numericCode = normalized.match(/^(?:emp[-\s]?)?(\d+)$/)?.[1];
+    return numericCode ? `emp-${numericCode.padStart(8, '0')}` : normalized;
+  };
+  const normalizedEmployeeCode = normalizeEmployeeCode(employeeCode);
+  const employeeKey = employeeCode.toLowerCase();
+  const excludedDateSet = new Set(excludedDates);
+  const dayOffLabels = new Set(['off', 'day off', 'scheduled day off']);
+  const dayOffShiftCodes = new Set<string>();
+
+  for (const workstation of workstations) {
+    const isDayOff = [workstation.shift, workstation.name, workstation.description]
+      .some((value) => dayOffLabels.has(value.trim().toLowerCase()));
+    if (isDayOff) {
+      for (const value of [workstation.code, String(workstation.id), workstation.shift, workstation.name, workstation.description]) {
+        const normalized = value.trim().toLowerCase();
+        if (normalized) {
+          dayOffShiftCodes.add(normalized);
+        }
+      }
+    }
+  }
+
+  const latestRosterShiftByDate = new Map<string, EmployeeRosterListRecord>();
+  for (const record of roster) {
+    if (normalizeEmployeeCode(record.employee_id) !== normalizedEmployeeCode) {
+      continue;
+    }
+    const date = dashboardDateKey(record.shift_date);
+    if (!date) {
+      continue;
+    }
+    const existing = latestRosterShiftByDate.get(date);
+    const existingVersion = Date.parse(existing?.updated_at || existing?.created_at || '') || 0;
+    const recordVersion = Date.parse(record.updated_at || record.created_at || '') || 0;
+    if (!existing || recordVersion >= existingVersion) {
+      latestRosterShiftByDate.set(date, record);
+    }
+  }
+
+  const todayKey = dateKey(today);
+  return Array.from(latestRosterShiftByDate).flatMap(([date, record]): CompanyCalendarEvent[] => {
+    const shift = record.shift.trim();
+    const normalizedShift = shift.toLowerCase();
+    const isScheduledDayOff = dayOffLabels.has(normalizedShift) || dayOffShiftCodes.has(normalizedShift);
+    const isLeaveShift = normalizedShift === 'l' || normalizedShift === 'leave';
+    if (
+      date >= todayKey ||
+      excludedDateSet.has(date) ||
+      !shift ||
+      ['+', 'null', 'undefined'].includes(normalizedShift) ||
+      isScheduledDayOff ||
+      isLeaveShift ||
+      attendance.has(`${employeeKey}|${date}`)
+    ) {
+      return [];
+    }
+
+    return [{
+      id: `unannounced-leave-${normalizedEmployeeCode}-${date}`,
+      title: 'Unannounced Leave',
+      date,
+      category: 'pending',
+    }];
+  }).sort((left, right) => left.date.localeCompare(right.date));
+}
+
 @Component({
   selector: 'app-dashboard',
   imports: [CommonModule, FormsModule],
@@ -157,10 +241,17 @@ export class dashboardComponent implements OnInit {
   private readonly publicHolidayService = inject(PublicHolidayService);
   private readonly applicationFormService = inject(ApplicationFormService);
   private readonly leaveApplicationService = inject(LeaveApplicationService);
+  private readonly attendanceManagementService = inject(AttendanceManagementService);
+  private readonly workstationService = inject(WorkstationService);
   private readonly today = new Date();
   private readonly hour = this.today.getHours();
   private leaveEmployeeCode = '';
+  private leaveEmployeeProfile: ApplicationFormRecord | null = null;
   private leaveCalendarRequestId = 0;
+  private attendanceCalendarRequestId = 0;
+  private employeeRosterRecords: EmployeeRosterListRecord[] | null = null;
+  private workstationRecords: WorkstationRecord[] | null = null;
+  private unannouncedLeaveCandidates: CompanyCalendarEvent[] = [];
 
   readonly menuActions = computed(() =>
     getNavigableHrMenuActions()
@@ -187,6 +278,7 @@ export class dashboardComponent implements OnInit {
   readonly calendarEvents = signal<CompanyCalendarEvent[]>([]);
   readonly holidayLoadError = signal(false);
   readonly leaveCalendarLoadError = signal(false);
+  readonly attendanceCalendarLoadError = signal(false);
   readonly holidayDialogOpen = signal(false);
   readonly holidayDate = signal(dateKey(this.today));
   readonly holidayDescription = signal('');
@@ -306,7 +398,9 @@ export class dashboardComponent implements OnInit {
           return;
         }
         this.leaveEmployeeCode = employeeCode;
+        this.leaveEmployeeProfile = employee;
         this.loadLeaveEventsForVisiblePeriod();
+        this.loadUnannouncedLeaveEventsForVisiblePeriod();
       },
       error: (error: unknown) => {
         console.error('Failed to load the signed-in employee profile for the leave calendar.', error);
@@ -336,6 +430,7 @@ export class dashboardComponent implements OnInit {
           ...events.filter((event) => !event.id.startsWith('leave-')),
           ...leaveEvents,
         ]);
+        this.refreshUnannouncedLeaveEvents();
       },
       error: (error: unknown) => {
         if (requestId !== this.leaveCalendarRequestId) {
@@ -345,6 +440,76 @@ export class dashboardComponent implements OnInit {
         this.leaveCalendarLoadError.set(true);
       },
     });
+  }
+
+  private loadUnannouncedLeaveEventsForVisiblePeriod(): void {
+    if (!this.leaveEmployeeCode) {
+      return;
+    }
+    const requestId = ++this.attendanceCalendarRequestId;
+    const [fromDate, toDate] = this.leaveCalendarDateRange();
+    this.unannouncedLeaveCandidates = [];
+    this.attendanceCalendarLoadError.set(false);
+    this.refreshUnannouncedLeaveEvents();
+
+    forkJoin({
+      roster: this.employeeRosterRecords
+        ? of(this.employeeRosterRecords)
+        : this.applicationFormService.fetchEmployeeRosterList(),
+      attendance: this.leaveEmployeeProfile
+        ? this.attendanceManagementService.fetchEmployeeRosterAttendance(
+          this.leaveEmployeeProfile,
+          fromDate,
+          toDate,
+        )
+        : of(new Map<string, AttendanceDailyRecord>()),
+      workstations: this.workstationRecords
+        ? of(this.workstationRecords)
+        : this.workstationService.fetchWorkstations(),
+    }).subscribe({
+      next: ({ roster, attendance, workstations }) => {
+        if (requestId !== this.attendanceCalendarRequestId) {
+          return;
+        }
+        this.employeeRosterRecords = roster;
+        this.workstationRecords = workstations;
+        const excludedDates = this.calendarEvents()
+          .filter((event) => event.category === 'holiday' || event.id.startsWith('leave-'))
+          .map((event) => event.date);
+        this.unannouncedLeaveCandidates = dashboardUnannouncedLeaveEvents(
+          this.leaveEmployeeCode,
+          roster,
+          attendance,
+          workstations,
+          excludedDates,
+          this.today,
+        );
+        this.refreshUnannouncedLeaveEvents();
+        this.attendanceCalendarLoadError.set(false);
+      },
+      error: (error: unknown) => {
+        if (requestId !== this.attendanceCalendarRequestId) {
+          return;
+        }
+        console.error('Failed to load attendance for the dashboard unannounced leave calendar.', error);
+        this.attendanceCalendarLoadError.set(true);
+      },
+    });
+  }
+
+  private refreshUnannouncedLeaveEvents(): void {
+    const excludedDates = new Set(
+      this.calendarEvents()
+        .filter((event) => event.category === 'holiday' || event.id.startsWith('leave-'))
+        .map((event) => event.date),
+    );
+    const visibleCandidates = this.unannouncedLeaveCandidates.filter(
+      (event) => !excludedDates.has(event.date),
+    );
+    this.calendarEvents.update((events) => [
+      ...events.filter((event) => !event.id.startsWith('unannounced-leave-')),
+      ...visibleCandidates,
+    ]);
   }
 
   private leaveCalendarDateRange(): [string, string] {
@@ -422,9 +587,11 @@ export class dashboardComponent implements OnInit {
           ...events.filter((existing) => existing.id !== event.id),
           event,
         ]);
+        this.refreshUnannouncedLeaveEvents();
         this.selectedDate.set(holidayDate);
         this.monthAnchor.set(firstOfMonth(holidayDate));
         this.loadLeaveEventsForVisiblePeriod();
+        this.loadUnannouncedLeaveEventsForVisiblePeriod();
         this.holidaySaving.set(false);
         this.holidayDialogOpen.set(false);
         this.holidayCreateSuccess.set(`${description} was added to the calendar.`);
@@ -467,6 +634,7 @@ export class dashboardComponent implements OnInit {
             ...mergedHolidays.values(),
           ];
         });
+        this.refreshUnannouncedLeaveEvents();
       },
       error: (error: unknown) => {
         console.error('Failed to load company public holidays for the dashboard calendar.', error);
@@ -504,6 +672,10 @@ export class dashboardComponent implements OnInit {
     void this.router.navigateByUrl(action.route);
   }
 
+  createAbsenceRequest(): void {
+    void this.router.navigateByUrl('/employee-action/leave-application-form/create');
+  }
+
   changeMonth(offset: number): void {
     const selected = this.selectedDate();
     const nextDate = this.activeView() === 'month'
@@ -516,6 +688,7 @@ export class dashboardComponent implements OnInit {
     this.monthAnchor.set(firstOfMonth(nextDate));
     this.selectedDate.set(nextDate);
     this.loadLeaveEventsForVisiblePeriod();
+    this.loadUnannouncedLeaveEventsForVisiblePeriod();
   }
 
   goToToday(): void {
@@ -527,6 +700,7 @@ export class dashboardComponent implements OnInit {
       12,
     ));
     this.loadLeaveEventsForVisiblePeriod();
+    this.loadUnannouncedLeaveEventsForVisiblePeriod();
   }
 
   selectDate(date: Date): void {
@@ -541,6 +715,7 @@ export class dashboardComponent implements OnInit {
       previousMonth.getFullYear() !== this.monthAnchor().getFullYear()
     ) {
       this.loadLeaveEventsForVisiblePeriod();
+      this.loadUnannouncedLeaveEventsForVisiblePeriod();
     }
   }
 
@@ -550,6 +725,7 @@ export class dashboardComponent implements OnInit {
     }
     this.activeView.set(view);
     this.loadLeaveEventsForVisiblePeriod();
+    this.loadUnannouncedLeaveEventsForVisiblePeriod();
   }
 
   eventCategoryLabel(category: CompanyCalendarEventCategory): string {

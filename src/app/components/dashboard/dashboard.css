@@ -675,6 +675,10 @@
   background: #f1a20b;
 }
 
+.legend-swatch--leave {
+  background: #20a47c;
+}
+
 .legend-swatch--remote {
   background: #17a881;
 }

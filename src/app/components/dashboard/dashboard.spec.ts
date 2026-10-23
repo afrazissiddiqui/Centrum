@@ -3,9 +3,11 @@ import { Router } from '@angular/router';
 import { of } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
 import { ApplicationFormRecord, ApplicationFormService } from '../../services/application-form.service';
+import { AttendanceManagementService } from '../../services/attendance-management.service';
 import { LeaveApplicationRecord, LeaveApplicationService } from '../../services/leave-application.service';
 import { PermissionService } from '../../services/permission.service';
 import { PublicHolidayRecord, PublicHolidayService } from '../../services/public-holiday.service';
+import { WorkstationService } from '../../services/workstation.service';
 import { dashboardComponent } from './dashboard';
 
 describe('Dashboard', () => {
@@ -36,7 +38,15 @@ describe('Dashboard', () => {
         { provide: PermissionService, useValue: { canAccess: () => true } },
         { provide: ApplicationFormService, useValue: {
           fetchEmployeeProfiles: () => of([signedInEmployee]),
+          fetchEmployeeRosterList: () => of([]),
           getSignedInUserRecord: () => signedInEmployee,
+        } },
+        { provide: AttendanceManagementService, useValue: {
+          fetchEmployeeRosterAttendance: () => of(new Map()),
+        } },
+        { provide: WorkstationService, useValue: {
+          workstations: () => [],
+          fetchWorkstations: () => of([]),
         } },
         { provide: LeaveApplicationService, useValue: {
           fetchLeaveApplications: () => of(leaveApplications),
@@ -60,6 +70,19 @@ describe('Dashboard', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('navigates to the leave request form from New Absence Request', () => {
+    const router = TestBed.inject(Router);
+    const navigateByUrl = spyOn(router, 'navigateByUrl').and.returnValue(Promise.resolve(true));
+    const button = Array.from(
+      fixture.nativeElement.querySelectorAll('button'),
+    ).find((element) => element.textContent?.includes('New Absence Request')) as HTMLButtonElement;
+
+    expect(button.disabled).toBe(false);
+    button.click();
+
+    expect(navigateByUrl).toHaveBeenCalledWith('/employee-action/leave-application-form/create');
   });
 
   it('builds a six-week calendar and moves between months', () => {
