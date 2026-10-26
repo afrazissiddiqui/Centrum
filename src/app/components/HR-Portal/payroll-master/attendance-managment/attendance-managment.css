@@ -491,6 +491,7 @@
 }
 
 .attendance-table-scroll {
+  max-height: min(70vh, 720px);
   overflow: auto;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -570,21 +571,29 @@
 
 .attendance-table--date-range .attendance-table__date-range-identity:first-child,
 .attendance-table--date-range .attendance-table__date-range-employee-code {
-  left: auto;
-  z-index: 4;
+  left: 0;
+  z-index: 8;
 }
 
 .attendance-table--date-range .attendance-table__date-range-identity:nth-child(2),
 .attendance-table--date-range .attendance-table__date-range-employee-name {
-  left: auto;
-  z-index: 3;
+  left: var(--attendance-date-range-code-width);
+  z-index: 7;
 }
 
 .attendance-table--date-range tbody .attendance-table__date-range-employee-code,
 .attendance-table--date-range tbody .attendance-table__date-range-employee-name {
-  position: relative;
-  left: auto;
-  z-index: 1;
+  position: sticky;
+}
+
+.attendance-table--date-range tbody .attendance-table__date-range-employee-code {
+  left: 0;
+  z-index: 3;
+}
+
+.attendance-table--date-range tbody .attendance-table__date-range-employee-name {
+  left: var(--attendance-date-range-code-width);
+  z-index: 2;
 }
 
 .attendance-table--date-range .attendance-table__date-range-employee-code,
@@ -675,6 +684,65 @@
   width: 56px;
   min-width: 56px;
   max-width: 56px;
+}
+
+.attendance-table:not(.attendance-table--date-range) .attendance-table__group--select,
+.attendance-table:not(.attendance-table--date-range) .attendance-table__select,
+.attendance-table:not(.attendance-table--date-range) .attendance-table__select-header {
+  position: sticky;
+  left: 0;
+}
+
+.attendance-table:not(.attendance-table--date-range) .attendance-table__group--select {
+  z-index: 10;
+}
+
+.attendance-table:not(.attendance-table--date-range) .attendance-table__group-row .attendance-table__group--identity {
+  position: sticky;
+  left: 56px;
+  z-index: 9;
+}
+
+.attendance-table:not(.attendance-table--date-range) .attendance-table__select-header {
+  z-index: 9;
+}
+
+.attendance-table:not(.attendance-table--date-range) .attendance-table__select {
+  z-index: 4;
+}
+
+.attendance-table:not(.attendance-table--date-range) {
+  --attendance-user-id-width: 130px;
+  --attendance-employee-name-width: 200px;
+}
+
+.attendance-table:not(.attendance-table--date-range) .attendance-col--EmployeeId {
+  position: sticky;
+  left: 56px;
+  z-index: 4;
+  box-sizing: border-box;
+  width: var(--attendance-user-id-width);
+  min-width: var(--attendance-user-id-width);
+  max-width: var(--attendance-user-id-width);
+  background: #eff6ff;
+  box-shadow: 1px 0 0 #dbeafe;
+}
+
+.attendance-table:not(.attendance-table--date-range) .attendance-col--EmployeeName {
+  position: sticky;
+  left: calc(56px + var(--attendance-user-id-width));
+  z-index: 3;
+  box-sizing: border-box;
+  width: var(--attendance-employee-name-width);
+  min-width: var(--attendance-employee-name-width);
+  max-width: var(--attendance-employee-name-width);
+  background: #eff6ff;
+  box-shadow: 1px 0 0 #dbeafe;
+}
+
+.attendance-table:not(.attendance-table--date-range) thead .attendance-col--EmployeeId,
+.attendance-table:not(.attendance-table--date-range) thead .attendance-col--EmployeeName {
+  z-index: 8;
 }
 
 .attendance-table__group--actions,

@@ -235,7 +235,7 @@
                   appColumnResize
                   (click)="sortData(col.key)"
                   class="sortable-header"
-                  [ngClass]="getColumnGroupClass(col.key)"
+                  [ngClass]="[getColumnGroupClass(col.key), 'attendance-col--' + col.key]"
                   scope="col"
                 >
                   {{ col.label }}
@@ -251,7 +251,7 @@
                 <td class="attendance-table__select">
                   <span class="attendance-skeleton attendance-skeleton--checkbox" aria-hidden="true"></span>
                 </td>
-                <td *ngFor="let col of visibleColumns" [ngClass]="getColumnGroupClass(col.key)">
+                <td *ngFor="let col of visibleColumns" [ngClass]="[getColumnGroupClass(col.key), 'attendance-col--' + col.key]">
                   <span class="attendance-skeleton" [ngClass]="getSkeletonClass(col.key)" aria-hidden="true"></span>
                 </td>
                 <td class="attendance-table__actions">
@@ -275,7 +275,7 @@
                 </td>
                 <td
                   *ngFor="let col of visibleColumns"
-                  [ngClass]="getColumnGroupClass(col.key)"
+                  [ngClass]="[getColumnGroupClass(col.key), 'attendance-col--' + col.key]"
                 >
                   <ng-container [ngSwitch]="col.key">
                     <span *ngSwitchCase="'AttendanceStatus'" class="attendance-status" [ngClass]="getStatusClass(row.AttendanceStatus)">
