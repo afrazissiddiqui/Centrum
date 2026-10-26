@@ -213,7 +213,13 @@ describe('AddOvertimeComponent', () => {
 
     expect(fixture.componentInstance.selectedMonth()).toBe('2026-10');
     expect(attendanceService.fetchCalculatedWorkingHoursByDate).toHaveBeenCalledWith(
-      { mode: 'dateRange', fromDate: '2026-10-01', toDate: '2026-10-31' },
+      { mode: 'dateRange', fromDate: '2026-10-24', toDate: '2026-11-23' },
+      '4023',
+    );
+
+    fixture.componentInstance.onMonthChange('2026-12');
+    expect(attendanceService.fetchCalculatedWorkingHoursByDate).toHaveBeenCalledWith(
+      { mode: 'dateRange', fromDate: '2026-12-24', toDate: '2027-01-23' },
       '4023',
     );
   });
@@ -221,7 +227,7 @@ describe('AddOvertimeComponent', () => {
   it('displays a month filter without overtime range date filters or the range overtime column', () => {
     const monthFilter = fixture.nativeElement.querySelector('[name="hours-month"]') as HTMLInputElement;
     expect(monthFilter.type).toBe('month');
-    expect(fixture.nativeElement.textContent).toContain('Overtime Hours (Month Total)');
+    expect(fixture.nativeElement.textContent).toContain('Overtime Hours (24th-23rd Total)');
     expect(fixture.nativeElement.querySelector('[name="overtime-from-date"]')).toBeNull();
     expect(fixture.nativeElement.querySelector('[name="overtime-to-date"]')).toBeNull();
     expect(fixture.nativeElement.textContent).not.toContain('Overtime in Range');
@@ -292,16 +298,17 @@ describe('AddOvertimeComponent', () => {
         loginDetails: { legacyCode: '4023' },
       } as ApplicationFormDetail,
     }]));
-    const monthStart = '2026-10-01';
-    const secondWorkedDate = '2026-10-02';
-    const outsideWorkedDate = '2026-11-03';
+    const beforePeriodDate = '2026-10-23';
+    const periodStartDate = '2026-10-24';
+    const periodEndDate = '2026-11-23';
+    const afterPeriodDate = '2026-11-24';
     applicationFormService.fetchEmployeeRosterList.and.returnValue(of([{
       employee_id: 'EMP-001',
       employee_name: 'Ayesha Khan',
       department: 'Finance',
       designation: 'Analyst',
       employment_status: 'Active',
-      shift_date: monthStart,
+      shift_date: beforePeriodDate,
       shift: '1',
       role: '',
       hub: '',
@@ -312,8 +319,30 @@ describe('AddOvertimeComponent', () => {
       department: 'Finance',
       designation: 'Analyst',
       employment_status: 'Active',
-      shift_date: secondWorkedDate,
+      shift_date: periodStartDate,
+      shift: '1',
+      role: '',
+      hub: '',
+      note: null,
+    }, {
+      employee_id: 'EMP-001',
+      employee_name: 'Ayesha Khan',
+      department: 'Finance',
+      designation: 'Analyst',
+      employment_status: 'Active',
+      shift_date: periodEndDate,
       shift: '2',
+      role: '',
+      hub: '',
+      note: null,
+    }, {
+      employee_id: 'EMP-001',
+      employee_name: 'Ayesha Khan',
+      department: 'Finance',
+      designation: 'Analyst',
+      employment_status: 'Active',
+      shift_date: afterPeriodDate,
+      shift: '1',
       role: '',
       hub: '',
       note: null,
@@ -349,9 +378,10 @@ describe('AddOvertimeComponent', () => {
       },
     ]));
     attendanceService.fetchCalculatedWorkingHoursByDate.and.returnValue(of([
-      { date: monthStart, hoursWorked: '10h' },
-      { date: secondWorkedDate, hoursWorked: '7h' },
-      { date: outsideWorkedDate, hoursWorked: '20h' },
+      { date: beforePeriodDate, hoursWorked: '50h' },
+      { date: periodStartDate, hoursWorked: '10h' },
+      { date: periodEndDate, hoursWorked: '7h' },
+      { date: afterPeriodDate, hoursWorked: '20h' },
     ]));
 
     fixture.componentInstance.onMonthChange('2026-10');
@@ -359,7 +389,7 @@ describe('AddOvertimeComponent', () => {
     fixture.detectChanges();
 
     expect(attendanceService.fetchCalculatedWorkingHoursByDate).toHaveBeenCalledWith(
-      { mode: 'dateRange', fromDate: '2026-10-01', toDate: '2026-10-31' },
+      { mode: 'dateRange', fromDate: '2026-10-24', toDate: '2026-11-23' },
       '4023',
     );
     expect(fixture.nativeElement.textContent).toContain('17h');
