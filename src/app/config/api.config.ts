@@ -1,4 +1,5 @@
 const API_BASE_URL = 'http://alhafiz.vdc.services:8084/ahcp/public';
+export const AGP_API_BASE_URL = 'http://alhafiz.vdc.services:8084/ahcp_live/public';
 
 /** Pioneer attendance API (proxied in local dev via proxy.conf.json). */
 export const BIOMETRICS_API_BASE_URL = resolveBiometricsApiBaseUrl();
@@ -16,7 +17,7 @@ function resolveBiometricsApiBaseUrl(): string {
 }
 
 /** Builds a full API URL: `{API_BASE_URL}/api/{endpoint}` */
-export function apiUrl(endpoint: string): string {
+export function apiUrl(endpoint: string, baseUrl = API_BASE_URL): string {
   const path = endpoint.replace(/^\/+/, '');
-  return `${API_BASE_URL}/api/${path}`;
+  return `${baseUrl}/api/${path}`;
 }

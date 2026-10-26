@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map, tap } from 'rxjs';
-import { apiUrl } from '../../../config/api.config';
+import { AGP_API_BASE_URL, apiUrl } from '../../../config/api.config';
 import { AuthService } from '../../../services/auth.service';
 
 export interface AgpLineItem {
@@ -136,11 +136,11 @@ export interface AgpPagination {
   total: number;
 }
 
-const ARTICLE_GATE_PASS_LIST_URL = apiUrl('article-gate-pass-list');
-const ARTICLE_GATE_PASS_ADD_URL = apiUrl('article-gate-pass-add');
-const ARTICLE_GATE_PASS_DETAIL_URL = apiUrl('article-gate-pass-detail');
-const ARTICLE_GATE_PASS_UPDATE_URL = apiUrl('article-gate-pass-update');
-const ARTICLE_GATE_PASS_DELETE_URL = apiUrl('article-gate-pass-delete');
+const ARTICLE_GATE_PASS_LIST_URL = apiUrl('article-gate-pass-list', AGP_API_BASE_URL);
+const ARTICLE_GATE_PASS_ADD_URL = apiUrl('article-gate-pass-add', AGP_API_BASE_URL);
+const ARTICLE_GATE_PASS_DETAIL_URL = apiUrl('article-gate-pass-detail', AGP_API_BASE_URL);
+const ARTICLE_GATE_PASS_UPDATE_URL = apiUrl('article-gate-pass-update', AGP_API_BASE_URL);
+const ARTICLE_GATE_PASS_DELETE_URL = apiUrl('article-gate-pass-delete', AGP_API_BASE_URL);
 
 function emptyLine(): AgpLineItem {
   return {

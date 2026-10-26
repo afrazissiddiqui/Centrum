@@ -13,6 +13,7 @@ import { AgpRecord, AgpService } from './agp.service';
 import { ShellbarSearchService } from '../../../services/shellbar-search.service';
 import { connectShellbarSearch } from '../../../utils/shellbar-search-connect.util';
 import { buildCompactPageNumbers } from '../../../utils/pagination.util';
+import { Subscription } from 'rxjs';
 
 type AgpSortableKey = Exclude<keyof AgpRecord, 'lines' | 'selected'>;
 
@@ -35,13 +36,21 @@ export class AgpComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly shellbarSearch = inject(ShellbarSearchService);
   private readonly document = inject(DOCUMENT);
+  private listRequest?: Subscription;
+  private cachedRows: AgpRecord[] | null = null;
+  private cachedFilteredRows: AgpRecord[] = [];
+  private cachedSearchText = '';
+  private cachedSortColumn: AgpSortableKey | null = null;
+  private cachedSortDirection: 'asc' | 'desc' | null = null;
 
   constructor(
     private readonly router: Router,
     private readonly agpService: AgpService,
     private readonly layout: GatePassLayoutService,
     private readonly alertService: AlertService,
-  ) {}
+  ) {
+    this.destroyRef.onDestroy(() => this.listRequest?.unsubscribe());
+  }
 
   formatCell(record: AgpRecord, key: AgpSortableKey): string {
     return formatGatePassListCell(record[key] as string | number | null | undefined, key);
@@ -58,8 +67,9 @@ export class AgpComponent implements OnInit {
   }
 
   loadList(page = this.currentPage): void {
+    this.listRequest?.unsubscribe();
     this.listLoading.set(true);
-    this.agpService.fetchArticleGatePasses(page, this.pageSize).subscribe({
+    this.listRequest = this.agpService.fetchArticleGatePasses(page, this.pageSize).subscribe({
       next: () => {
         if (page > this.pagination.lastPage) {
           this.currentPage = Math.max(1, this.pagination.lastPage);
@@ -67,7 +77,6 @@ export class AgpComponent implements OnInit {
           return;
         }
         this.currentPage = this.pagination.currentPage;
-        this.pageSize = this.pagination.perPage;
         this.listLoading.set(false);
       },
       error: (error: unknown) => {
@@ -112,7 +121,7 @@ export class AgpComponent implements OnInit {
   sortColumn: AgpSortableKey = 'submittedDate';
   sortDirection: 'asc' | 'desc' = 'desc';
   currentPage = 1;
-  pageSize = 15;
+  pageSize = 10;
   readonly pageSizeOptions = [5, 10, 15, 25, 50, 100];
   showDialog = false;
   readonly showDetailDialog = signal(false);
@@ -365,6 +374,16 @@ export class AgpComponent implements OnInit {
   }
 
   get filteredList(): AgpRecord[] {
+    const rows = this.rows;
+    if (
+      rows === this.cachedRows &&
+      this.searchText === this.cachedSearchText &&
+      this.sortColumn === this.cachedSortColumn &&
+      this.sortDirection === this.cachedSortDirection
+    ) {
+      return this.cachedFilteredRows;
+    }
+
     let list = [...this.rows];
 
     if (this.searchText) {
@@ -393,7 +412,16 @@ export class AgpComponent implements OnInit {
 
     list.sort((a, b) => compareGatePassListRecords(a, b, this.sortColumn, this.sortDirection));
 
-    return list;
+    this.cachedRows = rows;
+    this.cachedSearchText = this.searchText;
+    this.cachedSortColumn = this.sortColumn;
+    this.cachedSortDirection = this.sortDirection;
+    this.cachedFilteredRows = list;
+    return this.cachedFilteredRows;
+  }
+
+  trackRowId(_index: number, record: AgpRecord): number {
+    return record.Id;
   }
 
   get paginatedList(): AgpRecord[] {

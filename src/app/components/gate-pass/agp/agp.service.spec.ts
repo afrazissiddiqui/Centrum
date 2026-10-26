@@ -4,7 +4,7 @@ import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@ang
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { apiUrl } from '../../../config/api.config';
+import { AGP_API_BASE_URL, apiUrl } from '../../../config/api.config';
 import { AgpAddPayload, AgpRecord, AgpService } from './agp.service';
 
 describe('AgpService', () => {
@@ -61,7 +61,7 @@ describe('AgpService', () => {
 
     service.updateArticleGatePass(12, payload).subscribe();
 
-    const req = httpMock.expectOne(`${apiUrl('article-gate-pass-update')}/12`);
+    const req = httpMock.expectOne(`${apiUrl('article-gate-pass-update', AGP_API_BASE_URL)}/12`);
     expect(req.request.method).toBe('POST');
     const body = JSON.parse(req.request.body as string) as Record<string, unknown>;
     expect(body).not.toHaveProperty('baseDocNo');
@@ -74,7 +74,7 @@ describe('AgpService', () => {
     });
 
     const pageRequest = httpMock.expectOne((request) =>
-      request.url === apiUrl('article-gate-pass-list') &&
+      request.url === apiUrl('article-gate-pass-list', AGP_API_BASE_URL) &&
       request.params.get('page') === '2' &&
       request.params.get('per_page') === '50',
     );

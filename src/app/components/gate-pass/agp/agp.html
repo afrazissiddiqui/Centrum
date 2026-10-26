@@ -87,7 +87,7 @@
             <tr *ngIf="!listLoading() && paginatedList.length === 0">
               <td [attr.colspan]="visibleColumnCount + 2">No AGP records found.</td>
             </tr>
-            <tr *ngFor="let j of paginatedList">
+            <tr *ngFor="let j of paginatedList; trackBy: trackRowId">
               <td>
                 <input type="checkbox" [(ngModel)]="j.selected" />
               </td>
