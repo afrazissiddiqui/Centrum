@@ -10,7 +10,7 @@
     >
       <div class="sapMTableTitle sapMBarChild sapMBarChildFirstChild">
         <div class="sapMTitle sapMTitleStyleH5 sapMTitleNoWrap sapMTitleMaxWidth" role="heading" aria-level="5">
-          Plant Maintenance Master Form ({{ pagination.total }}) · Selected ({{ getSelectedCount() }})
+          Plant Maintenance Master Form ({{ machineList.length }}) · Selected ({{ getSelectedCount() }})
         </div>
       </div>
 
@@ -152,45 +152,30 @@
 
       <div class="table-pagination">
         <div class="pagination-info">
-          Showing {{ pagination.from ?? 0 }} to {{ pagination.to ?? 0 }} of
-          {{ pagination.total }} entries
+          Showing {{ filteredList.length === 0 ? 0 : (currentPage - 1) * pageSize + 1 }} to
+          {{ Math.min(currentPage * pageSize, filteredList.length) }} of {{ filteredList.length }} entries
         </div>
 
         <div class="pagination-controls">
-          <button
-            type="button"
-            [disabled]="loading() || currentPage === 1"
-            (click)="setPage(currentPage - 1)"
-          >
-            Previous
-          </button>
+          <button type="button" [disabled]="currentPage === 1" (click)="setPage(currentPage - 1)">Previous</button>
           <div class="page-numbers">
             <button
               type="button"
               *ngFor="let page of pages"
               [class.active]="page === currentPage"
-              [disabled]="loading()"
               (click)="setPage(page)"
             >
               {{ page }}
             </button>
           </div>
-          <button
-            type="button"
-            [disabled]="loading() || currentPage === totalPages"
-            (click)="setPage(currentPage + 1)"
-          >
+          <button type="button" [disabled]="currentPage === totalPages" (click)="setPage(currentPage + 1)">
             Next
           </button>
         </div>
 
         <div class="page-size-selector">
-          <select
-            [(ngModel)]="pageSize"
-            (ngModelChange)="onPageSizeChange($event)"
-            [disabled]="loading()"
-          >
-            <option *ngFor="let size of pageSizeOptions" [ngValue]="size">Show {{ size }}</option>
+          <select [(ngModel)]="pageSize" (ngModelChange)="onPageSizeChange()">
+            <option *ngFor="let size of pageSizeOptions" [value]="size">Show {{ size }}</option>
           </select>
         </div>
       </div>
