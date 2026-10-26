@@ -54,9 +54,22 @@ export class AgpComponent implements OnInit {
       onSearchChange: () => this.onSearchChange(),
     });
 
+    this.loadList();
+  }
+
+  loadList(page = this.currentPage): void {
     this.listLoading.set(true);
-    this.agpService.fetchArticleGatePasses().subscribe({
-      next: () => this.listLoading.set(false),
+    this.agpService.fetchArticleGatePasses(page, this.pageSize).subscribe({
+      next: () => {
+        if (page > this.pagination.lastPage) {
+          this.currentPage = Math.max(1, this.pagination.lastPage);
+          this.loadList(this.currentPage);
+          return;
+        }
+        this.currentPage = this.pagination.currentPage;
+        this.pageSize = this.pagination.perPage;
+        this.listLoading.set(false);
+      },
       error: (error: unknown) => {
         this.listLoading.set(false);
         this.alertService.error(
@@ -87,6 +100,10 @@ export class AgpComponent implements OnInit {
     return this.agpService.records();
   }
 
+  get pagination() {
+    return this.agpService.pagination();
+  }
+
   get visibleColumnCount(): number {
     return this.columns.filter((col) => col.visible).length;
   }
@@ -95,9 +112,8 @@ export class AgpComponent implements OnInit {
   sortColumn: AgpSortableKey = 'submittedDate';
   sortDirection: 'asc' | 'desc' = 'desc';
   currentPage = 1;
-  pageSize = 10;
-  pageSizeOptions: number[] = [5, 10, 20, 50];
-
+  pageSize = 15;
+  readonly pageSizeOptions = [5, 10, 15, 25, 50, 100];
   showDialog = false;
   readonly showDetailDialog = signal(false);
   readonly detailLoading = signal(false);
@@ -176,9 +192,7 @@ export class AgpComponent implements OnInit {
         }
 
         this.agpService.removeAgpRecord(record);
-        if (this.paginatedList.length === 0 && this.currentPage > 1) {
-          this.currentPage -= 1;
-        }
+        this.loadList();
         this.alertService.success('Deleted', response?.message || 'AGP record removed successfully.');
       },
       error: (error: unknown) => {
@@ -383,12 +397,11 @@ export class AgpComponent implements OnInit {
   }
 
   get paginatedList(): AgpRecord[] {
-    const start = (this.currentPage - 1) * this.pageSize;
-    return this.filteredList.slice(start, start + this.pageSize);
+    return this.filteredList;
   }
 
   get totalPages(): number {
-    return Math.ceil(this.filteredList.length / this.pageSize);
+    return this.pagination.lastPage;
   }
 
   get pages(): number[] {
@@ -397,7 +410,11 @@ export class AgpComponent implements OnInit {
 
   onSearchChange(): void {
     this.shellbarSearch.syncQuery(this.searchText);
+    const needsPageReset = this.currentPage !== 1;
     this.currentPage = 1;
+    if (needsPageReset) {
+      this.loadList();
+    }
   }
 
   sortData(column: AgpSortableKey): void {
@@ -412,11 +429,13 @@ export class AgpComponent implements OnInit {
   setPage(page: number): void {
     if (page >= 1 && page <= this.totalPages) {
       this.currentPage = page;
+      this.loadList(page);
     }
   }
 
   onPageSizeChange(): void {
     this.currentPage = 1;
+    this.loadList();
   }
 
   createNew(): void {

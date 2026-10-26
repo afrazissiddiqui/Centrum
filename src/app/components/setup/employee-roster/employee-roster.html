@@ -17,7 +17,7 @@
       <label class="select-control"><ui5-icon name="building" aria-hidden="true"></ui5-icon><select aria-label="Filter employees by branch" [ngModel]="selectedHub()" (ngModelChange)="selectedHub.set($event)">@for (branch of rosterBranchOptions; track branch) { <option [value]="branch">{{ branch }}</option> }</select><ui5-icon name="slim-arrow-down" aria-hidden="true"></ui5-icon></label>
       <label class="select-control"><ui5-icon name="group" aria-hidden="true"></ui5-icon><select [ngModel]="selectedDepartment()" (ngModelChange)="onDepartmentChange($event)"><option>All Departments</option>@for (department of departmentOptions(); track department.id) { <option [value]="department.name">{{ department.name }}</option> } </select><ui5-icon name="slim-arrow-down" aria-hidden="true"></ui5-icon></label>
       <div class="month-control"><button type="button" aria-label="Previous month" (click)="changeMonth(-1)">‹</button><span><ui5-icon name="calendar" aria-hidden="true"></ui5-icon> {{ monthLabel() }}</span><button type="button" aria-label="Next month" (click)="changeMonth(1)">›</button></div>
-      <label class="select-control month-half-control"><ui5-icon name="time-entry-request" aria-hidden="true"></ui5-icon><select [ngModel]="selectedMonthHalf()" (ngModelChange)="onMonthHalfChange($event)"><option>First Half</option><option>Second Half</option><option>Whole Month</option></select><ui5-icon name="slim-arrow-down" aria-hidden="true"></ui5-icon></label>
+      <label class="select-control month-half-control"><ui5-icon name="time-entry-request" aria-hidden="true"></ui5-icon><select [ngModel]="selectedMonthHalf()" (ngModelChange)="onMonthHalfChange($event, rosterTableScroll)"><option>First Half</option><option>Second Half</option><option>Whole Month</option></select><ui5-icon name="slim-arrow-down" aria-hidden="true"></ui5-icon></label>
       <button type="button" class="today-button" (click)="jumpToToday()">Jump to Today</button>
       <div class="roster-search">
         <label class="search-control"><ui5-icon name="search" aria-hidden="true"></ui5-icon><input type="search" [attr.aria-label]="legacyCodeSearchOnly() ? 'Search employees by legacy code only' : 'Search employees by name, username, ID, or legacy code'" [placeholder]="legacyCodeSearchOnly() ? 'Search by legacy code...' : 'Search employee by name, username, ID, legacy code, or role...'" [ngModel]="searchText()" (ngModelChange)="searchText.set($event)" /></label>
@@ -53,11 +53,13 @@
         [class.table-scroll--whole-month]="selectedMonthHalf() === 'Whole Month'"
         aria-hidden="true"
       >
-        <table class="roster-table">
+        <table class="roster-table" [style.width.px]="selectedMonthHalf() === 'Whole Month' ? 446 + visibleDays().length * 48 : null">
+          <colgroup><col class="employee-column" /><col class="role-column" /><col class="paid-leaves-column" /><col class="days-off-column" /><col class="menu-column" />@for (day of visibleDays(); track day.date) { <col class="roster-day-column" /> }</colgroup>
           <thead><tr><th class="employee-column"><label><input type="checkbox" tabindex="-1" [checked]="allVisibleSelected()" /> Staff Member ({{ activeCount() }})</label></th><th class="role-column">Role / Hub</th><th class="paid-leaves-column"><span>Paid Leaves</span><strong>{{ monthLabel() }}</strong></th><th class="days-off-column"><span>Days Off</span><strong>{{ monthLabel() }}</strong></th><th class="menu-column"></th><th *ngFor="let day of visibleDays()" [class.today-column]="day.isToday" [class.weekend-column]="day.isHoliday"><span>{{ day.weekday }}</span><strong>{{ day.date | number:'2.0-0' }}</strong></th></tr></thead>
         </table>
       </div>
       <div
+        #rosterTableScroll
         class="table-scroll"
         [class.table-scroll--whole-month]="selectedMonthHalf() === 'Whole Month'"
         (scroll)="syncRosterHeader($event)"
@@ -65,7 +67,8 @@
         aria-label="Scrollable employee roster by day"
         tabindex="0"
       >
-        <table class="roster-table">
+        <table class="roster-table" [style.width.px]="selectedMonthHalf() === 'Whole Month' ? 446 + visibleDays().length * 48 : null">
+          <colgroup><col class="employee-column" /><col class="role-column" /><col class="paid-leaves-column" /><col class="days-off-column" /><col class="menu-column" />@for (day of visibleDays(); track day.date) { <col class="roster-day-column" /> }</colgroup>
           <thead><tr><th class="employee-column"><label><input type="checkbox" [checked]="allVisibleSelected()" (change)="toggleAllVisible($event)" /> Staff Member ({{ activeCount() }})</label></th><th class="role-column">Role / Hub</th><th class="paid-leaves-column"><span>Paid Leaves</span><strong>{{ monthLabel() }}</strong></th><th class="days-off-column"><span>Days Off</span><strong>{{ monthLabel() }}</strong></th><th class="menu-column"></th><th *ngFor="let day of visibleDays()" [class.today-column]="day.isToday" [class.weekend-column]="day.isHoliday"><span>{{ day.weekday }}</span><strong>{{ day.date | number:'2.0-0' }}</strong></th></tr></thead>
           <tbody>
             @if (loading()) { <tr><td class="empty-state" [attr.colspan]="visibleDays().length + 5">Loading employees...</td></tr> }

@@ -90,7 +90,7 @@ describe('OvertimeListComponent', () => {
     expect(fixture.nativeElement.querySelector('.employee-detail-panel__body').textContent).toContain('Department');
     expect(fixture.nativeElement.querySelector('.employee-detail-panel__body').textContent).toContain('Finance');
     expect(fixture.componentInstance.formatRecordCell('overtime_rate', fixture.componentInstance.records()[0]))
-      .toBe('123.29');
+      .toBe('144.23');
   });
 
   it('recalculates a previously stored overtime rate from the employee gross salary', () => {
@@ -108,7 +108,7 @@ describe('OvertimeListComponent', () => {
     expect(fixture.componentInstance.formatRecordCell(
       'overtime_rate',
       fixture.componentInstance.records()[0],
-    )).toBe('123.29');
+    )).toBe('144.23');
   });
 
   it('shows the clicked overtime line in the side card', () => {

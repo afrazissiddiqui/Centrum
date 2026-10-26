@@ -164,7 +164,7 @@ h1 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 22px;
 .table-scroll::-webkit-scrollbar-thumb:hover { background: #7188a5; }
 .table-scroll--whole-month { overscroll-behavior-x: contain; }
 .table-scroll--whole-month .roster-table { width: max-content; min-width: 100%; }
-.table-scroll--whole-month .roster-table thead th:nth-child(n + 6) { width: 48px; }
+.table-scroll--whole-month .roster-table .roster-day-column { width: 48px; }
 .table-scroll--whole-month .roster-table th:first-child,
 .table-scroll--whole-month .roster-table td:first-child { position: sticky; left: 0; z-index: 2; }
 .table-scroll--whole-month .roster-table thead th:first-child { z-index: 3; background: #eef3fb; }

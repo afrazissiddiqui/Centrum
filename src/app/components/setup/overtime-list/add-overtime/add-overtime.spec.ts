@@ -414,7 +414,7 @@ describe('AddOvertimeComponent', () => {
       working_hours: 10.5,
       shift_hours: 8,
       overtime_hours: 2.5,
-      overtime_rate: 123.29,
+      overtime_rate: 144.23,
       flag: '1',
     }));
     expect(fixture.componentInstance.employees()[0].flag).toBe('1');

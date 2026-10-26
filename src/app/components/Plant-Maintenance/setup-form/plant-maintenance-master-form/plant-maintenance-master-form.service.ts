@@ -1,6 +1,6 @@
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, map, tap } from 'rxjs';
+import { Observable, forkJoin, map, of, switchMap, tap } from 'rxjs';
 import { apiUrl } from '../../../../config/api.config';
 import {
   MachineSearchOption,
@@ -98,11 +98,34 @@ export interface PlantMaintenanceMasterApiResponse {
   data?: Record<string, unknown>;
 }
 
+export interface PlantMaintenanceMasterFormPagination {
+  currentPage: number;
+  lastPage: number;
+  perPage: number;
+  total: number;
+  from: number | null;
+  to: number | null;
+}
+
+interface PlantMaintenanceMasterFormPage {
+  records: PlantMaintenanceMasterRecord[];
+  pagination: PlantMaintenanceMasterFormPagination;
+}
+
 const PLANT_MAINTENANCE_MAIN_FORM_LIST_URL = apiUrl('plant-maintenance-main-form-list');
 const PLANT_MAINTENANCE_MAIN_FORM_ADD_URL = apiUrl('plant-maintenance-main-form-add');
 const PLANT_MAINTENANCE_MAIN_FORM_DETAIL_URL = apiUrl('plant-maintenance-main-form-detail');
 const PLANT_MAINTENANCE_MAIN_FORM_UPDATE_URL = apiUrl('plant-maintenance-main-form-update');
 const PLANT_MAINTENANCE_MAIN_FORM_DELETE_URL = apiUrl('plant-maintenance-main-form-delete');
+
+const EMPTY_MASTER_FORM_PAGINATION: PlantMaintenanceMasterFormPagination = {
+  currentPage: 1,
+  lastPage: 1,
+  perPage: 15,
+  total: 0,
+  from: null,
+  to: null,
+};
 
 export function plantMaintenanceMasterHasReplacementYes(
   record: PlantMaintenanceMasterRecord,
@@ -275,13 +298,56 @@ export function buildPlantMaintenanceMasterFormPayload(
 export class PlantMaintenanceMasterFormService {
   private readonly http = inject(HttpClient);
   private readonly _records = signal<PlantMaintenanceMasterRecord[]>([]);
+  private readonly _pagination = signal(EMPTY_MASTER_FORM_PAGINATION);
 
   readonly records = this._records.asReadonly();
+  readonly pagination = this._pagination.asReadonly();
 
   fetchPlantMaintenanceMasterForms(): Observable<PlantMaintenanceMasterRecord[]> {
-    return this.http.get<unknown>(PLANT_MAINTENANCE_MAIN_FORM_LIST_URL).pipe(
-      map((response) => this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item))),
-      tap((records) => this._records.set(records)),
+    return this.fetchMasterFormPage().pipe(
+      switchMap((firstPage) => {
+        const remainingPages = Array.from(
+          {
+            length: Math.max(
+              0,
+              firstPage.pagination.lastPage - firstPage.pagination.currentPage,
+            ),
+          },
+          (_, index) =>
+            this.fetchMasterFormPage(
+              firstPage.pagination.currentPage + index + 1,
+              firstPage.pagination.perPage,
+            ),
+        );
+
+        const allPages$ = remainingPages.length
+          ? forkJoin(remainingPages).pipe(
+              map((pages) => [firstPage, ...pages].flatMap((page) => page.records)),
+            )
+          : of(firstPage.records);
+
+        return allPages$.pipe(
+          map((records) => ({ records, pagination: firstPage.pagination })),
+        );
+      }),
+      tap(({ records, pagination }) => {
+        this._records.set(records);
+        this._pagination.set(pagination);
+      }),
+      map(({ records }) => records),
+    );
+  }
+
+  fetchPlantMaintenanceMasterFormPage(
+    page: number,
+    perPage: number,
+  ): Observable<PlantMaintenanceMasterRecord[]> {
+    return this.fetchMasterFormPage(page, perPage).pipe(
+      tap(({ records, pagination }) => {
+        this._records.set(records);
+        this._pagination.set(pagination);
+      }),
+      map(({ records }) => records),
     );
   }
 
@@ -439,6 +505,103 @@ export class PlantMaintenanceMasterFormService {
     }
 
     return [];
+  }
+
+  private fetchMasterFormPage(
+    page?: number,
+    perPage = EMPTY_MASTER_FORM_PAGINATION.perPage,
+  ): Observable<PlantMaintenanceMasterFormPage> {
+    const request =
+      page === undefined
+        ? this.http.get<unknown>(PLANT_MAINTENANCE_MAIN_FORM_LIST_URL)
+        : this.http.get<unknown>(PLANT_MAINTENANCE_MAIN_FORM_LIST_URL, {
+            params: new HttpParams()
+              .set('page', page)
+              .set('per_page', perPage),
+          });
+
+    return request.pipe(
+      map((response) => {
+        const records = this.extractApiItems(response).map((item) =>
+          this.mapApiItemToRecord(item),
+        );
+        return {
+          records,
+          pagination: this.mapPagination(response, records.length, page ?? 1, perPage),
+        };
+      }),
+    );
+  }
+
+  private mapPagination(
+    response: unknown,
+    recordCount: number,
+    requestedPage: number,
+    requestedPerPage: number,
+  ): PlantMaintenanceMasterFormPagination {
+    const source = this.findPaginationSource(response);
+    if (!source) {
+      const from =
+        recordCount > 0 ? (requestedPage - 1) * requestedPerPage + 1 : null;
+      return {
+        currentPage: requestedPage,
+        lastPage: 1,
+        perPage: requestedPerPage,
+        total: recordCount,
+        from,
+        to: from === null ? null : from + recordCount - 1,
+      };
+    }
+
+    const total = this.readPaginationNumber(source['total'], recordCount, true);
+    const perPage = this.readPaginationNumber(
+      source['per_page'],
+      requestedPerPage,
+    );
+    return {
+      currentPage: this.readPaginationNumber(
+        source['current_page'],
+        requestedPage,
+      ),
+      lastPage: this.readPaginationNumber(source['last_page'], 1),
+      perPage,
+      total,
+      from: this.readNullablePaginationNumber(source['from']),
+      to: this.readNullablePaginationNumber(source['to']),
+    };
+  }
+
+  private findPaginationSource(response: unknown): Record<string, unknown> | null {
+    if (!response || typeof response !== 'object' || Array.isArray(response)) {
+      return null;
+    }
+
+    const source = response as Record<string, unknown>;
+    if (
+      'current_page' in source ||
+      'last_page' in source ||
+      'per_page' in source ||
+      'total' in source
+    ) {
+      return source;
+    }
+
+    return this.findPaginationSource(source['data']);
+  }
+
+  private readPaginationNumber(value: unknown, fallback: number, allowZero = false): number {
+    const number = Number(value);
+    return Number.isInteger(number) && (allowZero ? number >= 0 : number > 0)
+      ? number
+      : fallback;
+  }
+
+  private readNullablePaginationNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    const number = Number(value);
+    return Number.isInteger(number) && number >= 0 ? number : null;
   }
 
   private pickString(sources: Array<Record<string, unknown>>, keys: string[]): string {

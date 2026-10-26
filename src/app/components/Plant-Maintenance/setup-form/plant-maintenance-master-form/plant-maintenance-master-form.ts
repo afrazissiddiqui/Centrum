@@ -42,13 +42,15 @@ export class PlantMaintenanceMasterFormComponent implements OnInit {
   private readonly router = inject(Router);
 
   readonly Math = Math;
+  readonly loading = signal(true);
+  readonly skeletonRows = [1, 2, 3, 4, 5, 6];
 
   searchText = '';
   sortColumn: MasterTableColumnKey = 'machineId';
   sortDirection: 'asc' | 'desc' = 'asc';
   currentPage = 1;
-  pageSize = 10;
-  pageSizeOptions: number[] = [5, 10, 20, 50];
+  pageSize = 15;
+  pageSizeOptions: number[] = [5, 10, 15, 20, 50];
   showDialog = false;
   readonly showViewDialog = signal(false);
   readonly detailLoading = signal(false);
@@ -56,14 +58,7 @@ export class PlantMaintenanceMasterFormComponent implements OnInit {
   activeTab: 'sort' | 'filter' | 'group' = 'filter';
 
   ngOnInit(): void {
-    this.masterService.fetchPlantMaintenanceMasterForms().subscribe({
-      error: (error: unknown) => {
-        void this.alertService.error(
-          'Load Failed',
-          formatApiErrorMessage(error, 'Failed to load plant maintenance master forms.'),
-        );
-      },
-    });
+    this.loadPage(1, this.pageSize);
   }
 
   readonly rowActions: RowActionKey[] = ['view', 'update', 'delete'];
@@ -88,6 +83,10 @@ export class PlantMaintenanceMasterFormComponent implements OnInit {
 
   get machineList(): PlantMaintenanceMasterRecord[] {
     return this.masterService.records();
+  }
+
+  get pagination() {
+    return this.masterService.pagination();
   }
 
   get filteredList(): PlantMaintenanceMasterRecord[] {
@@ -135,12 +134,11 @@ export class PlantMaintenanceMasterFormComponent implements OnInit {
   }
 
   get paginatedList(): PlantMaintenanceMasterRecord[] {
-    const start = (this.currentPage - 1) * this.pageSize;
-    return this.filteredList.slice(start, start + this.pageSize);
+    return this.filteredList;
   }
 
   get totalPages(): number {
-    return Math.max(1, Math.ceil(this.filteredList.length / this.pageSize));
+    return Math.max(1, this.pagination.lastPage);
   }
 
   get pages(): number[] {
@@ -232,6 +230,7 @@ export class PlantMaintenanceMasterFormComponent implements OnInit {
         if (this.paginatedList.length === 0 && this.currentPage > 1) {
           this.currentPage -= 1;
         }
+        this.loadPage(this.currentPage, this.pageSize);
         void this.alertService.success('Deleted', 'Plant maintenance master form removed successfully.');
       },
       error: (error: unknown) => {
@@ -288,13 +287,41 @@ export class PlantMaintenanceMasterFormComponent implements OnInit {
   }
 
   setPage(page: number): void {
-    if (page >= 1 && page <= this.totalPages) {
-      this.currentPage = page;
+    if (
+      this.loading() ||
+      page < 1 ||
+      page > this.totalPages ||
+      page === this.currentPage
+    ) {
+      return;
     }
+    this.loadPage(page, this.pageSize);
   }
 
-  onPageSizeChange(): void {
-    this.currentPage = 1;
+  onPageSizeChange(pageSize: number): void {
+    if (this.loading()) {
+      return;
+    }
+    this.pageSize = pageSize;
+    this.loadPage(1, pageSize);
+  }
+
+  private loadPage(page: number, perPage: number): void {
+    this.loading.set(true);
+    this.masterService.fetchPlantMaintenanceMasterFormPage(page, perPage).subscribe({
+      next: () => {
+        this.currentPage = this.pagination.currentPage;
+        this.pageSize = this.pagination.perPage;
+        this.loading.set(false);
+      },
+      error: (error: unknown) => {
+        this.loading.set(false);
+        void this.alertService.error(
+          'Load Failed',
+          formatApiErrorMessage(error, 'Failed to load plant maintenance master forms.'),
+        );
+      },
+    });
   }
 
   openDialog(): void {

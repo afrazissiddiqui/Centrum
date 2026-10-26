@@ -2777,8 +2777,10 @@ export class EmployeeRosterComponent implements OnInit {
     this.loadRosterAttendance();
   }
 
-  onMonthHalfChange(value: string): void {
+  onMonthHalfChange(value: string, tableScroll: HTMLElement): void {
     this.selectedMonthHalf.set(value as MonthHalf);
+    tableScroll.scrollLeft = 0;
+    tableScroll.parentElement?.style.setProperty('--roster-scroll-left', '0px');
     this.clearSelection();
   }
 

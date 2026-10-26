@@ -319,6 +319,8 @@
               </ng-container>
               <col class="attendance-table__date-range-summary">
               <col class="attendance-table__date-range-summary">
+              <col class="attendance-table__date-range-summary">
+              <col class="attendance-table__date-range-summary">
               <col class="attendance-table__date-range-view">
             </colgroup>
             <thead>
@@ -328,6 +330,8 @@
                 <th class="attendance-table__group attendance-table__group--time" [attr.colspan]="dateRangeDates.length * 3" scope="colgroup">Date</th>
                 <th class="attendance-table__group attendance-table__group--time attendance-table__date-range-summary-header" rowspan="3" scope="col">Total Working Hours</th>
                 <th class="attendance-table__group attendance-table__group--time attendance-table__date-range-summary-header" rowspan="3" scope="col">Working Days</th>
+                <th class="attendance-table__group attendance-table__group--time attendance-table__date-range-summary-header" rowspan="3" scope="col">Paid Leaves</th>
+                <th class="attendance-table__group attendance-table__group--time attendance-table__date-range-summary-header" rowspan="3" scope="col">Unpaid Leaves</th>
                 <th class="attendance-table__actions-header attendance-table__date-range-view-header" rowspan="3" scope="col">View</th>
               </tr>
               <tr class="attendance-table__column-row">
@@ -345,10 +349,10 @@
             </thead>
             <tbody>
               <tr *ngIf="loading()" class="attendance-skeleton-row">
-                <td class="attendance-table__empty" [attr.colspan]="5 + dateRangeDates.length * 3">Loading attendance…</td>
+                <td class="attendance-table__empty" [attr.colspan]="7 + dateRangeDates.length * 3">Loading attendance…</td>
               </tr>
               <tr *ngIf="!loading() && dateRangeRows.length === 0">
-                <td class="attendance-table__empty" [attr.colspan]="5 + dateRangeDates.length * 3">
+                <td class="attendance-table__empty" [attr.colspan]="7 + dateRangeDates.length * 3">
                   No attendance records found for the selected date range.
                 </td>
               </tr>
@@ -376,6 +380,8 @@
                   {{ formatWorkingDuration(row.totalWorkingMinutes) }}
                 </td>
                 <td class="attendance-col--time attendance-table__date-range-summary-value">{{ row.workingDays }}</td>
+                <td class="attendance-col--time attendance-table__date-range-summary-value">—</td>
+                <td class="attendance-col--time attendance-table__date-range-summary-value">—</td>
                 <td class="attendance-table__actions attendance-table__date-range-view">
                   <button type="button" class="attendance-view-btn" (click)="viewDateRangeRecord(row)" title="View attendance for each date">
                     <ui5-icon name="detail-view" class="attendance-btn-icon" aria-hidden="true"></ui5-icon>

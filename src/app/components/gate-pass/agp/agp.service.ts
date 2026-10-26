@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map, tap } from 'rxjs';
 import { apiUrl } from '../../../config/api.config';
 import { AuthService } from '../../../services/auth.service';
@@ -127,6 +127,15 @@ export interface AgpRecord {
   department?: string;
 }
 
+export interface AgpPagination {
+  currentPage: number;
+  lastPage: number;
+  perPage: number;
+  from: number | null;
+  to: number | null;
+  total: number;
+}
+
 const ARTICLE_GATE_PASS_LIST_URL = apiUrl('article-gate-pass-list');
 const ARTICLE_GATE_PASS_ADD_URL = apiUrl('article-gate-pass-add');
 const ARTICLE_GATE_PASS_DETAIL_URL = apiUrl('article-gate-pass-detail');
@@ -179,10 +188,27 @@ export class AgpService {
   private readonly agpList = signal<AgpRecord[]>([]);
 
   readonly records = this.agpList.asReadonly();
+  readonly pagination = signal<AgpPagination>({
+    currentPage: 1,
+    lastPage: 1,
+    perPage: 15,
+    from: null,
+    to: null,
+    total: 0,
+  });
 
-  fetchArticleGatePasses(): Observable<AgpRecord[]> {
-    return this.http.get<unknown>(ARTICLE_GATE_PASS_LIST_URL).pipe(
-      map((response) => this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item))),
+  fetchArticleGatePasses(page = 1, perPage = this.pagination().perPage): Observable<AgpRecord[]> {
+    const params = new HttpParams()
+      .set('page', page)
+      .set('per_page', perPage);
+    const requestedPerPage = perPage;
+
+    return this.http.get<unknown>(ARTICLE_GATE_PASS_LIST_URL, { params }).pipe(
+      map((response) => {
+        const records = this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item));
+        this.pagination.set(this.extractPagination(response, records.length, page, requestedPerPage));
+        return records;
+      }),
       tap((records) => this.agpList.set(records)),
     );
   }
@@ -327,6 +353,65 @@ export class AgpService {
     }
 
     return [];
+  }
+
+  private extractPagination(
+    response: unknown,
+    recordCount: number,
+    requestedPage: number,
+    requestedPerPage: number,
+  ): AgpPagination {
+    const metadata = this.findPaginationMetadata(response);
+    const total = this.readPositiveOrZeroNumber(metadata, ['total']) ?? recordCount;
+    const perPage = this.readPositiveNumber(metadata, ['per_page', 'perPage']) ?? requestedPerPage;
+    const lastPage =
+      this.readPositiveNumber(metadata, ['last_page', 'lastPage']) ??
+      Math.max(1, Math.ceil(total / perPage));
+    const currentPage = this.readPositiveNumber(metadata, ['current_page', 'currentPage']) ?? requestedPage;
+    const from =
+      this.readPositiveNumber(metadata, ['from']) ??
+      (recordCount > 0 ? (currentPage - 1) * perPage + 1 : null);
+    const to = this.readPositiveNumber(metadata, ['to']) ?? (from === null ? null : from + recordCount - 1);
+
+    return { currentPage, lastPage, perPage, from, to, total };
+  }
+
+  private findPaginationMetadata(response: unknown): Record<string, unknown> {
+    if (!response || typeof response !== 'object' || Array.isArray(response)) {
+      return {};
+    }
+
+    const object = response as Record<string, unknown>;
+    if (
+      object['current_page'] !== undefined ||
+      object['currentPage'] !== undefined ||
+      object['last_page'] !== undefined ||
+      object['per_page'] !== undefined
+    ) {
+      return object;
+    }
+
+    return this.findPaginationMetadata(object['data']);
+  }
+
+  private readPositiveNumber(source: Record<string, unknown>, keys: string[]): number | null {
+    for (const key of keys) {
+      const value = Number(source[key]);
+      if (Number.isInteger(value) && value > 0) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  private readPositiveOrZeroNumber(source: Record<string, unknown>, keys: string[]): number | null {
+    for (const key of keys) {
+      const value = Number(source[key]);
+      if (Number.isInteger(value) && value >= 0) {
+        return value;
+      }
+    }
+    return null;
   }
 
   private pickString(sources: Array<Record<string, unknown>>, keys: string[]): string {

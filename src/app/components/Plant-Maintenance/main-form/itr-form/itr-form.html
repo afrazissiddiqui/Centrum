@@ -65,7 +65,7 @@
 
     <div class="table-wrapper">
       <div class="table-scroll">
-        <table class="mountain-table">
+        <table class="mountain-table" [attr.aria-busy]="loading()">
           <thead>
             <tr>
               <th>
@@ -87,12 +87,25 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngIf="paginatedList.length === 0">
+            <ng-container *ngIf="loading()">
+              <tr *ngFor="let row of skeletonRows" class="application-skeleton-row" aria-hidden="true">
+                <td>
+                  <span class="application-skeleton-cell application-skeleton-cell--checkbox"></span>
+                </td>
+                <td *ngFor="let col of columns" [hidden]="!col.visible">
+                  <span class="application-skeleton-cell"></span>
+                </td>
+                <td *ngIf="showActionsColumn" class="scd-actions-cell">
+                  <span class="application-skeleton-cell application-skeleton-cell--actions"></span>
+                </td>
+              </tr>
+            </ng-container>
+            <tr *ngIf="!loading() && paginatedList.length === 0">
               <td [attr.colspan]="visibleColumnCount" class="scd-table-empty">
                 No records yet. Click <strong>Add</strong> to create an ITR Form entry.
               </td>
             </tr>
-            <tr *ngFor="let item of paginatedList">
+            <tr *ngFor="let item of paginatedList" [hidden]="loading()">
               <td>
                 <input
                   type="checkbox"

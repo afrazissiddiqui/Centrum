@@ -57,6 +57,8 @@ export class HuskyFormComponent implements OnInit {
   private readonly router = inject(Router);
 
   readonly Math = Math;
+  readonly loading = signal(true);
+  readonly skeletonRows = [1, 2, 3, 4, 5, 6];
 
   searchText = '';
   sortColumn: HuskyTableColumnKey = 'machineId';
@@ -72,7 +74,11 @@ export class HuskyFormComponent implements OnInit {
 
   ngOnInit(): void {
     this.huskyService.fetchHuskyForms().subscribe({
+      next: () => {
+        this.loading.set(false);
+      },
       error: (error: unknown) => {
+        this.loading.set(false);
         void this.alertService.error(
           'Load Failed',
           formatApiErrorMessage(error, 'Failed to load Husky forms.'),
