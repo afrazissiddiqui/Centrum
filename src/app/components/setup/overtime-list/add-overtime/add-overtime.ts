@@ -585,8 +585,8 @@ export class AddOvertimeComponent implements OnInit {
     const requestId = ++this.hoursRequestId;
     const month = this.selectedMonth();
     const [year, monthNumber] = month.split('-').map(Number);
-    const fromDate = `${month}-24`;
-    const toDate = this.localDateValue(new Date(year, monthNumber, 23));
+    const fromDate = `${month}-01`;
+    const toDate = this.localDateValue(new Date(year, monthNumber, 0));
     const employees = this.employees().filter((employee) =>
       employee.flag === '0' &&
       this.isYes(employee.detail?.hrSettings.attendanceShiftManagement) &&

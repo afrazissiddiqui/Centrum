@@ -246,24 +246,31 @@ export function buildCreateReceiptFromProductionPayload(
   const baseDocEntry = (header.baseProductionOrderDocEntry ?? '').trim();
   const docEntry = Number.parseInt(baseDocEntry || (line?.baseEntry ?? '').trim() || '', 10);
 
-  const normalizedLines = validLines.map((row, index) => ({
-    line_num: index,
-    item_code: (row.itemCode ?? '').trim(),
-    quantity: row.quantity ?? 0,
-    warehouse: ((row.warehouse ?? '') as string).trim(),
-    batch_no: ((row.batchNumber ?? '') as string).trim(),
-    batches: [
-      {
-        BatchNum: ((row.batchNumber ?? '') as string).trim(),
-        Quantity: (row.quantity ?? 0).toFixed(6),
-        MnfDate: ((row.manufacturingDate ?? '') as string).trim() || null,
-        ProductionTime: normalizeProductionTime(header.productionTime) || null,
-        U_LegacyBatch: ((row.legacyBatch ?? '') as string).trim() || null,
-      },
-    ],
-    refilling: Boolean(row.refilling),
-    existing_batch: ((row.existingBatch ?? '') as string).trim(),
-  }));
+  const normalizedLines = validLines.map((row, index) => {
+    const existingBatch = (row.existingBatch ?? '').trim();
+    const batchNumber = row.refilling && existingBatch
+      ? existingBatch
+      : (row.batchNumber ?? '').trim();
+
+    return {
+      line_num: index,
+      item_code: (row.itemCode ?? '').trim(),
+      quantity: row.quantity ?? 0,
+      warehouse: ((row.warehouse ?? '') as string).trim(),
+      batch_no: batchNumber,
+      batches: [
+        {
+          BatchNum: batchNumber,
+          Quantity: (row.quantity ?? 0).toFixed(6),
+          MnfDate: ((row.manufacturingDate ?? '') as string).trim() || null,
+          ProductionTime: normalizeProductionTime(header.productionTime) || null,
+          U_LegacyBatch: ((row.legacyBatch ?? '') as string).trim() || null,
+        },
+      ],
+      refilling: Boolean(row.refilling),
+      existing_batch: existingBatch,
+    };
+  });
 
   const headerWarehouse = ((header as ReceiptFromProductionHeader & { warehouse?: string }).warehouse ?? '').trim();
   const lineWarehouse = ((line?.warehouse ?? '') as string).trim();
@@ -277,7 +284,7 @@ export function buildCreateReceiptFromProductionPayload(
     remarks: (header.remarks ?? '').trim(),
     warehouse: lineWarehouse || headerWarehouse,
     quantity: line?.quantity ?? 0,
-    batchNumber: ((line?.batchNumber ?? '') as string).trim(),
+    batchNumber: normalizedLines[0]?.batch_no ?? '',
     manufacturingDate: ((line?.manufacturingDate ?? '') as string).trim(),
     branch: normalizeBranchCode(header.branchId ?? ''),
     expiryDate: ((line?.expiryDate ?? '') as string).trim(),

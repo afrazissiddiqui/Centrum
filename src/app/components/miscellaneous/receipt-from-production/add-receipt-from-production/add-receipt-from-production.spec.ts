@@ -266,6 +266,26 @@ describe('AddReceiptFromProduction', () => {
     ]);
   });
 
+  it('uses the selected existing batch for refilling payload batch numbers', () => {
+    component.contentLines.set([
+      {
+        ...createEmptyReceiptFromProductionLine(),
+        itemCode: 'FG-Toll-P-00000069',
+        batchNumber: '3-45.00G--2026-000000007',
+        existingBatch: '701',
+        refilling: true,
+        quantity: 8064,
+      },
+    ]);
+
+    const payload = buildCreateReceiptFromProductionPayload(component.headerForm(), component.contentLines());
+
+    expect(payload.batchNumber).toBe('701');
+    expect(payload.items?.[0].batch_no).toBe('701');
+    expect(payload.items?.[0].batches[0].BatchNum).toBe('701');
+    expect(payload.items?.[0].existing_batch).toBe('701');
+  });
+
   it('prefers the changed line warehouse over a prefilled header warehouse', () => {
     component.headerForm.set({
       ...component.headerForm(),
