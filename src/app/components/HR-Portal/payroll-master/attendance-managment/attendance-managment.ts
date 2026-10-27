@@ -56,6 +56,11 @@ interface DateRangeAttendanceRow {
   workingDays: number;
 }
 
+export function attendanceSearchUserId(searchText: string, queryMode: AttendanceQueryMode): string {
+  const search = searchText.trim();
+  return queryMode === 'dateRange' && /^(?:emp-)?\d+$/i.test(search) ? search : '';
+}
+
 @Component({
   selector: 'app-attendance-managment',
   standalone: true,
@@ -84,6 +89,8 @@ export class AttendanceManagmentComponent implements OnInit {
   private querySub?: Subscription;
   private pageEnrichGeneration = 0;
   private readonly enrichedEmployeeKeys = new Set<string>();
+  private attendanceSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+  private attendanceSearchUserId = '';
 
   Math = Math;
   searchText = '';
@@ -132,6 +139,9 @@ export class AttendanceManagmentComponent implements OnInit {
     this.destroyRef.onDestroy(() => {
       this.pageEnrichSub?.unsubscribe();
       this.querySub?.unsubscribe();
+      if (this.attendanceSearchTimeout) {
+        clearTimeout(this.attendanceSearchTimeout);
+      }
     });
     this.loadRecords();
   }
@@ -341,6 +351,28 @@ export class AttendanceManagmentComponent implements OnInit {
   onSearchChange(): void {
     this.currentPage = 1;
     this.renderCurrentPage();
+
+    if (this.attendanceSearchTimeout) {
+      clearTimeout(this.attendanceSearchTimeout);
+      this.attendanceSearchTimeout = null;
+    }
+
+    const searchUserId = this.userId.trim()
+      ? ''
+      : attendanceSearchUserId(this.searchText, this.queryMode);
+    if (searchUserId === this.attendanceSearchUserId) {
+      return;
+    }
+
+    this.attendanceSearchTimeout = setTimeout(() => {
+      this.attendanceSearchTimeout = null;
+      if (!searchUserId && !this.attendanceSearchUserId) {
+        return;
+      }
+      this.attendanceSearchUserId = searchUserId;
+      this.currentPage = 1;
+      this.loadRecords();
+    }, 300);
   }
 
   onFilterChange(): void {
@@ -349,6 +381,11 @@ export class AttendanceManagmentComponent implements OnInit {
   }
 
   onQueryModeChange(): void {
+    if (this.attendanceSearchTimeout) {
+      clearTimeout(this.attendanceSearchTimeout);
+      this.attendanceSearchTimeout = null;
+    }
+    this.attendanceSearchUserId = '';
     if (this.queryMode === 'today') {
       this.loadRecords();
     } else if (this.queryMode === 'dateRange') {
@@ -507,12 +544,20 @@ export class AttendanceManagmentComponent implements OnInit {
 
   private loadRecords(): void {
     this.loading.set(true);
+    if (this.attendanceSearchTimeout) {
+      clearTimeout(this.attendanceSearchTimeout);
+      this.attendanceSearchTimeout = null;
+    }
     this.pageEnrichSub?.unsubscribe();
     this.enrichedEmployeeKeys.clear();
 
+    const searchUserId = this.userId.trim()
+      ? ''
+      : attendanceSearchUserId(this.searchText, this.queryMode);
+    this.attendanceSearchUserId = searchUserId;
     const query: AttendanceQuery = {
       mode: this.queryMode,
-      userId: this.userId,
+      userId: this.userId.trim() || searchUserId,
       date: this.selectedDate,
       fromDate: this.fromDate,
       toDate: this.toDate,

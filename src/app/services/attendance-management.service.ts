@@ -120,7 +120,11 @@ export class AttendanceManagementService {
       switchMap((employees) =>
         this.fetchPunches(normalizedQuery, employees).pipe(
           map((punches) => {
-            const session = this.createSession(punches, employees, normalizedQuery);
+            const requestedEmployee = normalizedQuery.userId
+              ? findEmployeeByAttendanceUserId(normalizedQuery.userId, employees)
+              : undefined;
+            const sessionEmployees = requestedEmployee ? [requestedEmployee] : employees;
+            const session = this.createSession(punches, sessionEmployees, normalizedQuery);
             this.sessionState.set(session);
             return session.slots.length;
           }),
@@ -166,21 +170,9 @@ export class AttendanceManagementService {
         const session = this.createSession(punches, employees, query);
         const employeeCodeByAttendanceKey = new Map<string, string>();
         for (const employee of employees) {
-          const candidates = [
-            employee.ExtEmpNo,
-            employee.detail?.loginDetails.legacyCode,
-            resolveAttendanceUserId(employee),
-            employee.userId,
-            employee.EmployeeCode,
-          ];
-          for (const candidate of candidates) {
-            if (!candidate?.trim()) {
-              continue;
-            }
-            const attendanceKey = resolvePunchKey(candidate, session.index.aliasToCanonical);
-            if (attendanceKey) {
-              employeeCodeByAttendanceKey.set(attendanceKey, employee.EmployeeCode);
-            }
+          const attendanceKey = attendanceEmployeeKey(employee);
+          if (attendanceKey) {
+            employeeCodeByAttendanceKey.set(attendanceKey, employee.EmployeeCode);
           }
         }
 
@@ -848,12 +840,20 @@ export function resolveAttendanceUserId(employee: ApplicationFormRecord): string
 }
 
 function resolveEmployeeLegacyCode(userId: string, employees: ApplicationFormRecord[]): string {
+  const employee = findEmployeeByAttendanceUserId(userId, employees);
+  return employee?.ExtEmpNo?.trim() || employee?.detail?.loginDetails.legacyCode?.trim() || '';
+}
+
+function findEmployeeByAttendanceUserId(
+  userId: string,
+  employees: ApplicationFormRecord[],
+): ApplicationFormRecord | undefined {
   const requestedUserKey = canonicalAttendanceKey(extractAttendanceUserId(userId));
   if (!requestedUserKey) {
-    return '';
+    return undefined;
   }
 
-  const employee = employees.find((record) =>
+  return employees.find((record) =>
     [
       resolveAttendanceUserId(record),
       record.userId,
@@ -865,8 +865,6 @@ function resolveEmployeeLegacyCode(userId: string, employees: ApplicationFormRec
       canonicalAttendanceKey(extractAttendanceUserId(candidate)) === requestedUserKey,
     ),
   );
-
-  return employee?.ExtEmpNo?.trim() || employee?.detail?.loginDetails.legacyCode?.trim() || '';
 }
 
 /** Normalizes biometric / login ids to a shared comparable key (8-digit numeric when possible). */
@@ -1024,9 +1022,17 @@ function registerEmployeeAliases(
       continue;
     }
     for (const variant of attendanceKeyVariants(candidate)) {
-      index.aliasToCanonical.set(variant, canonical);
+      if (!index.aliasToCanonical.has(variant)) {
+        index.aliasToCanonical.set(variant, canonical);
+      }
     }
   }
+}
+
+function attendanceEmployeeKey(employee: ApplicationFormRecord): string {
+  return canonicalAttendanceKey(employee.EmployeeCode?.trim() || '') ||
+    canonicalAttendanceKey(resolveAttendanceUserId(employee)) ||
+    canonicalAttendanceKey(employee.ExtEmpNo?.trim() || employee.detail?.loginDetails.legacyCode?.trim() || '');
 }
 
 function buildEmployeeAttendanceIndex(employees: ApplicationFormRecord[]): EmployeeAttendanceIndex {
@@ -1038,24 +1044,39 @@ function buildEmployeeAttendanceIndex(employees: ApplicationFormRecord[]): Emplo
 
   for (const employee of employees) {
     const rawUserId = resolveAttendanceUserId(employee);
-    const cardNo = employee.ExtEmpNo?.trim() || '';
-    if (!rawUserId && !cardNo) {
+    const cardNo = employee.ExtEmpNo?.trim() || employee.detail?.loginDetails.legacyCode?.trim() || '';
+    const employeeCode = employee.EmployeeCode?.trim();
+    const canonical = attendanceEmployeeKey(employee);
+    if (!canonical) {
+      continue;
+    }
+
+    const employeeName = employee.EmployeeName?.trim() || '';
+    registerEmployeeAliases(index, canonical, employee.apiId?.trim() || employeeCode || cardNo || rawUserId, employeeName, [
+      employee.ExtEmpNo,
+      employee.detail?.loginDetails.legacyCode,
+    ]);
+  }
+
+  for (const employee of employees) {
+    const rawUserId = resolveAttendanceUserId(employee);
+    const cardNo = employee.ExtEmpNo?.trim() || employee.detail?.loginDetails.legacyCode?.trim() || '';
+    const canonical = attendanceEmployeeKey(employee);
+    if (!canonical) {
       continue;
     }
 
     const loginCode = employee.detail?.loginDetails.employeeCode?.trim() || '';
-    const rawCode = employee.EmployeeCode?.trim();
-    const employeeCode = rawCode && rawCode !== '—' ? rawCode : '';
-    const canonical = canonicalAttendanceKey(cardNo || rawUserId);
     const employeeName = employee.EmployeeName?.trim() || '';
 
-    registerEmployeeAliases(index, canonical, employee.apiId?.trim() || cardNo || rawUserId, employeeName, [
+    registerEmployeeAliases(index, canonical, employee.apiId?.trim() || employee.EmployeeCode?.trim() || cardNo || rawUserId, employeeName, [
       rawUserId,
       cardNo,
+      employee.detail?.loginDetails.legacyCode,
       canonical,
       employee.userId,
       employee.detail?.loginDetails.userId,
-      employeeCode,
+      employee.EmployeeCode,
       loginCode,
       employee.apiId,
     ]);

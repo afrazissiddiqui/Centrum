@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@angular/platform-browser-dynamic/testing';
 import { of } from 'rxjs';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ApplicationFormRecord, ApplicationFormService } from './application-form.service';
+import { ApplicationFormDetail, ApplicationFormRecord, ApplicationFormService } from './application-form.service';
 import {
   AttendanceDailyRecord,
   AttendanceManagementService,
@@ -158,6 +158,63 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(attendance.has('emp-00000007|2026-10-17')).toBe(false);
   });
 
+  it('assigns card punches to the employee legacy code when it collides with another employee ID', () => {
+    const sakhi: ApplicationFormRecord = {
+      EmployeeCode: '00000076',
+      EmployeeName: 'Sakhi Marjan',
+      Department: '',
+      EmployeeNature: '',
+      Designation: '',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: 'Active',
+      userId: '00000076',
+    };
+    const inam: ApplicationFormRecord = {
+      EmployeeCode: 'EMP-00000179',
+      EmployeeName: 'Inam Ullah',
+      Department: '',
+      EmployeeNature: '',
+      Designation: '',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: 'Active',
+      userId: '00000179',
+      detail: {
+        loginDetails: { legacyCode: '00000076' },
+      } as ApplicationFormDetail,
+    };
+    let attendance = new Map<string, AttendanceDailyRecord>();
+
+    service.fetchRosterAttendance([sakhi, inam], '2026-09-01', '2026-09-30').subscribe((result) => {
+      attendance = result;
+    });
+
+    const request = httpMock.expectOne((req) => req.urlWithParams.includes('/rawpunch?'));
+    request.flush(JSON.stringify({
+      data: [{
+        card_no: '00000076',
+        punch_in: '2026-09-16T14:52:03.000Z',
+        punch_out: '2026-09-16T07:25:43.000Z',
+        hours_worked: '16h 34m',
+      }],
+    }));
+
+    const inamAttendance = attendance.get('emp-00000179|2026-09-16');
+    expect(inamAttendance?.Punches.map((punch) => punch.PunchDatetime)).toEqual([
+      '2026-09-16T07:25:43.000Z',
+      '2026-09-16T14:52:03.000Z',
+    ]);
+    expect(inamAttendance?.AttendanceStatus).toBe('Present');
+    expect(inamAttendance?.PunchIn).toBeTruthy();
+    expect(inamAttendance?.PunchOut).toBeTruthy();
+    expect(attendance.has('00000076|2026-09-16')).toBe(false);
+  });
+
   it('loads year-to-date roster attendance for only the selected employee', () => {
     const employee: ApplicationFormRecord = {
       EmployeeCode: 'EMP-00000007',
@@ -243,6 +300,75 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(record.PunchCount).toBe(2);
     expect(record.WorkingHours).toBe('8h 45m');
     expect(record.WorkingMinutes).toBe(525);
+  });
+
+  it('loads calculated date-range punches by card number when searching by employee code', () => {
+    employeeRecords = [{
+      EmployeeCode: '00000076',
+      EmployeeName: 'Sakhi Marjan',
+      apiId: '00000076',
+      Department: '',
+      EmployeeNature: '',
+      Designation: '',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: 'Active',
+      userId: '00000076',
+    }, {
+      EmployeeCode: 'EMP-00000179',
+      EmployeeName: 'Inam Ullah',
+      apiId: '00000179',
+      Department: '',
+      EmployeeNature: '',
+      Designation: '',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: 'Active',
+      userId: '00000179',
+      detail: {
+        loginDetails: { legacyCode: '00000076' },
+      } as ApplicationFormDetail,
+    }];
+
+    service.loadSession({
+      mode: 'dateRange',
+      userId: '179',
+      fromDate: '2026-09-01',
+      toDate: '2026-09-30',
+    }).subscribe();
+
+    const request = httpMock.expectOne((req) => req.urlWithParams.includes('/rawpunch?'));
+    const requestParams = new URL(request.request.urlWithParams).searchParams;
+    expect(requestParams.get('card_no')).toBe('00000076');
+    request.flush(JSON.stringify({
+      success: true,
+      type: 'calculated',
+      total: 1,
+      data: [{
+        id: '00003',
+        card_no: '00000076',
+        punch_in: '2026-09-10T18:57:44.000Z',
+        punch_out: null,
+        hours_worked: null,
+        machine_id: '3',
+        status: '01',
+      }],
+    }));
+
+    const slot = service.slots().find((item) => item.date === '2026-09-10');
+    expect(service.slots()).toHaveLength(30);
+    expect(slot).toMatchObject({
+      date: '2026-09-10',
+      displayId: 'Emp-00000179',
+      employeeName: 'Inam Ullah',
+      punchIn: '2026-09-10T18:57:44.000Z',
+      punchOut: '',
+      status: 'Present',
+    });
   });
 
   it('groups filtered punches by employee when the API returns login and card IDs', () => {
