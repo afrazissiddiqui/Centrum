@@ -19,6 +19,7 @@ export const payrollMasterRoutes: Routes = [
           anyOf: [
             { moduleSlug: 'payroll_processing_form', action: 'list' },
             { moduleSlug: 'attendance_managment_form', action: 'list' },
+            { moduleSlug: 'employee_roster_form', action: 'list' },
             { moduleSlug: 'tax_allowance_form', action: 'list' },
             { moduleSlug: 'tax_computation_form', action: 'list' },
           ],
@@ -31,6 +32,12 @@ export const payrollMasterRoutes: Routes = [
       { path: '', component: PayrollProcessingComponent, canActivate: [requirePermission('payroll_processing_form', 'list')] },
       { path: 'payroll-processing/create', component: AddPayrollProcessComponent, canActivate: [requirePermission('payroll_processing_form', 'add')] },
       { path: 'attendance-managment', component: AttendanceManagmentComponent, canActivate: [requirePermission('attendance_managment_form', 'list')] },
+      {
+        path: 'unpaid-leave',
+        loadComponent: () => import('../../setup/employee-roster/employee-roster').then((m) => m.EmployeeRosterComponent),
+        canActivate: [requirePermission('employee_roster_form', 'list')],
+        data: { unpaidLeaveOnly: true },
+      },
       { path: 'tax-managment', component: TaxManagmentComponent, canActivate: [requirePermission('tax_allowance_form', 'list')] },
       { path: 'tax-computation', component: TaxComputationComponent, canActivate: [requirePermission('tax_computation_form', 'list')] },
       { path: 'bonus/create', component: BonusAddComponent, canActivate: [requirePermission('tax_computation_form', 'add')] },

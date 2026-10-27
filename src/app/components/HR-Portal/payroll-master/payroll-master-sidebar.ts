@@ -10,6 +10,7 @@ export const PAYROLL_MASTER_SIDEBAR_SECTIONS: SidebarSection[] = [
     title: 'Payroll Sub Modules',
     items: [
       { id: 'attendance-managment', label: 'Attendance Managment', route: '/payroll-master/attendance-managment', access: { moduleSlug: 'attendance_managment_form', action: 'list' } },
+      { id: 'unpaid-leave', label: 'Unpaid Leave', route: '/payroll-master/unpaid-leave', access: { moduleSlug: 'employee_roster_form', action: 'list' } },
       { id: 'tax-managment', label: 'Tax Allowance Form', route: '/payroll-master/tax-managment', access: { moduleSlug: 'tax_allowance_form', action: 'list' } },
       { id: 'tax-computation', label: 'Tax Computation', route: '/payroll-master/tax-computation', access: { moduleSlug: 'tax_computation_form', action: 'list' } },
       { id: 'bonus', label: 'Bonus', route: '/payroll-master/bonus', access: { moduleSlug: 'tax_computation_form', action: 'list' } },
@@ -21,6 +22,9 @@ export const PAYROLL_MASTER_SIDEBAR_SECTIONS: SidebarSection[] = [
 export function payrollMasterActiveItemFromUrl(url: string): string {
   if (url.includes('/payroll-master/attendance-managment')) {
     return 'attendance-managment';
+  }
+  if (url.includes('/payroll-master/unpaid-leave')) {
+    return 'unpaid-leave';
   }
   if (url.includes('/payroll-master/tax-managment')) {
     return 'tax-managment';
@@ -36,4 +40,3 @@ export function payrollMasterActiveItemFromUrl(url: string): string {
   // }
   return 'payroll-processing';
 }
-

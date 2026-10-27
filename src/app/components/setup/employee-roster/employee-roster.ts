@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { catchError, concatMap, finalize, forkJoin, from, map, Observable, of, Subscription, switchMap, toArray } from 'rxjs';
 import { ApplicationFormDetail, ApplicationFormRecord, ApplicationFormService, canonicalizeEmployeeCodeValue, EmployeeProfileAddPayload, EmployeeRosterAddPayload, EmployeeRosterListRecord } from '../../../services/application-form.service';
 import { AlertService } from '../../../services/alert.service';
@@ -22,6 +23,7 @@ import { countUnannouncedLeaveDaysForYear } from '../../../utils/unannounced-lea
 import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
 import { GatePassDepartmentService } from '../../gate-pass/gate-pass-department.service';
 import { WorkstationRecord, WorkstationService } from '../../../services/workstation.service';
+import { PayrollMasterLayoutService } from '../../HR-Portal/payroll-master/payroll-master-layout.service';
 
 type ShiftCode = string;
 export type MonthHalf = 'First Half' | 'Second Half' | 'Whole Month';
@@ -61,6 +63,15 @@ interface ShiftDetailDialog {
 interface UnannouncedLeavePostResult {
   results: Array<{ dateRange: string[]; error: unknown | null }>;
   successfulDates: string[];
+}
+
+interface UnpaidLeaveReportRow {
+  employee: RosterEmployee;
+  dates: string[];
+  pendingDates: string[];
+  leaveType: string;
+  status: string;
+  pending: boolean;
 }
 
 interface UnannouncedLeaveProfileUpdateResult {
@@ -584,7 +595,7 @@ export function nonShiftUnannouncedLeaveDates(
   const normalizedEmployeeCode = employeeCode.toLowerCase();
   const holidaySet = new Set(Array.from(publicHolidayDates, (value) => value.trim()).filter(Boolean));
   return dates.filter((date) => {
-    if (holidaySet.has(date) || isRosterDateInFuture(date, today)) {
+    if (holidaySet.has(date) || !isRosterDateBeforeToday(date, today)) {
       return false;
     }
     const dailyAttendance = attendance.get(`${normalizedEmployeeCode}|${date}`);
@@ -858,6 +869,9 @@ function rosterShiftLetter(index: number): string {
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 export class EmployeeRosterComponent implements OnInit {
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly payrollLayout = inject(PayrollMasterLayoutService);
   private readonly employeeService = inject(ApplicationFormService);
   private readonly attendanceService = inject(AttendanceManagementService);
   private readonly alertService = inject(AlertService);
@@ -867,6 +881,7 @@ export class EmployeeRosterComponent implements OnInit {
   private readonly leaveApplicationService = inject(LeaveApplicationService);
   private readonly leaveTypeService = inject(LeaveTypeService);
   private readonly publicHolidayService = inject(PublicHolidayService);
+  readonly unpaidLeaveOnly = this.route.snapshot.data['unpaidLeaveOnly'] === true;
 
   readonly loading = signal(false);
   readonly saving = signal(false);
@@ -972,6 +987,18 @@ export class EmployeeRosterComponent implements OnInit {
   readonly branchHolidaysOpen = signal(false);
   readonly unpaidLeaveReportOpen = signal(false);
   readonly unpaidLeaveReportMonth = signal(this.monthLabel());
+  readonly unpaidLeaveFromDate = signal(this.localDateString(new Date()).slice(0, 8) + '01');
+  readonly unpaidLeaveToDate = signal(this.localDateString(new Date(
+    new Date().getFullYear(),
+    new Date().getMonth() + 1,
+    0,
+  )));
+  readonly unpaidLeaveDepartmentFilter = signal('');
+  readonly unpaidLeaveEmployeeFilter = signal('');
+  readonly unpaidLeaveTypeFilter = signal('');
+  readonly unpaidLeavePage = signal(1);
+  readonly unpaidLeavePageSize = signal(10);
+  readonly unpaidLeaveDetails = signal<UnpaidLeaveReportRow | null>(null);
   readonly unpaidLeaveReportAttendance = signal(new Map<string, AttendanceDailyRecord>());
   readonly unpaidLeaveReportLoading = signal(false);
   readonly unpaidLeaveReportLoaded = signal(false);
@@ -980,44 +1007,67 @@ export class EmployeeRosterComponent implements OnInit {
   private unpaidLeaveReportRequestId = 0;
   private unpaidLeaveReportRequest?: Subscription;
   readonly unassignedDialogOpen = signal(false);
+  readonly unpaidLeaveReportEmployees = computed<RosterEmployee[]>(() => {
+    const employeesByCode = new Map(
+      this.employees().map((employee) => [
+        normalizeEmployeeCodeForRoster(employee.EmployeeCode),
+        employee,
+      ]),
+    );
+
+    for (const profile of this.employeeService.getApplicationRecords()) {
+      const employeeCode = normalizeEmployeeCodeForRoster(profile.EmployeeCode);
+      if (!employeeCode || employeesByCode.has(employeeCode)) {
+        continue;
+      }
+
+      employeesByCode.set(employeeCode, {
+        ...profile,
+        hub:
+          profile.detail?.personalInfo.branchLocation ||
+          profile.detail?.requisition.location ||
+          '',
+        role: profile.Designation || '',
+        shifts: [],
+      });
+    }
+
+    return Array.from(employeesByCode.values());
+  });
   readonly monthlyUnannouncedLeaveReport = computed(() => {
+    this.publicHolidayDatesLoaded();
     if (!this.unpaidLeaveReportLoaded()) {
       return [];
     }
-    const monthLabel = this.unpaidLeaveReportMonth();
-    const monthKey = rosterMonthKey(monthLabel);
-    const daysInMonth = rosterMonthDayCount(monthKey);
-    const dates = Array.from({ length: daysInMonth }, (_, index) =>
-      this.rosterDateForMonth(monthLabel, index + 1),
-    );
-    const postedDates = indexRequestedLeaveDates(
-      this.leaveApplications().filter((application) =>
-        normalizeLeaveType(application.LeaveType) === normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE),
-      ),
-      monthLabel,
+    const dates = this.unpaidLeaveReportDates();
+    const postedApplications = this.leaveApplications().filter((application) =>
+      normalizeLeaveType(application.LeaveType) === normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE) &&
+      !/reject|cancel|void|deleted/i.test(application.RequestStatus),
     );
     const locallyPostedDates = this.postedUnannouncedLeaveDateKeys();
-    const publicHolidayDates = this.publicHolidayDatesForMonth(monthLabel);
-    return this.employees()
+    const publicHolidayDates = new Set(
+      dates.flatMap((date) => this.publicHolidayDatesForMonth(this.monthLabelForDate(date))),
+    );
+    return this.unpaidLeaveReportEmployees()
       .map((employee) => ({
         employee,
-        dates: employeeShiftIsApplicable(employee as ApplicationFormRecord)
+        dates: dates.filter((date) => employeeShiftIsApplicable(employee as ApplicationFormRecord)
           ? rosterUnannouncedLeaveDates(
             employee.EmployeeCode,
-            this.unpaidLeaveReportShifts(employee, monthLabel),
-            dates,
+            this.unpaidLeaveReportShifts(employee, this.monthLabelForDate(date)),
+            [date],
             this.unpaidLeaveReportAttendance(),
             this.workstationService.workstations(),
             new Date(),
             publicHolidayDates,
-          )
+          ).length > 0
           : nonShiftUnannouncedLeaveDates(
             employee.EmployeeCode,
-            dates,
+            [date],
             this.unpaidLeaveReportAttendance(),
             publicHolidayDates,
             new Date(),
-          ),
+          ).length > 0),
       }))
       .filter((entry) => entry.dates.length > 0)
       .map((entry) => {
@@ -1025,12 +1075,86 @@ export class EmployeeRosterComponent implements OnInit {
         return {
           ...entry,
           pendingDates: entry.dates.filter((date) =>
-            !postedDates.has(`${employeeKey}|${date}`) &&
+            !postedApplications.some((application) =>
+              normalizeEmployeeCodeForRoster(application.EmployeeId) === employeeKey &&
+              this.leaveApplicationCoversDate(application, date),
+            ) &&
             !locallyPostedDates.has(`${entry.employee.EmployeeCode.toLowerCase()}|${date}`),
           ),
         };
       })
       .sort((left, right) => left.employee.EmployeeName.localeCompare(right.employee.EmployeeName));
+  });
+  readonly unpaidLeaveReportRows = computed<UnpaidLeaveReportRow[]>(() =>
+    this.monthlyUnannouncedLeaveReport().map((entry) => {
+      const requestStatus = entry.dates
+        .map((date) => this.findUnannouncedLeaveApplication(entry.employee.EmployeeCode, date)?.RequestStatus.trim())
+        .find((status): status is string => !!status && !/submitted/i.test(status));
+      const pending = entry.pendingDates.length > 0;
+      return {
+        employee: entry.employee,
+        dates: entry.dates,
+        pendingDates: entry.pendingDates,
+        leaveType: UNANNOUNCED_LEAVE_TYPE,
+        pending,
+        status: pending ? 'Unexcused' : requestStatus || 'Pending Response',
+      };
+    }),
+  );
+  readonly unpaidLeaveDepartmentOptions = computed(() =>
+    [...new Set(this.unpaidLeaveReportRows()
+      .map(({ employee }) => String(employee.Department ?? '').trim())
+      .filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right)),
+  );
+  readonly filteredUnpaidLeaveReportRows = computed(() => {
+    const department = this.unpaidLeaveDepartmentFilter().trim().toLowerCase();
+    const employeeId = this.unpaidLeaveEmployeeFilter().trim().toLowerCase();
+    const leaveType = this.unpaidLeaveTypeFilter();
+    const query = this.unpaidLeaveReportSearch().trim().toLowerCase();
+    return this.unpaidLeaveReportRows().filter(({ employee, status, leaveType: rowLeaveType }) =>
+      (!department || String(employee.Department ?? '').toLowerCase() === department) &&
+      (!employeeId || employee.EmployeeCode.toLowerCase().includes(employeeId)) &&
+      (!leaveType || normalizeLeaveType(rowLeaveType) === normalizeLeaveType(leaveType)) &&
+      (!query || [employee.EmployeeName, employee.EmployeeCode, employee.Department, status]
+        .some((value) => String(value ?? '').toLowerCase().includes(query))),
+    );
+  });
+  readonly paginatedUnpaidLeaveReportRows = computed(() => {
+    const rows = this.filteredUnpaidLeaveReportRows();
+    const pageSize = this.unpaidLeavePageSize();
+    const page = Math.min(this.unpaidLeavePage(), this.unpaidLeaveTotalPages());
+    const start = (page - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  });
+  readonly unpaidLeaveTotalPages = computed(() =>
+    Math.max(1, Math.ceil(this.filteredUnpaidLeaveReportRows().length / this.unpaidLeavePageSize())),
+  );
+  readonly unpaidLeavePendingCount = computed(() =>
+    this.unpaidLeaveReportRows().reduce((total, row) => total + row.pendingDates.length, 0),
+  );
+  readonly unpaidLeaveTotalDays = computed(() =>
+    this.unpaidLeaveReportRows().reduce((total, row) => total + row.dates.length, 0),
+  );
+  readonly unpaidLeavePendingExplanationCount = computed(() =>
+    this.unpaidLeaveReportRows().filter((row) => row.status === 'Pending Response').length,
+  );
+  readonly unpaidLeaveTodayCount = computed(() => {
+    const today = this.localDateString(new Date());
+    return this.unpaidLeaveReportRows().filter((row) => row.dates.includes(today)).length;
+  });
+  readonly unpaidLeaveRepeatCount = computed(() => {
+    return this.unpaidLeaveReportRows().filter((row) => row.dates.length > 1).length;
+  });
+  readonly selectedUnpaidLeaveRowCount = computed(() =>
+    this.filteredUnpaidLeaveReportRows().filter(({ employee, pending }) =>
+      pending && this.selectedUnpaidLeaveEmployees().has(employee.EmployeeCode),
+    ).reduce((total, row) => total + row.pendingDates.length, 0),
+  );
+  readonly allUnpaidLeaveRowsSelected = computed(() => {
+    const selectableRows = this.filteredUnpaidLeaveReportRows().filter((row) => row.pending);
+    return selectableRows.length > 0 &&
+      selectableRows.every(({ employee }) => this.selectedUnpaidLeaveEmployees().has(employee.EmployeeCode));
   });
   readonly filteredUnpaidLeaveReport = computed(() => {
     const query = this.unpaidLeaveReportSearch().trim().toLowerCase();
@@ -1194,6 +1318,12 @@ export class EmployeeRosterComponent implements OnInit {
     this.loadEmployees();
   }
 
+  togglePayrollSidebar(): void {
+    if (this.unpaidLeaveOnly) {
+      this.payrollLayout.toggleSidebar();
+    }
+  }
+
   private loadWorkstations(): void {
     if (this.workstationLoading()) {
       return;
@@ -1221,10 +1351,19 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   openUnpaidLeaveReport(): void {
-    this.unpaidLeaveReportMonth.set(this.monthLabel());
+    const monthKey = rosterMonthKey(this.monthLabel());
+    this.setUnpaidLeaveDateRange(
+      `${monthKey}-01`,
+      `${monthKey}-${String(rosterMonthDayCount(monthKey)).padStart(2, '0')}`,
+    );
     this.unpaidLeaveReportSearch.set('');
+    this.unpaidLeaveDepartmentFilter.set('');
+    this.unpaidLeaveEmployeeFilter.set('');
+    this.unpaidLeaveTypeFilter.set('');
+    this.unpaidLeavePage.set(1);
     this.selectedUnpaidLeaveEmployees.set(new Set());
     this.unpaidLeaveReportOpen.set(true);
+    this.preloadUnpaidLeavePublicHolidays();
     this.loadUnpaidLeaveReportAttendance();
   }
 
@@ -1233,17 +1372,143 @@ export class EmployeeRosterComponent implements OnInit {
     this.selectedUnpaidLeaveEmployees.set(new Set());
     this.unpaidLeaveReportRequestId++;
     this.unpaidLeaveReportRequest?.unsubscribe();
+    if (this.unpaidLeaveOnly) {
+      void this.router.navigateByUrl('/payroll-master/attendance-managment');
+    }
     this.unpaidLeaveReportRequest = undefined;
     this.unpaidLeaveReportLoading.set(false);
   }
 
   changeUnpaidLeaveReportMonth(offset: number): void {
-    const [monthName, yearText] = this.unpaidLeaveReportMonth().split(' ');
-    const date = new Date(`${monthName} 1, ${yearText}`);
+    const date = new Date(`${this.unpaidLeaveFromDate()}T00:00:00`);
     date.setMonth(date.getMonth() + offset);
-    this.unpaidLeaveReportMonth.set(date.toLocaleString('en-US', { month: 'long', year: 'numeric' }));
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    this.setUnpaidLeaveDateRange(
+      `${monthKey}-01`,
+      `${monthKey}-${String(new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()).padStart(2, '0')}`,
+    );
     this.selectedUnpaidLeaveEmployees.set(new Set());
+    this.unpaidLeavePage.set(1);
+    this.preloadUnpaidLeavePublicHolidays();
     this.loadUnpaidLeaveReportAttendance();
+  }
+
+  applyUnpaidLeaveFilters(): void {
+    const fromDate = this.unpaidLeaveFromDate();
+    const toDate = this.unpaidLeaveToDate();
+    if (!fromDate || !toDate || fromDate > toDate) {
+      this.alertService.warning('Invalid Date Range', 'Choose a valid start and end date for the unpaid leave report.');
+      return;
+    }
+    this.setUnpaidLeaveDateRange(fromDate, toDate);
+    this.unpaidLeavePage.set(1);
+    this.selectedUnpaidLeaveEmployees.set(new Set());
+    this.preloadUnpaidLeavePublicHolidays();
+    this.loadUnpaidLeaveReportAttendance();
+  }
+
+  clearUnpaidLeaveFilters(): void {
+    const monthKey = rosterMonthKey(this.unpaidLeaveReportMonth());
+    this.setUnpaidLeaveDateRange(
+      `${monthKey}-01`,
+      `${monthKey}-${String(rosterMonthDayCount(monthKey)).padStart(2, '0')}`,
+    );
+    this.unpaidLeaveDepartmentFilter.set('');
+    this.unpaidLeaveEmployeeFilter.set('');
+    this.unpaidLeaveTypeFilter.set('');
+    this.unpaidLeaveReportSearch.set('');
+    this.unpaidLeavePage.set(1);
+    this.selectedUnpaidLeaveEmployees.set(new Set());
+    this.preloadUnpaidLeavePublicHolidays();
+    this.loadUnpaidLeaveReportAttendance();
+  }
+
+  setUnpaidLeavePage(page: number): void {
+    this.unpaidLeavePage.set(Math.max(1, Math.min(page, this.unpaidLeaveTotalPages())));
+  }
+
+  viewUnpaidLeaveDetails(row: UnpaidLeaveReportRow): void {
+    this.unpaidLeaveDetails.set(row);
+  }
+
+  closeUnpaidLeaveDetails(): void {
+    this.unpaidLeaveDetails.set(null);
+  }
+
+  async postUnpaidLeaveRow(row: UnpaidLeaveReportRow): Promise<void> {
+    if (!row.pending) {
+      return;
+    }
+    this.selectedUnpaidLeaveEmployees.set(new Set([row.employee.EmployeeCode]));
+    await this.postSelectedUnpaidLeaveReportEmployees();
+  }
+
+  formatUnpaidLeaveDate(date: string): string {
+    const parsedDate = new Date(`${date}T00:00:00`);
+    return Number.isNaN(parsedDate.getTime())
+      ? date
+      : parsedDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+  }
+
+  formatUnpaidLeaveDates(dates: string[]): string {
+    return dates.map((date) => this.formatUnpaidLeaveDate(date)).join(', ');
+  }
+
+  private setUnpaidLeaveDateRange(fromDate: string, toDate: string): void {
+    this.unpaidLeaveFromDate.set(fromDate);
+    this.unpaidLeaveToDate.set(toDate);
+    this.unpaidLeaveReportMonth.set(this.monthLabelForDate(fromDate));
+  }
+
+  private unpaidLeaveReportDates(): string[] {
+    const fromDate = this.unpaidLeaveFromDate();
+    const toDate = this.unpaidLeaveToDate();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate) || fromDate > toDate) {
+      return [];
+    }
+
+    const cursor = new Date(`${fromDate}T00:00:00`);
+    const end = new Date(`${toDate}T00:00:00`);
+    const dates: string[] = [];
+    while (cursor <= end) {
+      dates.push(this.localDateString(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return dates;
+  }
+
+  private monthLabelForDate(date: string): string {
+    const parsedDate = new Date(`${date.slice(0, 7)}-01T00:00:00`);
+    return Number.isNaN(parsedDate.getTime())
+      ? this.unpaidLeaveReportMonth()
+      : parsedDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  }
+
+  private preloadUnpaidLeavePublicHolidays(): void {
+    for (const date of this.unpaidLeaveReportDates()) {
+      this.publicHolidayDatesForMonth(this.monthLabelForDate(date));
+    }
+  }
+
+  private leaveApplicationCoversDate(application: LeaveApplicationRecord, date: string): boolean {
+    const fromDate = this.rosterDateValue(application.FromDate);
+    const toDate = this.rosterDateValue(application.ToDate);
+    return fromDate && toDate
+      ? fromDate <= date && date <= toDate
+      : this.rosterDateValue(application.RequestDate) === date;
+  }
+
+  private findUnannouncedLeaveApplication(
+    employeeCode: string,
+    date: string,
+  ): LeaveApplicationRecord | undefined {
+    const employeeKey = normalizeEmployeeCodeForRoster(employeeCode);
+    return this.leaveApplications().find((application) =>
+      normalizeEmployeeCodeForRoster(application.EmployeeId) === employeeKey &&
+      normalizeLeaveType(application.LeaveType) === normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE) &&
+      !/reject|cancel|void|deleted/i.test(application.RequestStatus) &&
+      this.leaveApplicationCoversDate(application, date),
+    );
   }
 
   toggleUnpaidLeaveReportEmployee(employeeCode: string, checked: boolean): void {
@@ -1274,24 +1539,48 @@ export class EmployeeRosterComponent implements OnInit {
     });
   }
 
+  toggleAllUnpaidLeaveReportRows(checked: boolean): void {
+    const employeeCodes = new Set(
+      this.filteredUnpaidLeaveReportRows()
+        .filter((row) => row.pending)
+        .map(({ employee }) => employee.EmployeeCode),
+    );
+    this.selectedUnpaidLeaveEmployees.update((selected) => {
+      const next = new Set(selected);
+      for (const employeeCode of employeeCodes) {
+        if (checked) {
+          next.add(employeeCode);
+        } else {
+          next.delete(employeeCode);
+        }
+      }
+      return next;
+    });
+  }
+
   private loadUnpaidLeaveReportAttendance(): void {
     this.unpaidLeaveReportRequest?.unsubscribe();
     const requestId = ++this.unpaidLeaveReportRequestId;
     this.unpaidLeaveReportAttendance.set(new Map());
     this.unpaidLeaveReportLoaded.set(false);
     this.unpaidLeaveReportError.set('');
-    const employees = this.employees();
+    const employees = this.unpaidLeaveReportEmployees();
     if (!employees.length) {
       this.unpaidLeaveReportLoaded.set(true);
       this.unpaidLeaveReportLoading.set(false);
       return;
     }
 
-    const monthKey = rosterMonthKey(this.unpaidLeaveReportMonth());
-    const lastDay = rosterMonthDayCount(monthKey);
+    const fromDate = this.unpaidLeaveFromDate();
+    const toDate = this.unpaidLeaveToDate();
+    if (!fromDate || !toDate || fromDate > toDate) {
+      this.unpaidLeaveReportLoading.set(false);
+      this.unpaidLeaveReportError.set('Choose a valid date range before loading attendance.');
+      return;
+    }
     this.unpaidLeaveReportLoading.set(true);
     this.unpaidLeaveReportRequest = this.attendanceService
-      .fetchRosterAttendance(employees, `${monthKey}-01`, `${monthKey}-${String(lastDay).padStart(2, '0')}`)
+      .fetchRosterAttendance(employees, fromDate, toDate)
       .pipe(finalize(() => {
         if (requestId === this.unpaidLeaveReportRequestId) {
           this.unpaidLeaveReportLoading.set(false);
@@ -1364,7 +1653,11 @@ export class EmployeeRosterComponent implements OnInit {
             rosterEmployees.map((employee) => [employee.EmployeeCode, [...employee.shifts]]),
           );
           this.unassignedEmployees.set(profileIndex.unassignedEmployees);
-          this.loadRosterAttendance();
+          if (this.unpaidLeaveOnly) {
+            this.openUnpaidLeaveReport();
+          } else {
+            this.loadRosterAttendance();
+          }
         },
         error: (error) => {
           this.alertService.error(

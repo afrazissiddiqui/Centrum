@@ -1,6 +1,146 @@
-<div class="roster-page">
-  <app-page-toolbar [showSidebarToggle]="false"></app-page-toolbar>
+<div class="roster-page" [class.roster-page--unpaid-leave]="unpaidLeaveOnly">
+  <app-page-toolbar [showSidebarToggle]="unpaidLeaveOnly" (sidebarToggle)="togglePayrollSidebar()"></app-page-toolbar>
 
+  @if (unpaidLeaveOnly) {
+    <main class="unpaid-leave-overview">
+      <nav class="unpaid-leave-breadcrumb" aria-label="Breadcrumb">
+        <span>Leave Management</span>
+        <span aria-hidden="true">/</span>
+        <strong>Unannounced Leave Overview</strong>
+      </nav>
+
+      <section class="unpaid-leave-kpis" aria-label="Unannounced leave summary">
+        <article class="unpaid-leave-kpi unpaid-leave-kpi--blue">
+          <div><span>Total Unannounced Leaves</span><strong>{{ unpaidLeaveTotalDays() }}</strong><small>This Month</small></div>
+          <ui5-icon name="calendar" aria-hidden="true"></ui5-icon>
+        </article>
+        <article class="unpaid-leave-kpi unpaid-leave-kpi--green">
+          <div><span>Unexcused Absences</span><strong>{{ unpaidLeavePendingCount() }}</strong><small>Awaiting posting</small></div>
+          <ui5-icon name="employee" aria-hidden="true"></ui5-icon>
+        </article>
+        <article class="unpaid-leave-kpi unpaid-leave-kpi--yellow">
+          <div><span>Pending Explanation</span><strong>{{ unpaidLeavePendingExplanationCount() }}</strong><small>Active</small></div>
+          <ui5-icon name="history" aria-hidden="true"></ui5-icon>
+        </article>
+        <article class="unpaid-leave-kpi unpaid-leave-kpi--purple">
+          <div><span>Repeat Occurrences</span><strong>{{ unpaidLeaveRepeatCount() }}</strong><small>Employees</small></div>
+          <ui5-icon name="calendar" aria-hidden="true"></ui5-icon>
+        </article>
+      </section>
+
+      <section class="unpaid-leave-filters" aria-label="Unannounced leave filters">
+        <label>
+          <span>Date Range</span>
+          <div class="unpaid-leave-date-range">
+            <input aria-label="Start date" type="date" [ngModel]="unpaidLeaveFromDate()" (ngModelChange)="unpaidLeaveFromDate.set($event)" />
+            <span>to</span>
+            <input aria-label="End date" type="date" [ngModel]="unpaidLeaveToDate()" (ngModelChange)="unpaidLeaveToDate.set($event)" />
+          </div>
+        </label>
+        <label>
+          <span>Department</span>
+          <select [ngModel]="unpaidLeaveDepartmentFilter()" (ngModelChange)="unpaidLeaveDepartmentFilter.set($event); unpaidLeavePage.set(1)">
+            <option value="">All Departments</option>
+            @for (department of unpaidLeaveDepartmentOptions(); track department) {
+              <option [value]="department">{{ department }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>Employee ID</span>
+          <input type="search" placeholder="Enter employee ID" [ngModel]="unpaidLeaveEmployeeFilter()" (ngModelChange)="unpaidLeaveEmployeeFilter.set($event); unpaidLeavePage.set(1)" />
+        </label>
+        <label>
+          <span>Leave Type</span>
+          <select [ngModel]="unpaidLeaveTypeFilter()" (ngModelChange)="unpaidLeaveTypeFilter.set($event); unpaidLeavePage.set(1)">
+            <option value="">All Leave Types</option>
+            <option value="Unannounced Leave">Unannounced Leave</option>
+          </select>
+        </label>
+        <div class="unpaid-leave-filter-actions">
+          <button type="button" class="unpaid-leave-button unpaid-leave-button--primary" (click)="applyUnpaidLeaveFilters()" [disabled]="unpaidLeaveReportLoading()">
+            <ui5-icon name="filter" aria-hidden="true"></ui5-icon> Filter Records
+          </button>
+          <button type="button" class="unpaid-leave-button" (click)="clearUnpaidLeaveFilters()" [disabled]="unpaidLeaveReportLoading()">Clear</button>
+        </div>
+      </section>
+
+      <section class="unpaid-leave-table-panel" aria-label="Unannounced leave records">
+        <header class="unpaid-leave-table-toolbar">
+          <h2>All Records ({{ filteredUnpaidLeaveReportRows().length }})</h2>
+          <div class="unpaid-leave-table-actions">
+            <label class="unpaid-leave-table-search">
+              <ui5-icon name="search" aria-hidden="true"></ui5-icon>
+              <input type="search" placeholder="Search table..." [ngModel]="unpaidLeaveReportSearch()" (ngModelChange)="unpaidLeaveReportSearch.set($event); unpaidLeavePage.set(1)" />
+            </label>
+            <button type="button" class="unpaid-leave-icon-button" aria-label="Refresh records" title="Refresh records" (click)="applyUnpaidLeaveFilters()" [disabled]="unpaidLeaveReportLoading()">
+              <ui5-icon name="refresh" aria-hidden="true"></ui5-icon>
+            </button>
+            <button type="button" class="unpaid-leave-button unpaid-leave-button--primary unpaid-leave-post-button" (click)="postSelectedUnpaidLeaveReportEmployees()" [disabled]="!selectedUnpaidLeaveEmployees().size || unpaidLeaveReportPosting() || unpaidLeaveReportLoading()">
+              {{ unpaidLeaveReportPosting() ? 'Posting…' : 'Post Selected (' + selectedUnpaidLeaveRowCount() + ')' }}
+            </button>
+          </div>
+        </header>
+        <div class="unpaid-leave-table-scroll">
+          <table class="unpaid-leave-table">
+            <thead>
+              <tr>
+                <th class="unpaid-leave-check-column">
+                  <input type="checkbox" aria-label="Select all unposted leave records" [checked]="allUnpaidLeaveRowsSelected()" [disabled]="unpaidLeaveReportPosting()" (change)="toggleAllUnpaidLeaveReportRows($any($event.target).checked)" />
+                </th>
+                <th>Employee Name</th>
+                <th>Department</th>
+                <th>Date of Absence</th>
+                <th>Unannounced Leave Status</th>
+                <th class="unpaid-leave-action-column">Manager Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @if (unpaidLeaveReportLoading()) {
+                <tr><td class="unpaid-leave-table-message" colspan="6">Loading attendance records...</td></tr>
+              } @else if (unpaidLeaveReportError()) {
+                <tr><td class="unpaid-leave-table-message unpaid-leave-table-message--error" colspan="6" role="alert">{{ unpaidLeaveReportError() }}</td></tr>
+              } @else if (!unpaidLeaveReportLoaded()) {
+                <tr><td class="unpaid-leave-table-message" colspan="6">Attendance records have not loaded.</td></tr>
+              } @else if (!filteredUnpaidLeaveReportRows().length) {
+                <tr><td class="unpaid-leave-table-message" colspan="6">No unannounced leave records match these filters.</td></tr>
+              } @else {
+                @for (row of paginatedUnpaidLeaveReportRows(); track row.employee.EmployeeCode) {
+                  <tr>
+                    <td class="unpaid-leave-check-column">
+                      <input type="checkbox" [attr.aria-label]="'Select unannounced leave for ' + row.employee.EmployeeName" [checked]="selectedUnpaidLeaveEmployees().has(row.employee.EmployeeCode)" [disabled]="!row.pending || unpaidLeaveReportPosting()" (change)="toggleUnpaidLeaveReportEmployee(row.employee.EmployeeCode, $any($event.target).checked)" />
+                    </td>
+                    <td><strong class="unpaid-leave-employee-name">{{ row.employee.EmployeeName || row.employee.EmployeeCode }}</strong><small class="unpaid-leave-employee-code">{{ row.employee.EmployeeCode }}</small></td>
+                    <td>{{ row.employee.Department || '—' }}</td>
+                    <td class="unpaid-leave-dates">{{ formatUnpaidLeaveDates(row.dates) }}</td>
+                    <td><span class="unpaid-leave-status" [class.unpaid-leave-status--unexcused]="row.status === 'Unexcused'" [class.unpaid-leave-status--pending]="row.status === 'Pending Response'" [class.unpaid-leave-status--review]="row.status !== 'Unexcused' && row.status !== 'Pending Response'">{{ row.status }}</span></td>
+                    <td class="unpaid-leave-action-column"><button type="button" class="unpaid-leave-button unpaid-leave-button--primary" (click)="viewUnpaidLeaveDetails(row)">View Details</button></td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        <footer class="unpaid-leave-pagination">
+          <span>{{ filteredUnpaidLeaveReportRows().length }} records · {{ selectedUnpaidLeaveRowCount() }} selected</span>
+          <div class="unpaid-leave-pagination-controls">
+            <button type="button" aria-label="First page" [disabled]="unpaidLeavePage() <= 1" (click)="setUnpaidLeavePage(1)">|‹</button>
+            <button type="button" aria-label="Previous page" [disabled]="unpaidLeavePage() <= 1" (click)="setUnpaidLeavePage(unpaidLeavePage() - 1)">‹</button>
+            <span>Page <strong>{{ unpaidLeavePage() }}</strong> of {{ unpaidLeaveTotalPages() }}</span>
+            <button type="button" aria-label="Next page" [disabled]="unpaidLeavePage() >= unpaidLeaveTotalPages()" (click)="setUnpaidLeavePage(unpaidLeavePage() + 1)">›</button>
+            <button type="button" aria-label="Last page" [disabled]="unpaidLeavePage() >= unpaidLeaveTotalPages()" (click)="setUnpaidLeavePage(unpaidLeaveTotalPages())">›|</button>
+          </div>
+          <label class="unpaid-leave-page-size">Show
+            <select [ngModel]="unpaidLeavePageSize()" (ngModelChange)="unpaidLeavePageSize.set(+$event); unpaidLeavePage.set(1)">
+              <option [ngValue]="10">10 rows</option>
+              <option [ngValue]="25">25 rows</option>
+              <option [ngValue]="50">50 rows</option>
+            </select>
+          </label>
+        </footer>
+      </section>
+    </main>
+  } @else {
   <main class="roster-content">
     <header class="roster-header">
       <div>
@@ -79,6 +219,7 @@
       </div>
     </section>
   </main>
+  }
 
   @if (employeeSummaryDialog(); as employee) {
     <div class="dialog-backdrop" (click)="closeEmployeeSummary()"></div>
@@ -262,7 +403,34 @@
     </section>
   }
 
-  @if (unpaidLeaveReportOpen()) {
+  @if (unpaidLeaveReportOpen() && unpaidLeaveOnly) {
+    @if (unpaidLeaveDetails(); as row) {
+      <div class="unpaid-leave-details-backdrop" (click)="closeUnpaidLeaveDetails()"></div>
+      <section class="unpaid-leave-details" role="dialog" aria-modal="true" aria-labelledby="unpaid-leave-details-title">
+        <header>
+          <div><span>Unannounced Leave</span><h2 id="unpaid-leave-details-title">{{ row.employee.EmployeeName || row.employee.EmployeeCode }}</h2></div>
+          <button type="button" aria-label="Close details" (click)="closeUnpaidLeaveDetails()">×</button>
+        </header>
+        <dl>
+          <div><dt>Employee ID</dt><dd>{{ row.employee.EmployeeCode }}</dd></div>
+          <div><dt>Department</dt><dd>{{ row.employee.Department || '—' }}</dd></div>
+          <div class="unpaid-leave-details__dates"><dt>Date(s) of absence</dt><dd>{{ formatUnpaidLeaveDates(row.dates) }}</dd></div>
+          <div><dt>Status</dt><dd>{{ row.status }}</dd></div>
+        </dl>
+        @if (row.pending) {
+          <p>{{ row.pendingDates.length }} detected absence day(s) have not yet been posted to the Leave Request Form.</p>
+        } @else {
+          <p>A leave request already exists for this absence.</p>
+        }
+        <footer>
+          <button type="button" class="unpaid-leave-button" (click)="closeUnpaidLeaveDetails()">Close</button>
+          @if (row.pending) {
+            <button type="button" class="unpaid-leave-button unpaid-leave-button--primary" [disabled]="unpaidLeaveReportPosting()" (click)="postUnpaidLeaveRow(row)">Post Leave Request</button>
+          }
+        </footer>
+      </section>
+    }
+  } @else if (unpaidLeaveReportOpen()) {
     <div class="dialog-backdrop" (click)="closeUnpaidLeaveReport()"></div>
     <section class="unpaid-leave-report-dialog" role="dialog" aria-modal="true" aria-labelledby="unpaid-leave-report-title" (click)="$event.stopPropagation()">
       <header class="shift-dialog__header">
