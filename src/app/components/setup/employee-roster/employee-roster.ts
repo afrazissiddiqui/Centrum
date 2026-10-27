@@ -2326,6 +2326,14 @@ export class EmployeeRosterComponent implements OnInit {
     return isScheduledShiftAbsent(shift, attendance, date, this.workstationService.workstations());
   }
 
+  private shiftDetailRosterAttendance(detail: ShiftDetailDialog): AttendanceDailyRecord | null {
+    if (!this.rosterAttendanceLoaded()) {
+      return detail.attendance;
+    }
+    const date = this.rosterDate(detail.dayDate);
+    return this.rosterAttendance().get(`${detail.employee.EmployeeCode.toLowerCase()}|${date}`) ?? null;
+  }
+
   shiftDetailAttendanceStatus(detail: ShiftDetailDialog): string {
     if (detail.loading) {
       return 'Loading…';
@@ -2340,14 +2348,15 @@ export class EmployeeRosterComponent implements OnInit {
       return 'Unassigned';
     }
     const date = this.rosterDate(detail.dayDate);
-    if (isScheduledShiftAbsent(detail.shift, detail.attendance, date, this.workstationService.workstations())) {
+    const attendance = this.shiftDetailRosterAttendance(detail);
+    if (isScheduledShiftAbsent(detail.shift, attendance, date, this.workstationService.workstations())) {
       return 'Absent';
     }
     if (isRosterDateInFuture(date) &&
-      !detail.attendance?.PunchIn && !detail.attendance?.PunchOut) {
+      !attendance?.PunchIn && !attendance?.PunchOut) {
       return 'Scheduled';
     }
-    return detail.attendance?.AttendanceStatus ?? 'Present';
+    return attendance?.AttendanceStatus ?? 'Present';
   }
 
   shiftDetailIsAbsent(detail: ShiftDetailDialog): boolean {
@@ -2355,7 +2364,7 @@ export class EmployeeRosterComponent implements OnInit {
       !detail.error &&
       isScheduledShiftAbsent(
         detail.shift,
-        detail.attendance,
+        this.shiftDetailRosterAttendance(detail),
         this.rosterDate(detail.dayDate),
         this.workstationService.workstations(),
       );

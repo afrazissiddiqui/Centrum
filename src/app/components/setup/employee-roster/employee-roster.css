@@ -255,11 +255,11 @@ h1 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 22px;
 .unpaid-leave-details__dates dd { line-height: 1.6; overflow-wrap: anywhere; }
 .unpaid-leave-details > p { margin: 0 0 18px; color: #596471; font-size: 13px; line-height: 1.5; }
 .unpaid-leave-details > footer { justify-content: flex-end; }
-.roster-page--unpaid-leave { height: 100%; max-height: none; min-height: 0; overflow-x: hidden; overflow-y: scroll; overscroll-behavior-y: contain; scrollbar-color: #7188a5 #eaf0f7; scrollbar-gutter: stable; scrollbar-width: auto; }
+.roster-page--unpaid-leave { flex: 1 1 0; height: auto; max-height: none; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: auto; scrollbar-color: #7188a5 #eaf0f7; scrollbar-gutter: stable; scrollbar-width: auto; touch-action: pan-y; }
 .roster-page--unpaid-leave::-webkit-scrollbar { width: 14px; }
 .roster-page--unpaid-leave::-webkit-scrollbar-track { background: #eaf0f7; }
 .roster-page--unpaid-leave::-webkit-scrollbar-thumb { min-height: 40px; border: 3px solid #eaf0f7; border-radius: 8px; background: #7188a5; }
 .roster-page--unpaid-leave::-webkit-scrollbar-thumb:hover { background: #526b89; }
-.roster-page--unpaid-leave > .unpaid-leave-overview { flex: 0 0 auto; min-height: auto; overflow: visible; }
+.roster-page--unpaid-leave > .unpaid-leave-overview { flex: 0 0 auto; min-height: min-content; overflow: visible; }
 @media (max-width: 1000px) { .unpaid-leave-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }.unpaid-leave-filter-actions { align-self: end; }.unpaid-leave-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .unpaid-leave-overview { padding: 14px 10px 20px; }.unpaid-leave-kpis { grid-template-columns: 1fr 1fr; gap: 8px; }.unpaid-leave-kpi { min-height: 86px; padding: 10px; }.unpaid-leave-kpi div > span { font-size: 12px; }.unpaid-leave-kpi strong { font-size: 29px; }.unpaid-leave-kpi small { font-size: 10px; }.unpaid-leave-filters { grid-template-columns: 1fr; }.unpaid-leave-date-range input { min-width: 0; }.unpaid-leave-filter-actions { justify-content: flex-end; }.unpaid-leave-table-toolbar { align-items: flex-start; flex-direction: column; padding: 12px; }.unpaid-leave-table-actions { width: 100%; flex-wrap: wrap; }.unpaid-leave-table-search { flex: 1; }.unpaid-leave-table { min-width: 720px; }.unpaid-leave-pagination { grid-template-columns: 1fr auto; padding: 8px; }.unpaid-leave-pagination-controls { grid-column: 1 / -1; grid-row: 2; justify-content: center; }.unpaid-leave-page-size { grid-column: 2; grid-row: 1; } }
