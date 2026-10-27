@@ -245,6 +245,50 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(record.WorkingMinutes).toBe(525);
   });
 
+  it('groups filtered punches by employee when the API returns login and card IDs', () => {
+    employeeRecords = [{
+      EmployeeCode: '00000007',
+      EmployeeName: 'Test Employee',
+      ExtEmpNo: '00001161',
+      Department: '',
+      EmployeeNature: '',
+      Designation: '',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: 'Active',
+      userId: '00000007',
+    }];
+    service.loadSession({
+      mode: 'dateRange',
+      userId: '00000007',
+      fromDate: '2026-09-01',
+      toDate: '2026-09-30',
+    }).subscribe();
+
+    const request = httpMock.expectOne((req) => req.url.endsWith('/rawpunch'));
+    expect(request.request.params.get('card_no')).toBe('00001161');
+    request.flush(JSON.stringify({
+      data: [
+        {
+          card_no: '00001161',
+          punch_in: '2026-09-01T09:00:00',
+          punch_out: '2026-09-01T17:00:00',
+        },
+        {
+          card_no: '00000007',
+          punch_in: '2026-09-01T09:00:00',
+          punch_out: '2026-09-01T17:00:00',
+        },
+      ],
+    }));
+
+    expect(service.slots()).toHaveLength(1);
+    expect(service.slots()[0].employeeName).toBe('Test Employee');
+    expect(service.slots()[0].punchCount).toBe(4);
+  });
+
   it('fetches all employees for a calculated date range when no user ID is provided', () => {
     let loaded = false;
     service.loadSession({

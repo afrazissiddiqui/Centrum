@@ -329,7 +329,7 @@ export class AttendanceManagementService {
         continue;
       }
 
-      const employeeKey = punchEmployeeKey(punch);
+      const employeeKey = resolvePunchKey(punch.EmployeeId, index.aliasToCanonical);
       if (!employeeKey) {
         continue;
       }
@@ -1091,10 +1091,6 @@ function attachEmployeeNameFromAliases(
     }
     return;
   }
-}
-
-function punchEmployeeKey(punch: AttendancePunchRecord): string {
-  return canonicalAttendanceKey(punch.EmployeeId) || punch.EmployeeId.trim();
 }
 
 function attendanceGroupKey(employeeKey: string, date: string): string {
