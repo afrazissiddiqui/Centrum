@@ -3,8 +3,12 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { finalize } from 'rxjs';
-import { AuthService } from '../../../services/auth.service';
 import { AlertService } from '../../../services/alert.service';
+import { AuthService } from '../../../services/auth.service';
+import {
+  CrushedRisenConsumptionAddPayload,
+  CrushedRisenConsumptionService,
+} from '../../../services/crushed-risen-consumption.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
 import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
 import { MiscellaneousLayoutService } from '../../miscellaneous/miscellaneous-layout.service';
@@ -49,9 +53,11 @@ export class CrushedRisenConsumptionComponent {
   private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
   private readonly alertService = inject(AlertService);
+  private readonly consumptionService = inject(CrushedRisenConsumptionService);
   private readonly receiptFromProductionService = inject(ReceiptFromProductionService);
   protected readonly layout = inject(MiscellaneousLayoutService);
 
+  readonly saving = signal(false);
   readonly productionOrders = signal<ProductionOrderRecord[]>([]);
   readonly productionOrdersLoading = signal(false);
   readonly productionOrdersError = signal<string | null>(null);
@@ -127,6 +133,62 @@ export class CrushedRisenConsumptionComponent {
     this.contentLines.update((lines) =>
       lines.length > 1 ? lines.filter((_, lineIndex) => lineIndex !== index) : lines,
     );
+  }
+
+  saveRecord(): void {
+    if (this.saving()) {
+      return;
+    }
+
+    const header = this.headerForm();
+    const series = Number(header.series);
+    if (!header.series.trim() || !Number.isFinite(series)) {
+      void this.alertService.validation('Enter a valid numeric series before saving.');
+      return;
+    }
+    if (!header.documentNumberFromProduction.trim() || !header.productDocEntry.trim()) {
+      void this.alertService.validation('Select a production order before saving.');
+      return;
+    }
+
+    const payload: CrushedRisenConsumptionAddPayload = {
+      docNumPo: header.documentNumberFromProduction.trim(),
+      docEntryPo: header.productDocEntry.trim(),
+      itemCode: header.itemCodeFromProduction.trim(),
+      itemName: header.itemNameFromProduction.trim(),
+      crcNumber: header.crcNumber.trim(),
+      series,
+      status: header.status,
+      userSigned: header.signedUser,
+      remark: header.remark.trim(),
+      createDate: header.createDate,
+      createTime: this.formatCreateTime(header.createTime),
+      lines: this.contentLines().map((line) => ({
+        machineId: line.machineId.trim(),
+        machineName: line.machineName.trim(),
+        moldNumber: line.moldNumberFromProductionOrder.trim(),
+        cavityNumber: line.cavityNumberFromProductionOrder.trim(),
+        employeeShift: line.employeeShift.trim(),
+        crushedRisenConsumption: line.crushedRisenConsumption,
+      })),
+    };
+
+    this.saving.set(true);
+    this.consumptionService
+      .addRecord(payload)
+      .pipe(finalize(() => this.saving.set(false)))
+      .subscribe({
+        next: () => {
+          void this.alertService.success('Saved', 'Crushed Risen Consumption saved successfully.');
+          this.backToPurchaseRequest();
+        },
+        error: (error: unknown) => {
+          void this.alertService.error(
+            'Save Failed',
+            formatApiErrorMessage(error, 'Failed to save Crushed Risen Consumption.'),
+          );
+        },
+      });
   }
 
   openProductionOrderDialog(): void {
@@ -211,6 +273,21 @@ export class CrushedRisenConsumptionComponent {
 
   private getTimeValue(): string {
     return new Date().toTimeString().slice(0, 5);
+  }
+
+  private formatCreateTime(time: string): string {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(time);
+    if (!match) {
+      return time;
+    }
+
+    const hour = Number(match[1]);
+    const minute = match[2];
+    if (hour < 0 || hour > 23) {
+      return time;
+    }
+
+    return `${String(hour % 12 || 12).padStart(2, '0')}:${minute} ${hour < 12 ? 'AM' : 'PM'}`;
   }
 
   backToPurchaseRequest(): void {

@@ -198,21 +198,25 @@ describe('AttendanceManagementService calculated working hours', () => {
     request.flush(JSON.stringify({
       data: [{
         card_no: '00000076',
-        punch_in: '2026-09-16T14:52:03.000Z',
-        punch_out: '2026-09-16T07:25:43.000Z',
+        punch_in: '2026-08-24T20:16:12.000Z',
+        punch_out: '2026-08-24T05:50:10.000Z',
         hours_worked: '16h 34m',
       }],
     }));
 
-    const inamAttendance = attendance.get('emp-00000179|2026-09-16');
+    const inamAttendance = attendance.get('emp-00000179|2026-08-24');
     expect(inamAttendance?.Punches.map((punch) => punch.PunchDatetime)).toEqual([
-      '2026-09-16T07:25:43.000Z',
-      '2026-09-16T14:52:03.000Z',
+      '2026-08-24T05:50:10.000Z',
+      '2026-08-24T20:16:12.000Z',
     ]);
+    expect(inamAttendance?.PunchIn).toBe('2026-08-24T20:16:12.000Z');
+    expect(inamAttendance?.PunchOut).toBe('2026-08-24T05:50:10.000Z');
+    expect(formatPunchTime(inamAttendance?.PunchIn ?? '')).toBe('8:16:12 PM');
+    expect(formatPunchTime(inamAttendance?.PunchOut ?? '')).toBe('5:50:10 AM');
     expect(inamAttendance?.AttendanceStatus).toBe('Present');
     expect(inamAttendance?.PunchIn).toBeTruthy();
     expect(inamAttendance?.PunchOut).toBeTruthy();
-    expect(attendance.has('00000076|2026-09-16')).toBe(false);
+    expect(attendance.has('00000076|2026-08-24')).toBe(false);
   });
 
   it('loads year-to-date roster attendance for only the selected employee', () => {

@@ -19,7 +19,7 @@
   <main class="sir-page-content">
     <div class="sir-card">
       <div class="sir-toolbar">
-        <div class="sir-toolbar-title">Crushed Risen Consumption (0)</div>
+        <div class="sir-toolbar-title">Crushed Risen Consumption ({{ records().length }})</div>
       </div>
 
       <div class="sir-table-card">
@@ -36,9 +36,35 @@
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td colspan="5" class="sir-empty-state">No Crushed Risen Consumption records found</td>
-                </tr>
+                @if (loading()) {
+                  <tr>
+                    <td colspan="5" class="sir-empty-state">Loading Crushed Risen Consumption records…</td>
+                  </tr>
+                } @else if (records().length) {
+                  @for (record of records(); track record.id) {
+                    <tr>
+                      <td>{{ record.documentNumberFromProduction }}</td>
+                      <td>{{ record.itemNameFromProduction }}</td>
+                      <td>{{ record.itemCodeFromProduction }}</td>
+                      <td>{{ record.status }}</td>
+                      <td class="sir-col-action">
+                        <button type="button" class="sir-primary-button" (click)="viewRecord(record)">View</button>
+                        <button
+                          type="button"
+                          class="sir-primary-button"
+                          [disabled]="deletingId() !== null"
+                          (click)="deleteRecord(record)"
+                        >
+                          {{ deletingId() === record.id ? 'Deleting…' : 'Delete' }}
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                } @else {
+                  <tr>
+                    <td colspan="5" class="sir-empty-state">No Crushed Risen Consumption records found</td>
+                  </tr>
+                }
               </tbody>
             </table>
           </div>
@@ -46,4 +72,160 @@
       </div>
     </div>
   </main>
+
+  @if (detailLoading() || detail()) {
+    <div class="sir-modal-overlay" (click)="closeDetail()">
+      <section
+        class="sir-modal sir-modal--wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="crushed-risen-detail-title"
+        (click)="$event.stopPropagation()"
+      >
+        <header class="sir-modal-header">
+          <h2 id="crushed-risen-detail-title">Crushed Risen Consumption Details</h2>
+          <div>
+            @if (detail(); as recordDetail) {
+              @if (!detailEditing()) {
+                <button type="button" class="sir-secondary-button" (click)="detailEditing.set(true)">Edit</button>
+              }
+            }
+            <button type="button" class="sir-modal-close" aria-label="Close details" [disabled]="updating()" (click)="closeDetail()">×</button>
+          </div>
+        </header>
+        <div class="sir-modal-body">
+          @if (detailLoading()) {
+            <p class="sir-modal-hint">Loading record details…</p>
+          } @else if (detail(); as recordDetail) {
+            <div class="sir-form-grid">
+              <div class="sir-form-column">
+                <p><strong>Document Number of From Production:</strong> {{ recordDetail.documentNumberFromProduction }}</p>
+                <p><strong>Doc Entry of Product:</strong> {{ recordDetail.productDocEntry }}</p>
+                <p><strong>Item Name From Production:</strong> {{ recordDetail.itemNameFromProduction }}</p>
+                <p><strong>Item Code From Production:</strong> {{ recordDetail.itemCodeFromProduction }}</p>
+                <p><strong>CRC Number:</strong> {{ recordDetail.crcNumber }}</p>
+                <p><strong>Series:</strong> {{ recordDetail.series }}</p>
+              </div>
+              <div class="sir-form-column">
+                <p>
+                  <strong>Status:</strong>
+                  @if (detailEditing()) {
+                    <input
+                      type="text"
+                      [ngModel]="recordDetail.status"
+                      (ngModelChange)="updateDetailField('status', $event)"
+                    />
+                  } @else {
+                    {{ recordDetail.status }}
+                  }
+                </p>
+                <p><strong>User Signed:</strong> {{ recordDetail.signedUser }}</p>
+                <p>
+                  <strong>Remark:</strong>
+                  @if (detailEditing()) {
+                    <input
+                      type="text"
+                      [ngModel]="recordDetail.remark"
+                      (ngModelChange)="updateDetailField('remark', $event)"
+                    />
+                  } @else {
+                    {{ recordDetail.remark }}
+                  }
+                </p>
+                <p><strong>Create Date:</strong> {{ recordDetail.createDate }}</p>
+                <p><strong>Create Time:</strong> {{ recordDetail.createTime }}</p>
+                <p><strong>Update Date / Time:</strong> {{ recordDetail.updateDate }} {{ recordDetail.updateTime }}</p>
+                <p><strong>SAP Document:</strong> {{ recordDetail.sapDocNum }} ({{ recordDetail.sapDocEntry }})</p>
+              </div>
+            </div>
+
+            <h3>Consumption Lines</h3>
+            @if (detailEditing()) {
+              <button type="button" class="sir-secondary-button" [disabled]="updating()" (click)="addDetailLine()">Add Line</button>
+            }
+            <div class="sir-data-table-wrapper">
+              <table class="sir-modal-table">
+                <thead>
+                  <tr>
+                    <th>Machine ID</th>
+                    <th>Machine Name</th>
+                    <th>Mold Number</th>
+                    <th>Cavity Number</th>
+                    <th>Employee Shift</th>
+                    <th>Crushed Risen Consumption</th>
+                    @if (detailEditing()) {
+                      <th>Actions</th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (line of recordDetail.lines; track $index) {
+                    <tr>
+                      <td>
+                        @if (detailEditing()) {
+                          <input type="text" class="sir-table-input" [disabled]="updating()" [ngModel]="line.machineId" (ngModelChange)="updateDetailLine($index, 'machineId', $event)" />
+                        } @else {
+                          {{ line.machineId }}
+                        }
+                      </td>
+                      <td>
+                        @if (detailEditing()) {
+                          <input type="text" class="sir-table-input" [disabled]="updating()" [ngModel]="line.machineName" (ngModelChange)="updateDetailLine($index, 'machineName', $event)" />
+                        } @else {
+                          {{ line.machineName }}
+                        }
+                      </td>
+                      <td>
+                        @if (detailEditing()) {
+                          <input type="text" class="sir-table-input" [disabled]="updating()" [ngModel]="line.moldNumber" (ngModelChange)="updateDetailLine($index, 'moldNumber', $event)" />
+                        } @else {
+                          {{ line.moldNumber }}
+                        }
+                      </td>
+                      <td>
+                        @if (detailEditing()) {
+                          <input type="text" class="sir-table-input" [disabled]="updating()" [ngModel]="line.cavityNumber" (ngModelChange)="updateDetailLine($index, 'cavityNumber', $event)" />
+                        } @else {
+                          {{ line.cavityNumber }}
+                        }
+                      </td>
+                      <td>
+                        @if (detailEditing()) {
+                          <input type="text" class="sir-table-input" [disabled]="updating()" [ngModel]="line.employeeShift" (ngModelChange)="updateDetailLine($index, 'employeeShift', $event)" />
+                        } @else {
+                          {{ line.employeeShift }}
+                        }
+                      </td>
+                      <td>
+                        @if (detailEditing()) {
+                          <input type="number" class="sir-table-input" min="0" [disabled]="updating()" [ngModel]="line.crushedRisenConsumption" (ngModelChange)="updateDetailLine($index, 'crushedRisenConsumption', $event)" />
+                        } @else {
+                          {{ line.crushedRisenConsumption }}
+                        }
+                      </td>
+                      @if (detailEditing()) {
+                        <td><button type="button" class="sir-secondary-button" [disabled]="updating()" (click)="deleteDetailLine($index)">Remove</button></td>
+                      }
+                    </tr>
+                  } @empty {
+                    <tr><td [attr.colspan]="detailEditing() ? 7 : 6" class="sir-empty-state">No consumption lines found</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            @if (detailEditing()) {
+              <footer class="sir-form-actions">
+                <button type="button" class="sir-secondary-button" [disabled]="updating()" (click)="cancelDetailEdit()">
+                  Cancel
+                </button>
+                <button type="button" class="sir-primary-button" [disabled]="updating()" (click)="saveDetailChanges()">
+                  {{ updating() ? 'Saving…' : 'Save Changes' }}
+                </button>
+              </footer>
+            }
+          }
+        </div>
+      </section>
+    </div>
+  }
 </div>

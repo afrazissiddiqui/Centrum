@@ -287,6 +287,15 @@
           </div>
         </div>
       </section>
+
+      <div class="sir-form-actions">
+        <button type="button" class="sir-secondary-button" [disabled]="saving()" (click)="backToPurchaseRequest()">
+          Cancel
+        </button>
+        <button type="button" class="sir-primary-button" [disabled]="saving()" (click)="saveRecord()">
+          {{ saving() ? 'Saving…' : 'Save' }}
+        </button>
+      </div>
     </div>
   </main>
 </div>

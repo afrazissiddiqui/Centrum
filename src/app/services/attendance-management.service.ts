@@ -20,6 +20,7 @@ export interface AttendancePunchRecord {
   PunchDatetime: string;
   DeviceNo: string;
   Status: string;
+  PunchType?: 'in' | 'out';
   WorkingHours?: string;
   selected?: boolean;
 }
@@ -447,6 +448,13 @@ export class AttendanceManagementService {
     const sorted = sortPunchesChronologically(punches);
     const firstPunch = sorted[0];
     const secondPunch = sorted.length >= 2 ? sorted[1] : null;
+    const explicitPunchIn = punches.find((punch) => punch.PunchType === 'in');
+    const explicitPunchOut = punches.find((punch) => punch.PunchType === 'out');
+    const hasExplicitPunchTypes = !!explicitPunchIn || !!explicitPunchOut;
+    const punchInTime = hasExplicitPunchTypes ? explicitPunchIn?.PunchDatetime ?? '' : firstPunch.PunchDatetime;
+    const punchOutTime = hasExplicitPunchTypes ? explicitPunchOut?.PunchDatetime ?? '' : secondPunch?.PunchDatetime ?? '';
+    const punchInDevice = hasExplicitPunchTypes ? explicitPunchIn?.DeviceNo ?? '' : firstPunch.DeviceNo;
+    const punchOutDevice = hasExplicitPunchTypes ? explicitPunchOut?.DeviceNo ?? '' : secondPunch?.DeviceNo ?? '';
     const workingHours = sorted.find((punch) => punch.WorkingHours?.trim())?.WorkingHours?.trim() ?? '';
 
     return {
@@ -455,13 +463,13 @@ export class AttendanceManagementService {
       employeeName,
       date,
       status: 'Present',
-      punchIn: firstPunch.PunchDatetime,
-      punchOut: secondPunch?.PunchDatetime ?? '',
-      punchInDevice: firstPunch.DeviceNo,
-      punchOutDevice: secondPunch?.DeviceNo ?? '',
+      punchIn: punchInTime,
+      punchOut: punchOutTime,
+      punchInDevice,
+      punchOutDevice,
       workingMinutes:
         parseWorkingDurationMinutes(workingHours) ??
-        calcWorkingMinutes(firstPunch.PunchDatetime, secondPunch?.PunchDatetime ?? ''),
+        calcWorkingMinutes(punchInTime, punchOutTime),
       workingHours,
       punchCount: sorted.length,
     };
@@ -725,8 +733,8 @@ export class AttendanceManagementService {
 
     if (punchIn || punchOut) {
       return [
-        ...(punchIn ? [{ No: no, PunchDatetime: joinPunchDateAndTime(dateValue, punchIn) }] : []),
-        ...(punchOut ? [{ No: no + 1, PunchDatetime: joinPunchDateAndTime(dateValue, punchOut) }] : []),
+        ...(punchIn ? [{ No: no, PunchDatetime: joinPunchDateAndTime(dateValue, punchIn), PunchType: 'in' as const }] : []),
+        ...(punchOut ? [{ No: no + 1, PunchDatetime: joinPunchDateAndTime(dateValue, punchOut), PunchType: 'out' as const }] : []),
       ].map((punch) => ({
         ...punch,
         EmployeeId: normalizedEmployeeId,
