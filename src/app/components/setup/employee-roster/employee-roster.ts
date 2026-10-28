@@ -417,6 +417,28 @@ function normalizeLeaveDate(value: string): string {
   return isoDate?.[1] ?? '';
 }
 
+function leaveApplicationCoversDate(application: LeaveApplicationRecord, date: string): boolean {
+  const fromDate = normalizeLeaveDate(application.FromDate);
+  const toDate = normalizeLeaveDate(application.ToDate);
+  return fromDate && toDate
+    ? fromDate <= date && date <= toDate
+    : normalizeLeaveDate(application.RequestDate) === date;
+}
+
+export function unannouncedLeaveDatesNotCoveredByApplications(
+  employeeCode: string,
+  dates: string[],
+  applications: LeaveApplicationRecord[],
+): string[] {
+  const employeeKey = normalizeEmployeeCodeForRoster(employeeCode);
+  return dates.filter((date) => !applications.some((application) =>
+    normalizeEmployeeCodeForRoster(application.EmployeeId) === employeeKey &&
+    normalizeLeaveType(application.LeaveType) !== normalizeLeaveType(UNANNOUNCED_LEAVE_TYPE) &&
+    !/reject|deny|cancel|void|deleted/i.test(application.RequestStatus) &&
+    leaveApplicationCoversDate(application, date),
+  ));
+}
+
 function buildEmployeeRosterLoadIndex(records: EmployeeRosterListRecord[]): EmployeeRosterLoadIndex {
   const recordsByEmployee = new Map<string, EmployeeRosterListRecord>();
   const assignedEmployeeCodes = new Set<string>();
@@ -1068,23 +1090,27 @@ export class EmployeeRosterComponent implements OnInit {
       .filter((employee) => !this.unpaidLeaveOnly || employeeShiftIsNotApplicable(employee))
       .map((employee) => ({
         employee,
-        dates: dates.filter((date) => employeeShiftIsApplicable(employee as ApplicationFormRecord)
-          ? rosterUnannouncedLeaveDates(
-            employee.EmployeeCode,
-            this.unpaidLeaveReportShifts(employee, this.monthLabelForDate(date)),
-            [date],
-            this.unpaidLeaveReportAttendance(),
-            this.workstationService.workstations(),
-            new Date(),
-            publicHolidayDates,
-          ).length > 0
-          : nonShiftUnannouncedLeaveDates(
-            employee.EmployeeCode,
-            [date],
-            this.unpaidLeaveReportAttendance(),
-            publicHolidayDates,
-            new Date(),
-          ).length > 0),
+        dates: unannouncedLeaveDatesNotCoveredByApplications(
+          employee.EmployeeCode,
+          dates.filter((date) => employeeShiftIsApplicable(employee as ApplicationFormRecord)
+            ? rosterUnannouncedLeaveDates(
+              employee.EmployeeCode,
+              this.unpaidLeaveReportShifts(employee, this.monthLabelForDate(date)),
+              [date],
+              this.unpaidLeaveReportAttendance(),
+              this.workstationService.workstations(),
+              new Date(),
+              publicHolidayDates,
+            ).length > 0
+            : nonShiftUnannouncedLeaveDates(
+              employee.EmployeeCode,
+              [date],
+              this.unpaidLeaveReportAttendance(),
+              publicHolidayDates,
+              new Date(),
+            ).length > 0),
+          this.leaveApplications(),
+        ),
       }))
       .filter((entry) => entry.dates.length > 0)
       .map((entry) => {
@@ -1508,11 +1534,7 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   private leaveApplicationCoversDate(application: LeaveApplicationRecord, date: string): boolean {
-    const fromDate = this.rosterDateValue(application.FromDate);
-    const toDate = this.rosterDateValue(application.ToDate);
-    return fromDate && toDate
-      ? fromDate <= date && date <= toDate
-      : this.rosterDateValue(application.RequestDate) === date;
+    return leaveApplicationCoversDate(application, date);
   }
 
   private findUnannouncedLeaveApplication(

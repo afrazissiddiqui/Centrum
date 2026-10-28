@@ -27,6 +27,7 @@ import {
   rosterUnannouncedLeaveApplicationBalance,
   rosterUnannouncedLeaveBalance,
   rosterUnannouncedLeaveDates,
+  unannouncedLeaveDatesNotCoveredByApplications,
   nonShiftUnannouncedLeaveDates,
   trackedEmployeeUnannouncedLeaveDates,
   rosterPeriodForDate,
@@ -94,6 +95,47 @@ describe('indexRequestedLeaveDates', () => {
     expect(leaveDates.size).toBe(2);
     expect(leaveDates.has('emp-00000042|2026-10-01')).toBe(true);
     expect(leaveDates.has('emp-00000042|2026-10-02')).toBe(true);
+  });
+});
+
+describe('unannouncedLeaveDatesNotCoveredByApplications', () => {
+  it('excludes dates covered by active leave applications but keeps rejected and unannounced requests', () => {
+    const applications = [
+      {
+        EmployeeId: 'EMP-1001',
+        LeaveType: 'Annual Leave',
+        RequestStatus: 'Approved',
+        FromDate: '2026-10-12',
+        ToDate: '2026-10-13',
+      },
+      {
+        EmployeeId: 'EMP-1001',
+        LeaveType: 'Sick Leave',
+        RequestStatus: 'Rejected',
+        FromDate: '2026-10-14',
+        ToDate: '2026-10-14',
+      },
+      {
+        EmployeeId: 'EMP-1001',
+        LeaveType: 'Unannounced Leave',
+        RequestStatus: 'Submitted',
+        FromDate: '2026-10-15',
+        ToDate: '2026-10-15',
+      },
+      {
+        EmployeeId: 'EMP-2002',
+        LeaveType: 'Annual Leave',
+        RequestStatus: 'Approved',
+        FromDate: '2026-10-16',
+        ToDate: '2026-10-16',
+      },
+    ] as LeaveApplicationRecord[];
+
+    expect(unannouncedLeaveDatesNotCoveredByApplications(
+      'EMP-1001',
+      ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'],
+      applications,
+    )).toEqual(['2026-10-14', '2026-10-15', '2026-10-16']);
   });
 });
 
