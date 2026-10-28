@@ -5,6 +5,7 @@ import {
   filterUnassignedEmployees,
   filterShiftApplicableRosterRecords,
   findUnassignedEmployees,
+  employeeShiftIsNotApplicable,
   rosterPaidLeaveDates,
   rosterPaidLeaveDays,
   matchesRosterBranch,
@@ -393,6 +394,29 @@ describe('findUnassignedEmployees', () => {
   });
 });
 
+describe('employeeShiftIsNotApplicable', () => {
+  it('matches employees explicitly marked as not shift applicable', () => {
+    expect(employeeShiftIsNotApplicable({
+      EmployeeCode: 'EMP-00000041',
+      detail: { hrSettings: { attendanceShiftManagement: 'No' } },
+    } as ApplicationFormRecord)).toBe(true);
+    expect(employeeShiftIsNotApplicable({
+      EmployeeCode: 'EMP-00000042',
+      EmployeeShiftApplicable: 'No',
+    } as ApplicationFormRecord)).toBe(true);
+  });
+
+  it('excludes employees marked yes or without an explicit no value', () => {
+    expect(employeeShiftIsNotApplicable({
+      EmployeeCode: 'EMP-00000041',
+      detail: { hrSettings: { attendanceShiftManagement: 'Yes' } },
+    } as ApplicationFormRecord)).toBe(false);
+    expect(employeeShiftIsNotApplicable({
+      EmployeeCode: 'EMP-00000042',
+    } as ApplicationFormRecord)).toBe(false);
+  });
+});
+
 describe('filterShiftApplicableRosterRecords', () => {
   it('keeps roster employees whose profile has shift applicability enabled', () => {
     const applicableRecord = {
@@ -530,7 +554,7 @@ describe('rosterUnannouncedLeaveDates', () => {
 });
 
 describe('non-shift unannounced leave detection', () => {
-  it('flags missing punch-ins and punch-outs for employees without shift applicability while excluding holidays', () => {
+  it('flags missing punches only on non-holiday weekdays for employees without shift applicability', () => {
     const attendance = new Map<string, AttendanceDailyRecord>([
       ['emp-00000099|2026-10-14', { PunchIn: '', PunchOut: '' } as AttendanceDailyRecord],
       ['emp-00000099|2026-10-15', { PunchIn: '2026-10-15T09:00:00', PunchOut: '' } as AttendanceDailyRecord],
@@ -547,7 +571,7 @@ describe('non-shift unannounced leave detection', () => {
 
     expect(trackedEmployeeUnannouncedLeaveDates(
       { EmployeeCode: 'EMP-00000099', detail: { hrSettings: { attendanceShiftManagement: 'No' } } },
-      ['2026-10-14', '2026-10-17', '2026-10-18'],
+      ['2026-10-14', '2026-10-17', '2026-10-18', '2026-10-11'],
       attendance,
       [],
       new Date(2026, 9, 18),

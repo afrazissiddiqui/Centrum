@@ -152,6 +152,18 @@ function employeeShiftIsApplicable(employee: ApplicationFormRecord): boolean {
   return String(hrSetting ?? '').trim().toLowerCase() === 'yes';
 }
 
+export function employeeShiftIsNotApplicable(employee: ApplicationFormRecord): boolean {
+  const rawApplicability = (employee as ApplicationFormRecord & { EmployeeShiftApplicable?: unknown }).EmployeeShiftApplicable;
+  const normalized = String(rawApplicability ?? '').trim().toLowerCase();
+  if (rawApplicability === false || ['false', 'no', '0'].includes(normalized)) {
+    return true;
+  }
+  if (rawApplicability === true || ['true', 'yes', '1'].includes(normalized)) {
+    return false;
+  }
+  return String(employee.detail?.hrSettings?.attendanceShiftManagement ?? '').trim().toLowerCase() === 'no';
+}
+
 function buildEmployeeRosterProfileIndex(
   profiles: ApplicationFormRecord[],
   assignedEmployeeCodes: Set<string>,
@@ -595,7 +607,11 @@ export function nonShiftUnannouncedLeaveDates(
   const normalizedEmployeeCode = employeeCode.toLowerCase();
   const holidaySet = new Set(Array.from(publicHolidayDates, (value) => value.trim()).filter(Boolean));
   return dates.filter((date) => {
-    if (holidaySet.has(date) || !isRosterDateBeforeToday(date, today)) {
+    const dateParts = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const isSunday = dateParts
+      ? new Date(Number(dateParts[1]), Number(dateParts[2]) - 1, Number(dateParts[3])).getDay() === 0
+      : false;
+    if (holidaySet.has(date) || isSunday || !isRosterDateBeforeToday(date, today)) {
       return false;
     }
     const dailyAttendance = attendance.get(`${normalizedEmployeeCode}|${date}`);
@@ -1049,6 +1065,7 @@ export class EmployeeRosterComponent implements OnInit {
       dates.flatMap((date) => this.publicHolidayDatesForMonth(this.monthLabelForDate(date))),
     );
     return this.unpaidLeaveReportEmployees()
+      .filter((employee) => !this.unpaidLeaveOnly || employeeShiftIsNotApplicable(employee))
       .map((employee) => ({
         employee,
         dates: dates.filter((date) => employeeShiftIsApplicable(employee as ApplicationFormRecord)
