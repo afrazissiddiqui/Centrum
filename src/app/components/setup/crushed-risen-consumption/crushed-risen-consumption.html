@@ -216,6 +216,8 @@
                       <input
                         type="text"
                         class="sir-table-input"
+                        list="crushed-risen-machine-options"
+                        autocomplete="off"
                         [attr.aria-label]="'Machine ID, row ' + ($index + 1)"
                         [ngModel]="line.machineId"
                         (ngModelChange)="updateContentLine($index, 'machineId', $event)"
@@ -225,19 +227,33 @@
                       <input
                         type="text"
                         class="sir-table-input"
+                        list="crushed-risen-machine-name-options"
+                        autocomplete="off"
                         [attr.aria-label]="'Machine Name, row ' + ($index + 1)"
                         [ngModel]="line.machineName"
                         (ngModelChange)="updateContentLine($index, 'machineName', $event)"
                       />
                     </td>
                     <td>
-                      <input
-                        type="text"
+                      <select
                         class="sir-table-input"
                         [attr.aria-label]="'Mold Number From Prod Order, row ' + ($index + 1)"
                         [ngModel]="line.moldNumberFromProductionOrder"
                         (ngModelChange)="updateContentLine($index, 'moldNumberFromProductionOrder', $event)"
-                      />
+                      >
+                        <option value="">Select mold</option>
+                        @if (
+                          line.moldNumberFromProductionOrder &&
+                          !moldOptionsForMachine(line.machineId).includes(line.moldNumberFromProductionOrder)
+                        ) {
+                          <option [value]="line.moldNumberFromProductionOrder">
+                            {{ line.moldNumberFromProductionOrder }}
+                          </option>
+                        }
+                        @for (mold of moldOptionsForMachine(line.machineId); track mold) {
+                          <option [value]="mold">{{ mold }}</option>
+                        }
+                      </select>
                     </td>
                     <td>
                       <input
@@ -284,6 +300,16 @@
                 }
               </tbody>
             </table>
+            <datalist id="crushed-risen-machine-options">
+              @for (machine of machineOptions(); track machine.itemCode) {
+                <option [value]="machine.itemCode" [label]="machine.itemName"></option>
+              }
+            </datalist>
+            <datalist id="crushed-risen-machine-name-options">
+              @for (machine of machineOptions(); track machine.itemCode) {
+                <option [value]="machine.itemName" [label]="machine.itemCode"></option>
+              }
+            </datalist>
           </div>
         </div>
       </section>

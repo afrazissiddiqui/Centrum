@@ -1,9 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { finalize } from 'rxjs';
 import { AlertService } from '../../../services/alert.service';
+import { OitmItemsService } from '../../../services/oitm-items.service';
 import {
   CrushedRisenConsumptionDetail,
   CrushedRisenConsumptionDetailLine,
@@ -29,6 +30,7 @@ export class CrushedRisenConsumptionListComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly consumptionService = inject(CrushedRisenConsumptionService);
   private readonly alertService = inject(AlertService);
+  private readonly oitmItemsService = inject(OitmItemsService);
   protected readonly layout = inject(MiscellaneousLayoutService);
 
   readonly records = signal<CrushedRisenConsumptionRecord[]>([]);
@@ -38,9 +40,20 @@ export class CrushedRisenConsumptionListComponent implements OnInit {
   readonly deletingId = signal<number | null>(null);
   readonly detailEditing = signal(false);
   readonly updating = signal(false);
+  readonly machineOptions = computed(() =>
+    this.oitmItemsService.getCatalog().filter((item) => item.fetchPro?.trim() === 'Y'),
+  );
 
   ngOnInit(): void {
     this.loadRecords();
+    this.oitmItemsService.ensureLoaded().subscribe({
+      error: (error: unknown) => {
+        void this.alertService.error(
+          'Load Failed',
+          formatApiErrorMessage(error, 'Failed to load machine items.'),
+        );
+      },
+    });
   }
 
   loadRecords(): void {
@@ -61,6 +74,14 @@ export class CrushedRisenConsumptionListComponent implements OnInit {
   }
 
   viewRecord(record: CrushedRisenConsumptionRecord): void {
+    this.loadRecordDetail(record, false);
+  }
+
+  editRecord(record: CrushedRisenConsumptionRecord): void {
+    this.loadRecordDetail(record, true);
+  }
+
+  private loadRecordDetail(record: CrushedRisenConsumptionRecord, editing: boolean): void {
     this.detail.set(null);
     this.detailEditing.set(false);
     this.detailLoading.set(true);
@@ -68,7 +89,10 @@ export class CrushedRisenConsumptionListComponent implements OnInit {
       .fetchRecordDetail(record.id)
       .pipe(finalize(() => this.detailLoading.set(false)))
       .subscribe({
-        next: (detail) => this.detail.set(detail),
+        next: (detail) => {
+          this.detail.set(detail);
+          this.detailEditing.set(editing);
+        },
         error: (error: unknown) => {
           void this.alertService.error(
             'Load Failed',
@@ -91,12 +115,49 @@ export class CrushedRisenConsumptionListComponent implements OnInit {
       detail
         ? {
             ...detail,
-            lines: detail.lines.map((line, lineIndex) =>
-              lineIndex === index ? { ...line, [field]: value } : line,
-            ),
+            lines: detail.lines.map((line, lineIndex) => {
+              if (lineIndex !== index) {
+                return line;
+              }
+              if (field === 'machineId' && typeof value === 'string') {
+                const machine = this.findMachineById(value);
+                return {
+                  ...line,
+                  machineId: value,
+                  machineName: machine?.itemName ?? '',
+                  cavityNumber: machine?.cavityNumber ?? '',
+                };
+              }
+              if (field === 'machineName' && typeof value === 'string') {
+                const machine = this.findMachineByName(value);
+                return {
+                  ...line,
+                  machineName: value,
+                  machineId: machine?.itemCode ?? '',
+                  cavityNumber: machine?.cavityNumber ?? '',
+                };
+              }
+              return { ...line, [field]: value };
+            }),
           }
         : detail,
     );
+  }
+
+  private findMachineById(value: string) {
+    const normalized = value.trim().toLowerCase();
+    return this.machineOptions().find((item) => item.itemCode.trim().toLowerCase() === normalized);
+  }
+
+  private findMachineByName(value: string) {
+    const normalized = value.trim().toLowerCase();
+    return this.machineOptions().find((item) => item.itemName.trim().toLowerCase() === normalized);
+  }
+
+  moldOptionsForMachine(machineId: string): string[] {
+    return this.findMachineById(machineId)
+      ?.properties?.map((property) => property.name.trim())
+      .filter(Boolean) ?? [];
   }
 
   addDetailLine(): void {

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { finalize } from 'rxjs';
@@ -9,6 +9,7 @@ import {
   CrushedRisenConsumptionAddPayload,
   CrushedRisenConsumptionService,
 } from '../../../services/crushed-risen-consumption.service';
+import { OitmItemsService } from '../../../services/oitm-items.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
 import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
 import { MiscellaneousLayoutService } from '../../miscellaneous/miscellaneous-layout.service';
@@ -49,11 +50,12 @@ interface CrushedRisenConsumptionLine {
   styleUrl: '../../miscellaneous/miscellaneous-form.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class CrushedRisenConsumptionComponent {
+export class CrushedRisenConsumptionComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
   private readonly alertService = inject(AlertService);
   private readonly consumptionService = inject(CrushedRisenConsumptionService);
+  private readonly oitmItemsService = inject(OitmItemsService);
   private readonly receiptFromProductionService = inject(ReceiptFromProductionService);
   protected readonly layout = inject(MiscellaneousLayoutService);
 
@@ -64,6 +66,9 @@ export class CrushedRisenConsumptionComponent {
   readonly productionOrderDialogOpen = signal(false);
   readonly productionOrderSearchText = signal('');
   readonly selectedProductionOrder = signal<ProductionOrderRecord | null>(null);
+  readonly machineOptions = computed(() =>
+    this.oitmItemsService.getCatalog().filter((item) => item.fetchPro?.trim() === 'Y'),
+  );
 
   readonly filteredProductionOrders = computed(() => {
     const query = this.productionOrderSearchText().trim().toLowerCase();
@@ -108,6 +113,17 @@ export class CrushedRisenConsumptionComponent {
   });
   readonly contentLines = signal<CrushedRisenConsumptionLine[]>([this.createEmptyLine()]);
 
+  ngOnInit(): void {
+    this.oitmItemsService.ensureLoaded().subscribe({
+      error: (error: unknown) => {
+        void this.alertService.error(
+          'Load Failed',
+          formatApiErrorMessage(error, 'Failed to load machine items.'),
+        );
+      },
+    });
+  }
+
   updateHeaderField<K extends CrushedRisenConsumptionHeaderField>(
     field: K,
     value: CrushedRisenConsumptionHeader[K],
@@ -121,8 +137,47 @@ export class CrushedRisenConsumptionComponent {
     value: CrushedRisenConsumptionLine[K],
   ): void {
     this.contentLines.update((lines) =>
-      lines.map((line, lineIndex) => (lineIndex === index ? { ...line, [field]: value } : line)),
+      lines.map((line, lineIndex) => {
+        if (lineIndex !== index) {
+          return line;
+        }
+        if (field === 'machineId' && typeof value === 'string') {
+          const machine = this.findMachineById(value);
+          return {
+            ...line,
+            machineId: value,
+            machineName: machine?.itemName ?? '',
+            cavityNumberFromProductionOrder: machine?.cavityNumber ?? '',
+          };
+        }
+        if (field === 'machineName' && typeof value === 'string') {
+          const machine = this.findMachineByName(value);
+          return {
+            ...line,
+            machineName: value,
+            machineId: machine?.itemCode ?? '',
+            cavityNumberFromProductionOrder: machine?.cavityNumber ?? '',
+          };
+        }
+        return { ...line, [field]: value };
+      }),
     );
+  }
+
+  private findMachineById(value: string) {
+    const normalized = value.trim().toLowerCase();
+    return this.machineOptions().find((item) => item.itemCode.trim().toLowerCase() === normalized);
+  }
+
+  private findMachineByName(value: string) {
+    const normalized = value.trim().toLowerCase();
+    return this.machineOptions().find((item) => item.itemName.trim().toLowerCase() === normalized);
+  }
+
+  moldOptionsForMachine(machineId: string): string[] {
+    return this.findMachineById(machineId)
+      ?.properties?.map((property) => property.name.trim())
+      .filter(Boolean) ?? [];
   }
 
   addContentLine(): void {

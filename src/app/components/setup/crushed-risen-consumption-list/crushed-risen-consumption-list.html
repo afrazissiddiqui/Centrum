@@ -48,15 +48,30 @@
                       <td>{{ record.itemCodeFromProduction }}</td>
                       <td>{{ record.status }}</td>
                       <td class="sir-col-action">
-                        <button type="button" class="sir-primary-button" (click)="viewRecord(record)">View</button>
-                        <button
-                          type="button"
-                          class="sir-primary-button"
-                          [disabled]="deletingId() !== null"
-                          (click)="deleteRecord(record)"
-                        >
-                          {{ deletingId() === record.id ? 'Deleting…' : 'Delete' }}
-                        </button>
+                        <div class="sir-row-actions">
+                          <button
+                            type="button"
+                            class="sir-action-button sir-action-button-secondary"
+                            (click)="viewRecord(record)"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            class="sir-action-button sir-action-button-secondary"
+                            (click)="editRecord(record)"
+                          >
+                            Update
+                          </button>
+                          <button
+                            type="button"
+                            class="sir-action-button sir-action-button-secondary"
+                            [disabled]="deletingId() !== null"
+                            (click)="deleteRecord(record)"
+                          >
+                            {{ deletingId() === record.id ? 'Deleting…' : 'Delete' }}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   }
@@ -163,21 +178,50 @@
                     <tr>
                       <td>
                         @if (detailEditing()) {
-                          <input type="text" class="sir-table-input" [disabled]="updating()" [ngModel]="line.machineId" (ngModelChange)="updateDetailLine($index, 'machineId', $event)" />
+                          <input
+                            type="text"
+                            class="sir-table-input"
+                            list="crushed-risen-edit-machine-options"
+                            autocomplete="off"
+                            [disabled]="updating()"
+                            [ngModel]="line.machineId"
+                            (ngModelChange)="updateDetailLine($index, 'machineId', $event)"
+                          />
                         } @else {
                           {{ line.machineId }}
                         }
                       </td>
                       <td>
                         @if (detailEditing()) {
-                          <input type="text" class="sir-table-input" [disabled]="updating()" [ngModel]="line.machineName" (ngModelChange)="updateDetailLine($index, 'machineName', $event)" />
+                          <input
+                            type="text"
+                            class="sir-table-input"
+                            list="crushed-risen-edit-machine-name-options"
+                            autocomplete="off"
+                            [disabled]="updating()"
+                            [ngModel]="line.machineName"
+                            (ngModelChange)="updateDetailLine($index, 'machineName', $event)"
+                          />
                         } @else {
                           {{ line.machineName }}
                         }
                       </td>
                       <td>
                         @if (detailEditing()) {
-                          <input type="text" class="sir-table-input" [disabled]="updating()" [ngModel]="line.moldNumber" (ngModelChange)="updateDetailLine($index, 'moldNumber', $event)" />
+                          <select
+                            class="sir-table-input"
+                            [disabled]="updating()"
+                            [ngModel]="line.moldNumber"
+                            (ngModelChange)="updateDetailLine($index, 'moldNumber', $event)"
+                          >
+                            <option value="">Select mold</option>
+                            @if (line.moldNumber && !moldOptionsForMachine(line.machineId).includes(line.moldNumber)) {
+                              <option [value]="line.moldNumber">{{ line.moldNumber }}</option>
+                            }
+                            @for (mold of moldOptionsForMachine(line.machineId); track mold) {
+                              <option [value]="mold">{{ mold }}</option>
+                            }
+                          </select>
                         } @else {
                           {{ line.moldNumber }}
                         }
@@ -212,6 +256,16 @@
                   }
                 </tbody>
               </table>
+              <datalist id="crushed-risen-edit-machine-options">
+                @for (machine of machineOptions(); track machine.itemCode) {
+                  <option [value]="machine.itemCode" [label]="machine.itemName"></option>
+                }
+              </datalist>
+              <datalist id="crushed-risen-edit-machine-name-options">
+                @for (machine of machineOptions(); track machine.itemCode) {
+                  <option [value]="machine.itemName" [label]="machine.itemCode"></option>
+                }
+              </datalist>
             </div>
             @if (detailEditing()) {
               <footer class="sir-form-actions">

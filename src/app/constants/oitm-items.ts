@@ -3,6 +3,7 @@ export interface OitmItem {
   itemName: string;
   itemType?: string;
   fetchPro?: string;
+  cavityNumber?: string;
   properties?: OitmProperty[];
   uom: string;
   availableQty?: string | number;

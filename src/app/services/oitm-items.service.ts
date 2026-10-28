@@ -115,6 +115,7 @@ export class OitmItemsService {
       itemName: this.pickString([item], ['ItemName', 'itemName', 'item_name', 'name', 'Name', 'description', 'Description']),
       itemType: this.pickString([item], ['ItemType', 'itemType', 'item_type', 'type', 'Type']),
       fetchPro: this.pickString([item], ['U_FetchPro', 'u_fetch_pro', 'uFetchPro']),
+      cavityNumber: this.pickString([item], ['U_CavityNo', 'u_cavity_no', 'uCavityNo']),
       properties: this.pickProperties(item),
       uom: this.pickString([item], ['uom', 'UOM', 'Uom', 'unit', 'Unit']),
       availableQty: this.pickQtyValue(item),
