@@ -1,5 +1,5 @@
 const API_BASE_URL = 'http://alhafiz.vdc.services:8084/ahcp/public';
-export const AGP_API_BASE_URL = 'http://alhafiz.vdc.services:8084/ahcp_live/public';
+
 
 /** Pioneer attendance API (proxied in local dev via proxy.conf.json). */
 export const BIOMETRICS_API_BASE_URL = resolveBiometricsApiBaseUrl();
