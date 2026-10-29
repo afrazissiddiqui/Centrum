@@ -141,6 +141,15 @@ export class LeaveApplicationService {
     );
   }
 
+  fetchLeaveApplicationsForDateRange(fromDate: string, toDate: string): Observable<LeaveApplicationRecord[]> {
+    const params = new HttpParams().set('from_date', fromDate).set('to_date', toDate);
+
+    return this.http.get<unknown>(LEAVE_APPLICATION_LIST_URL, { params }).pipe(
+      map((response) => this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item))),
+      tap((records) => this.leaveList.set(records)),
+    );
+  }
+
   fetchLeaveApplicationDetail(id: string | number): Observable<LeaveApplicationRecord> {
     const identifier = encodeURIComponent(String(id));
     const numericId = Number.parseInt(String(id), 10) || 0;

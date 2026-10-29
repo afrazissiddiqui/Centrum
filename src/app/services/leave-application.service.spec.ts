@@ -169,6 +169,24 @@ describe('LeaveApplicationService', () => {
     expect(records?.[0].RequestStatus).toBe('Submitted');
   });
 
+  it('loads date-range leave records in one request without an employee search parameter', () => {
+    let records: LeaveApplicationRecord[] | undefined;
+    service.fetchLeaveApplicationsForDateRange('2026-10-01', '2026-10-31').subscribe((result) => {
+      records = result;
+    });
+
+    const request = httpMock.expectOne((req) =>
+      req.url.endsWith('/leave-application-list') &&
+      req.params.get('from_date') === '2026-10-01' &&
+      req.params.get('to_date') === '2026-10-31' &&
+      req.params.get('search') === null,
+    );
+    expect(request.request.method).toBe('GET');
+    request.flush({ status: true, message: 'Leave applications retrieved successfully', data: [] });
+
+    expect(records).toEqual([]);
+  });
+
   it('maps employee_code from leave list responses so searched requests are retained', () => {
     let records: LeaveApplicationRecord[] | undefined;
     service.fetchLeaveApplicationsForEmployee('Emp-00000011', '2026-10-01', '2026-10-30').subscribe((result) => {

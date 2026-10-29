@@ -10,7 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Subscription } from 'rxjs';
+import { EMPTY, Subscription, catchError } from 'rxjs';
 import { ColumnResizeDirective } from '../../../../column-resize';
 import { PageToolbarComponent } from '../../../page-toolbar/page-toolbar';
 import { AlertService } from '../../../../services/alert.service';
@@ -24,7 +24,9 @@ import {
   formatPunchDate,
   formatPunchTime,
   formatWorkingDuration,
+  canonicalAttendanceKey,
 } from '../../../../services/attendance-management.service';
+import { LeaveApplicationRecord, LeaveApplicationService } from '../../../../services/leave-application.service';
 import { ShellbarSearchService } from '../../../../services/shellbar-search.service';
 import { formatApiErrorMessage } from '../../../../utils/api-error.util';
 import {
@@ -54,11 +56,146 @@ interface DateRangeAttendanceRow {
   recordsByDate: Record<string, AttendanceSlotRef>;
   totalWorkingMinutes: number;
   workingDays: number;
+  absentDays: number;
 }
 
 export function attendanceSearchUserId(searchText: string, queryMode: AttendanceQueryMode): string {
   const search = searchText.trim();
   return queryMode === 'dateRange' && /^(?:emp-)?\d+$/i.test(search) ? search : '';
+}
+
+export function calculateLeaveOverlapDays(
+  requestFromDate: string | null | undefined,
+  requestToDate: string | null | undefined,
+  rangeFromDate: string | null | undefined,
+  rangeToDate: string | null | undefined,
+): number {
+  const leaveStart = parseAttendanceDate(requestFromDate);
+  const leaveEnd = parseAttendanceDate(requestToDate);
+  const rangeStart = parseAttendanceDate(rangeFromDate);
+  const rangeEnd = parseAttendanceDate(rangeToDate);
+
+  if (!leaveStart || !leaveEnd || !rangeStart || !rangeEnd) {
+    return 0;
+  }
+
+  const overlapStart = new Date(Math.max(leaveStart.getTime(), rangeStart.getTime()));
+  const overlapEnd = new Date(Math.min(leaveEnd.getTime(), rangeEnd.getTime()));
+  if (overlapEnd < overlapStart) {
+    return 0;
+  }
+
+  return Math.floor((overlapEnd.getTime() - overlapStart.getTime()) / 86400000) + 1;
+}
+
+export function indexPaidLeaveDates(
+  employees: Array<Pick<DateRangeAttendanceRow, 'employeeKey' | 'employeeCode'> & { absentDates: string[] }>,
+  records: Array<Pick<LeaveApplicationRecord, 'EmployeeId' | 'FromDate' | 'ToDate'>>,
+  rangeFromDate: string,
+  rangeToDate: string,
+): Map<string, Set<string>> {
+  const employeeByCode = new Map(
+    employees.map((employee) => [canonicalAttendanceKey(employee.employeeCode), employee]),
+  );
+  const rangeStart = parseAttendanceDate(rangeFromDate);
+  const rangeEnd = parseAttendanceDate(rangeToDate);
+  const intervalsByEmployee = new Map<string, Array<[number, number]>>();
+
+  if (!rangeStart || !rangeEnd) {
+    return new Map();
+  }
+
+  const rangeStartDay = Math.min(rangeStart.getTime(), rangeEnd.getTime()) / 86400000;
+  const rangeEndDay = Math.max(rangeStart.getTime(), rangeEnd.getTime()) / 86400000;
+  for (const record of records) {
+    const employee = employeeByCode.get(canonicalAttendanceKey(record.EmployeeId));
+    const leaveStart = parseAttendanceDate(record.FromDate);
+    const leaveEnd = parseAttendanceDate(record.ToDate);
+    if (!employee || !leaveStart || !leaveEnd) {
+      continue;
+    }
+
+    const startDay = Math.max(rangeStartDay, Math.min(leaveStart.getTime(), leaveEnd.getTime()) / 86400000);
+    const endDay = Math.min(rangeEndDay, Math.max(leaveStart.getTime(), leaveEnd.getTime()) / 86400000);
+    if (startDay > endDay) {
+      continue;
+    }
+
+    const intervals = intervalsByEmployee.get(employee.employeeKey) ?? [];
+    intervals.push([startDay, endDay]);
+    intervalsByEmployee.set(employee.employeeKey, intervals);
+  }
+
+  const paidLeaveDatesByEmployee = new Map<string, Set<string>>();
+  const dayMilliseconds = 86400000;
+  for (const employee of employees) {
+    const intervals = intervalsByEmployee.get(employee.employeeKey);
+    if (!intervals?.length || !employee.absentDates.length) {
+      paidLeaveDatesByEmployee.set(employee.employeeKey, new Set());
+      continue;
+    }
+
+    intervals.sort(([startA], [startB]) => startA - startB);
+    const mergedIntervals: Array<[number, number]> = [];
+    let [currentStart, currentEnd] = intervals[0];
+    for (let index = 1; index < intervals.length; index += 1) {
+      const [start, end] = intervals[index];
+      if (start <= currentEnd + 1) {
+        currentEnd = Math.max(currentEnd, end);
+        continue;
+      }
+      mergedIntervals.push([currentStart, currentEnd]);
+      currentStart = start;
+      currentEnd = end;
+    }
+    mergedIntervals.push([currentStart, currentEnd]);
+
+    const paidDates = new Set<string>();
+    let intervalIndex = 0;
+    const absentDays = employee.absentDates
+      .map((date) => ({ date, day: parseAttendanceDate(date)?.getTime() ?? Number.NaN }))
+      .filter((entry) => Number.isFinite(entry.day))
+      .sort((left, right) => left.day - right.day);
+    for (const absent of absentDays) {
+      const day = absent.day / dayMilliseconds;
+      while (intervalIndex < mergedIntervals.length && mergedIntervals[intervalIndex][1] < day) {
+        intervalIndex += 1;
+      }
+      const interval = mergedIntervals[intervalIndex];
+      if (interval && interval[0] <= day && day <= interval[1]) {
+        paidDates.add(absent.date);
+      }
+    }
+    paidLeaveDatesByEmployee.set(employee.employeeKey, paidDates);
+  }
+
+  return paidLeaveDatesByEmployee;
+}
+
+function parseAttendanceDate(value: string | null | undefined): Date | null {
+  if (!value || typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const isoDate = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    const [, year, month, day] = isoDate;
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  }
+
+  const dmyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (dmyMatch) {
+    const [, day, month, year] = dmyMatch;
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  }
+
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 @Component({
@@ -72,12 +209,14 @@ export function attendanceSearchUserId(searchText: string, queryMode: Attendance
 export class AttendanceManagmentComponent implements OnInit {
   private readonly layout = inject(PayrollMasterLayoutService);
   private readonly attendanceService = inject(AttendanceManagementService);
+  private readonly leaveApplicationService = inject(LeaveApplicationService);
   private readonly alertService = inject(AlertService);
   private readonly shellbarSearch = inject(ShellbarSearchService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly loading = signal(false);
   readonly loadingPage = signal(false);
+  readonly loadingLeaveSummary = signal(false);
   readonly showViewDialog = signal(false);
   readonly selectedRecord = signal<AttendanceDailyRecord | null>(null);
   readonly selectedDateRangeRecords = signal<AttendanceDailyRecord[]>([]);
@@ -87,8 +226,16 @@ export class AttendanceManagmentComponent implements OnInit {
 
   private pageEnrichSub?: Subscription;
   private querySub?: Subscription;
+  private leaveSummarySub?: Subscription;
+  private attendanceSessionReady = false;
+  private leaveSummaryRequested = false;
   private pageEnrichGeneration = 0;
+  private selectedDateRangeEmployeeKey = '';
   private readonly enrichedEmployeeKeys = new Set<string>();
+  private readonly dateRangePaidLeaveMap = new Map<string, number>();
+  private readonly dateRangeUnpaidLeaveMap = new Map<string, number>();
+  private readonly dateRangePaidLeaveDates = new Map<string, Set<string>>();
+  private readonly failedLeaveEmployeeKeys = new Set<string>();
   private attendanceSearchTimeout: ReturnType<typeof setTimeout> | null = null;
   private attendanceSearchUserId = '';
 
@@ -139,6 +286,7 @@ export class AttendanceManagmentComponent implements OnInit {
     this.destroyRef.onDestroy(() => {
       this.pageEnrichSub?.unsubscribe();
       this.querySub?.unsubscribe();
+      this.leaveSummarySub?.unsubscribe();
       if (this.attendanceSearchTimeout) {
         clearTimeout(this.attendanceSearchTimeout);
       }
@@ -249,6 +397,7 @@ export class AttendanceManagmentComponent implements OnInit {
           recordsByDate: {},
           totalWorkingMinutes: 0,
           workingDays: 0,
+          absentDays: 0,
         };
         rowsByEmployee.set(slot.employeeKey, row);
       }
@@ -256,6 +405,9 @@ export class AttendanceManagmentComponent implements OnInit {
       row.totalWorkingMinutes += slot.workingMinutes;
       if (slot.punchIn || slot.punchOut) {
         row.workingDays += 1;
+      }
+      if (slot.status === 'Absent') {
+        row.absentDays += 1;
       }
     }
 
@@ -491,6 +643,9 @@ export class AttendanceManagmentComponent implements OnInit {
     if (normalized === 'absent') {
       return 'attendance-status--absent';
     }
+    if (normalized === 'paid leave') {
+      return 'attendance-status--leave';
+    }
     return 'attendance-status--default';
   }
 
@@ -520,12 +675,20 @@ export class AttendanceManagmentComponent implements OnInit {
       (slot) => slot.employeeKey === row.employeeKey && this.dateRangeDates.includes(slot.date),
     );
     this.selectedRecord.set(null);
+    this.selectedDateRangeEmployeeKey = row.employeeKey;
     this.selectedDateRangeRecords.set(this.attendanceService.materializeSlots(slots));
     this.showViewDialog.set(true);
   }
 
   getDateRangeDetailRecord(date: string): AttendanceDailyRecord | undefined {
     return this.selectedDateRangeRecords().find((record) => record.AttendanceDate === date);
+  }
+
+  getDateRangeDetailStatus(date: string): string {
+    const record = this.getDateRangeDetailRecord(date);
+    return record?.AttendanceStatus === 'Absent' && this.isDatePaidLeave(this.selectedDateRangeEmployeeKey, date)
+      ? 'Paid Leave'
+      : record?.AttendanceStatus ?? '—';
   }
 
   get selectedDateRangeTotalWorkingMinutes(): number {
@@ -536,14 +699,35 @@ export class AttendanceManagmentComponent implements OnInit {
     return this.selectedDateRangeRecords().filter((record) => record.PunchIn || record.PunchOut).length;
   }
 
+  getDateRangePaidLeaveCount(employeeKey: string): number | string {
+    return this.failedLeaveEmployeeKeys.has(employeeKey) ? '—' : this.dateRangePaidLeaveMap.get(employeeKey) ?? 0;
+  }
+
+  getDateRangeUnpaidLeaveCount(employeeKey: string): number | string {
+    return this.failedLeaveEmployeeKeys.has(employeeKey) ? '—' : this.dateRangeUnpaidLeaveMap.get(employeeKey) ?? 0;
+  }
+
+  isDatePaidLeave(employeeKey: string, date: string): boolean {
+    return this.dateRangePaidLeaveDates.get(employeeKey)?.has(date) ?? false;
+  }
+
   closeViewDialog(): void {
     this.showViewDialog.set(false);
     this.selectedRecord.set(null);
     this.selectedDateRangeRecords.set([]);
+    this.selectedDateRangeEmployeeKey = '';
   }
 
   private loadRecords(): void {
     this.loading.set(true);
+    this.attendanceSessionReady = false;
+    this.leaveSummarySub?.unsubscribe();
+    this.loadingLeaveSummary.set(false);
+    this.leaveSummaryRequested = false;
+    this.dateRangePaidLeaveMap.clear();
+    this.dateRangeUnpaidLeaveMap.clear();
+    this.dateRangePaidLeaveDates.clear();
+    this.failedLeaveEmployeeKeys.clear();
     if (this.attendanceSearchTimeout) {
       clearTimeout(this.attendanceSearchTimeout);
       this.attendanceSearchTimeout = null;
@@ -567,10 +751,16 @@ export class AttendanceManagmentComponent implements OnInit {
     this.querySub = this.attendanceService.loadSession(query).subscribe({
       next: () => {
         this.loading.set(false);
+        this.attendanceSessionReady = true;
         this.renderCurrentPage();
       },
       error: (error: unknown) => {
         this.loading.set(false);
+        this.dateRangePaidLeaveMap.clear();
+        this.dateRangeUnpaidLeaveMap.clear();
+        this.dateRangePaidLeaveDates.clear();
+        this.leaveSummaryRequested = false;
+        this.failedLeaveEmployeeKeys.clear();
         this.pageRecords.set([]);
         void this.alertService.error(
           'Load Failed',
@@ -582,11 +772,19 @@ export class AttendanceManagmentComponent implements OnInit {
 
   private clearDateRangeResults(): void {
     this.querySub?.unsubscribe();
+    this.leaveSummarySub?.unsubscribe();
+    this.attendanceSessionReady = false;
     this.loading.set(false);
+    this.loadingLeaveSummary.set(false);
     this.pageEnrichSub?.unsubscribe();
     this.pageEnrichGeneration += 1;
     this.loadingPage.set(false);
     this.enrichedEmployeeKeys.clear();
+    this.dateRangePaidLeaveMap.clear();
+    this.dateRangeUnpaidLeaveMap.clear();
+    this.dateRangePaidLeaveDates.clear();
+    this.leaveSummaryRequested = false;
+    this.failedLeaveEmployeeKeys.clear();
     this.attendanceService.clearSession();
     this.pageRecords.set([]);
     this.closeViewDialog();
@@ -602,6 +800,9 @@ export class AttendanceManagmentComponent implements OnInit {
     const slots = this.paginatedSlots;
     this.pageRecords.set(this.attendanceService.materializeSlots(slots));
     this.enrichCurrentPageEmployees(slots);
+    if (this.attendanceSessionReady) {
+      this.refreshDateRangeLeaveSummary();
+    }
     queueMicrotask(() => this.resetTableScroll());
   }
 
@@ -650,6 +851,51 @@ export class AttendanceManagmentComponent implements OnInit {
         this.loadingPage.set(false);
       },
     });
+  }
+
+  private refreshDateRangeLeaveSummary(): void {
+    if (this.queryMode !== 'dateRange' || !this.dateRangeRows.length || this.leaveSummaryRequested) {
+      return;
+    }
+
+    this.leaveSummaryRequested = true;
+    this.loadingLeaveSummary.set(true);
+    this.leaveSummarySub = this.leaveApplicationService
+      .fetchLeaveApplicationsForDateRange(this.fromDate, this.toDate)
+      .pipe(
+        catchError((error: unknown) => {
+          this.failedLeaveEmployeeKeys.clear();
+          this.dateRangeRows.forEach((row) => this.failedLeaveEmployeeKeys.add(row.employeeKey));
+          this.loadingLeaveSummary.set(false);
+          void this.alertService.error(
+            'Leave Summary Failed',
+            formatApiErrorMessage(error, 'Could not load employee leave data for this date range.'),
+          );
+          return EMPTY;
+        }),
+      )
+      .subscribe((records) => {
+        const leaveDatesByEmployee = indexPaidLeaveDates(
+          this.dateRangeRows.map((row) => ({
+            employeeKey: row.employeeKey,
+            employeeCode: row.employeeCode,
+            absentDates: Object.values(row.recordsByDate)
+              .filter((record) => record.status === 'Absent')
+              .map((record) => record.date),
+          })),
+          records,
+          this.fromDate,
+          this.toDate,
+        );
+        for (const row of this.dateRangeRows) {
+          const paidLeaveDates = leaveDatesByEmployee.get(row.employeeKey) ?? new Set<string>();
+          const paidLeaveDays = paidLeaveDates.size;
+          this.dateRangePaidLeaveMap.set(row.employeeKey, paidLeaveDays);
+          this.dateRangePaidLeaveDates.set(row.employeeKey, paidLeaveDates);
+          this.dateRangeUnpaidLeaveMap.set(row.employeeKey, Math.max(0, row.absentDays - paidLeaveDays));
+        }
+        this.loadingLeaveSummary.set(false);
+      });
   }
 
   private getSlotSortableValue(row: AttendanceSlotRef, key: AttendanceColumnKey): string | number {

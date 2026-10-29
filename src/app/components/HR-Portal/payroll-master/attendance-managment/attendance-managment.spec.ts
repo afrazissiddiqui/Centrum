@@ -1,6 +1,6 @@
 import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
-import { attendanceSearchUserId } from './attendance-managment';
+import { attendanceSearchUserId, calculateLeaveOverlapDays, indexPaidLeaveDates } from './attendance-managment';
 
 describe('attendanceSearchUserId', () => {
   it('uses exact numeric employee searches to scope date-range requests', () => {
@@ -11,5 +11,34 @@ describe('attendanceSearchUserId', () => {
   it('keeps partial text and non-date-range searches client-side', () => {
     expect(attendanceSearchUserId('Inam Ullah', 'dateRange')).toBe('');
     expect(attendanceSearchUserId('17', 'date')).toBe('');
+  });
+});
+
+describe('calculateLeaveOverlapDays', () => {
+  it('counts overlapping leave days within the selected attendance range', () => {
+    expect(calculateLeaveOverlapDays('01/10/2026', '05/10/2026', '2026-10-01', '2026-10-31')).toBe(5);
+    expect(calculateLeaveOverlapDays('2026-10-15', '2026-10-18', '2026-10-01', '2026-10-10')).toBe(0);
+    expect(calculateLeaveOverlapDays('2026-10-28T00:00:00.000000Z', '2026-10-30T00:00:00.000000Z', '2026-10-01', '2026-10-31')).toBe(3);
+  });
+});
+
+describe('indexPaidLeaveDates', () => {
+  it('marks only absent dates covered by a leave request and merges overlapping intervals', () => {
+    const result = indexPaidLeaveDates(
+      [
+        { employeeKey: 'employee-3', employeeCode: 'Emp-00000003', absentDates: ['2026-10-01', '2026-10-04', '2026-10-07'] },
+        { employeeKey: 'employee-4', employeeCode: 'Emp-00000004', absentDates: ['2026-10-10', '2026-10-13'] },
+      ],
+      [
+        { EmployeeId: '3', FromDate: '2026-10-01', ToDate: '2026-10-03' },
+        { EmployeeId: 'Emp-00000003', FromDate: '2026-10-03', ToDate: '2026-10-05' },
+        { EmployeeId: 'Emp-00000004', FromDate: '2026-10-10', ToDate: '2026-10-12' },
+      ],
+      '2026-10-01',
+      '2026-10-31',
+    );
+
+    expect([...result.get('employee-3') ?? []]).toEqual(['2026-10-01', '2026-10-04']);
+    expect([...result.get('employee-4') ?? []]).toEqual(['2026-10-10']);
   });
 });

@@ -618,29 +618,9 @@
   box-shadow: 1px 0 0 #dbeafe;
 }
 
-.attendance-table--date-range .attendance-table__date-range-view-header {
-  position: sticky;
-  right: 0;
-  z-index: 8;
-  background: #f8fafc;
-  box-shadow: -4px 0 12px rgba(15, 23, 42, 0.08);
-}
-
-.attendance-table--date-range .attendance-table__date-range-view {
-  position: sticky;
-  right: 0;
-  z-index: 7;
-  background: #fff !important;
-  box-shadow: -4px 0 12px rgba(15, 23, 42, 0.06);
-}
-
 .attendance-table--date-range .attendance-list-row:hover .attendance-table__date-range-employee-code,
 .attendance-table--date-range .attendance-list-row:hover .attendance-table__date-range-employee-name {
   background: #eff6ff !important;
-}
-
-.attendance-table--date-range .attendance-list-row:hover .attendance-table__date-range-view {
-  background: #fff !important;
 }
 
 .attendance-table--date-range .attendance-list-row--alt .attendance-table__date-range-employee-code,
@@ -806,16 +786,8 @@
 }
 
 .attendance-table__group--actions,
-.attendance-table__actions-header,
-.attendance-table__actions {
-  position: sticky;
-  right: 0;
-}
-
-.attendance-table__group--actions,
 .attendance-table__actions-header {
   z-index: 5;
-  box-shadow: -4px 0 12px rgba(15, 23, 42, 0.06);
 }
 
 .attendance-table__actions-header {
@@ -857,7 +829,6 @@
 
 .attendance-table__actions {
   z-index: 2;
-  box-shadow: -4px 0 12px rgba(15, 23, 42, 0.04);
 }
 
 .attendance-list-row {
