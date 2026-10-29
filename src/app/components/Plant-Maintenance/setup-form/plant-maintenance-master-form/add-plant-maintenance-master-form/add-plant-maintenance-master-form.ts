@@ -164,7 +164,7 @@ export class AddPlantMaintenanceMasterFormComponent implements OnInit {
     'Weekly',
     'Fortnightly',
     'Monthly',
-    'Quaterly',
+    'Quarterly',
     'Semi-annually',
     'Anually',
   ] as const;
@@ -208,7 +208,6 @@ export class AddPlantMaintenanceMasterFormComponent implements OnInit {
     const cached = this.masterService.getById(id);
     if (cached) {
       this.populateFromRecord(cached);
-      return;
     }
 
     this.masterService.fetchPlantMaintenanceMasterFormDetail(id).subscribe({
@@ -218,7 +217,9 @@ export class AddPlantMaintenanceMasterFormComponent implements OnInit {
           'Load Failed',
           formatApiErrorMessage(error, 'Failed to load plant maintenance master form for edit.'),
         );
-        void this.router.navigate(['/plant-maintenance/main-form/plant-maintenance-master-form']);
+        if (!cached) {
+          void this.router.navigate(['/plant-maintenance/main-form/plant-maintenance-master-form']);
+        }
       },
     });
   }

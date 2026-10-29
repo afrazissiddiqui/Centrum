@@ -142,7 +142,7 @@ export class AddMaintenanceActivityDefinitionComponent implements OnInit {
 
     'Monthly',
 
-    'Quaterly',
+    'Quarterly',
 
     'Semi-annually',
 
@@ -192,9 +192,6 @@ export class AddMaintenanceActivityDefinitionComponent implements OnInit {
     if (cached) {
 
       this.populateFromRecord(cached);
-
-      return;
-
     }
 
     this.activityService.fetchMaintenanceActivityDefinitionDetail(id).subscribe({
@@ -211,7 +208,9 @@ export class AddMaintenanceActivityDefinitionComponent implements OnInit {
 
         );
 
-        void this.router.navigate(['/plant-maintenance/setup-form/maintenance-activity-definition']);
+        if (!cached) {
+          void this.router.navigate(['/plant-maintenance/setup-form/maintenance-activity-definition']);
+        }
 
       },
 
@@ -875,14 +874,16 @@ export class AddMaintenanceActivityDefinitionComponent implements OnInit {
     this.machineType.set(this.normalizeMachineType(record.machineType));
     this.location.set(this.normalizeLocation(record.location));
 
-    this.maintenanceNature.set(record.maintenanceNature === '—' ? '' : record.maintenanceNature);
+    this.maintenanceNature.set(
+      this.normalizeSelectOption(record.maintenanceNature, this.maintenanceNatureOptions),
+    );
 
     this.plantMaintenanceFrequency.set(
-      record.plantMaintenanceFrequency === '—' ? '' : record.plantMaintenanceFrequency,
+      this.normalizeSelectOption(record.plantMaintenanceFrequency, this.plantMaintenanceFrequencyOptions),
     );
 
     this.plantMaintenanceType.set(
-      record.plantMaintenanceType === '—' ? '' : record.plantMaintenanceType,
+      this.normalizeSelectOption(record.plantMaintenanceType, this.plantMaintenanceTypeOptions),
     );
 
     this.components.set(this.cloneComponents(record));
@@ -990,11 +991,7 @@ export class AddMaintenanceActivityDefinitionComponent implements OnInit {
   }
 
   private normalizeMachineType(value: string): string {
-    const trimmed = value.trim();
-    if (!trimmed || trimmed === '—') {
-      return '';
-    }
-    return (MACHINE_TYPE_OPTIONS as readonly string[]).includes(trimmed) ? trimmed : '';
+    return this.normalizeSelectOption(value, MACHINE_TYPE_OPTIONS);
   }
 
   private normalizeLocation(value?: string): string {
@@ -1004,9 +1001,27 @@ export class AddMaintenanceActivityDefinitionComponent implements OnInit {
     }
 
     const resolved = resolveBranchNameFromBplId(trimmed);
-    return LOCATION_OPTIONS.includes(resolved as (typeof LOCATION_OPTIONS)[number])
-      ? resolved
-      : '';
+    return this.normalizeSelectOption(resolved, LOCATION_OPTIONS);
+  }
+
+  private normalizeSelectOption(value: string, options: readonly string[]): string {
+    const normalizedValue = value.trim().toLowerCase();
+    if (!normalizedValue || normalizedValue === '—') {
+      return '';
+    }
+
+    const comparableValue =
+      normalizedValue === 'quaterly' || normalizedValue === 'quartely'
+        ? 'quarterly'
+        : normalizedValue;
+    return options.find((option) => {
+      const normalizedOption = option.trim().toLowerCase();
+      const comparableOption =
+        normalizedOption === 'quaterly' || normalizedOption === 'quartely'
+          ? 'quarterly'
+          : normalizedOption;
+      return comparableOption === comparableValue;
+    }) ?? '';
   }
 
 }

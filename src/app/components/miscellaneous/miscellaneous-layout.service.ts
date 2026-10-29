@@ -10,7 +10,7 @@ export function isMiscellaneousFormRoute(url: string): boolean {
     /\/miscellaneous\/inventory-transfer\/(create|edit)(\/|$)/.test(path) ||
     /\/miscellaneous\/inventory-transfer-request\/(create|edit)(\/|$)/.test(path) ||
     /\/miscellaneous\/good-issue\/(create|edit)(\/|$)/.test(path) ||
-    /\/miscellaneous\/crushed-risen-consumption\/create(\/|$)/.test(path)
+    /\/miscellaneous\/crushed-risen-consumption\/(create|edit)(\/|$)/.test(path)
   );
 }
 

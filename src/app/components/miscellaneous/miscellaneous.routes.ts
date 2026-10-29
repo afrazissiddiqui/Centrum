@@ -69,6 +69,11 @@ export const miscellaneousRoutes: Routes = [
         data: { title: 'Crushed Risen Consumption' },
       },
       {
+        path: 'crushed-risen-consumption/edit/:id',
+        component: CrushedRisenConsumptionComponent,
+        data: { title: 'Update Crushed Risen Consumption' },
+      },
+      {
         path: 'receipt-from-production/create',
         component: AddReceiptFromProduction,
         data: { title: 'Add Receipt from Production' },

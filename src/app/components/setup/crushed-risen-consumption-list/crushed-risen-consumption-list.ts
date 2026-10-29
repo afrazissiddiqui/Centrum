@@ -78,7 +78,7 @@ export class CrushedRisenConsumptionListComponent implements OnInit {
   }
 
   editRecord(record: CrushedRisenConsumptionRecord): void {
-    this.loadRecordDetail(record, true);
+    void this.router.navigateByUrl(`/miscellaneous/crushed-risen-consumption/edit/${record.id}`);
   }
 
   private loadRecordDetail(record: CrushedRisenConsumptionRecord, editing: boolean): void {

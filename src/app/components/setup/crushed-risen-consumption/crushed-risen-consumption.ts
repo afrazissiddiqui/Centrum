@@ -1,13 +1,15 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { finalize } from 'rxjs';
 import { AlertService } from '../../../services/alert.service';
 import { AuthService } from '../../../services/auth.service';
 import {
   CrushedRisenConsumptionAddPayload,
+  CrushedRisenConsumptionDetail,
   CrushedRisenConsumptionService,
+  CrushedRisenConsumptionUpdatePayload,
 } from '../../../services/crushed-risen-consumption.service';
 import { OitmItemsService } from '../../../services/oitm-items.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
@@ -32,7 +34,7 @@ interface CrushedRisenConsumptionHeader {
   updateTime: string;
 }
 
-type CrushedRisenConsumptionHeaderField = Exclude<keyof CrushedRisenConsumptionHeader, 'signedUser' | 'status'>;
+type CrushedRisenConsumptionHeaderField = Exclude<keyof CrushedRisenConsumptionHeader, 'signedUser'>;
 
 interface CrushedRisenConsumptionLine {
   machineId: string;
@@ -40,7 +42,7 @@ interface CrushedRisenConsumptionLine {
   moldNumberFromProductionOrder: string;
   cavityNumberFromProductionOrder: string;
   employeeShift: string;
-  crushedRisenConsumption: number | null;
+  crushedRisenConsumption: number | string | null;
 }
 
 @Component({
@@ -52,6 +54,7 @@ interface CrushedRisenConsumptionLine {
 })
 export class CrushedRisenConsumptionComponent implements OnInit {
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly authService = inject(AuthService);
   private readonly alertService = inject(AlertService);
   private readonly consumptionService = inject(CrushedRisenConsumptionService);
@@ -60,6 +63,9 @@ export class CrushedRisenConsumptionComponent implements OnInit {
   protected readonly layout = inject(MiscellaneousLayoutService);
 
   readonly saving = signal(false);
+  readonly loadingRecord = signal(false);
+  readonly editingId = signal<number | null>(null);
+  readonly isEditing = computed(() => this.editingId() !== null);
   readonly productionOrders = signal<ProductionOrderRecord[]>([]);
   readonly productionOrdersLoading = signal(false);
   readonly productionOrdersError = signal<string | null>(null);
@@ -114,6 +120,12 @@ export class CrushedRisenConsumptionComponent implements OnInit {
   readonly contentLines = signal<CrushedRisenConsumptionLine[]>([this.createEmptyLine()]);
 
   ngOnInit(): void {
+    const id = Number(this.route.snapshot.paramMap.get('id'));
+    if (Number.isInteger(id) && id > 0) {
+      this.editingId.set(id);
+      this.loadRecordForEditing(id);
+    }
+
     this.oitmItemsService.ensureLoaded().subscribe({
       error: (error: unknown) => {
         void this.alertService.error(
@@ -191,11 +203,49 @@ export class CrushedRisenConsumptionComponent implements OnInit {
   }
 
   saveRecord(): void {
-    if (this.saving()) {
+    if (this.saving() || this.loadingRecord()) {
       return;
     }
 
     const header = this.headerForm();
+    const lines = this.contentLines().map((line) => ({
+      machineId: line.machineId.trim(),
+      machineName: line.machineName.trim(),
+      moldNumber: line.moldNumberFromProductionOrder.trim(),
+      cavityNumber: line.cavityNumberFromProductionOrder.trim(),
+      employeeShift: line.employeeShift.trim(),
+      crushedRisenConsumption: line.crushedRisenConsumption,
+    }));
+
+    if (this.isEditing()) {
+      const id = this.editingId();
+      if (id === null) {
+        return;
+      }
+      const payload: CrushedRisenConsumptionUpdatePayload = {
+        remark: header.remark.trim(),
+        status: header.status.trim(),
+        lines,
+      };
+      this.saving.set(true);
+      this.consumptionService
+        .updateRecord(id, payload)
+        .pipe(finalize(() => this.saving.set(false)))
+        .subscribe({
+          next: () => {
+            void this.alertService.success('Updated', 'Crushed Risen Consumption updated successfully.');
+            this.backToPurchaseRequest();
+          },
+          error: (error: unknown) => {
+            void this.alertService.error(
+              'Update Failed',
+              formatApiErrorMessage(error, 'Failed to update Crushed Risen Consumption.'),
+            );
+          },
+        });
+      return;
+    }
+
     const series = Number(header.series);
     if (!header.series.trim() || !Number.isFinite(series)) {
       void this.alertService.validation('Enter a valid numeric series before saving.');
@@ -218,13 +268,12 @@ export class CrushedRisenConsumptionComponent implements OnInit {
       remark: header.remark.trim(),
       createDate: header.createDate,
       createTime: this.formatCreateTime(header.createTime),
-      lines: this.contentLines().map((line) => ({
-        machineId: line.machineId.trim(),
-        machineName: line.machineName.trim(),
-        moldNumber: line.moldNumberFromProductionOrder.trim(),
-        cavityNumber: line.cavityNumberFromProductionOrder.trim(),
-        employeeShift: line.employeeShift.trim(),
-        crushedRisenConsumption: line.crushedRisenConsumption,
+      lines: lines.map((line) => ({
+        ...line,
+        crushedRisenConsumption:
+          line.crushedRisenConsumption === null || line.crushedRisenConsumption === ''
+            ? null
+            : Number(line.crushedRisenConsumption),
       })),
     };
 
@@ -244,6 +293,52 @@ export class CrushedRisenConsumptionComponent implements OnInit {
           );
         },
       });
+  }
+
+  private loadRecordForEditing(id: number): void {
+    this.loadingRecord.set(true);
+    this.consumptionService
+      .fetchRecordDetail(id)
+      .pipe(finalize(() => this.loadingRecord.set(false)))
+      .subscribe({
+        next: (record) => this.populateForm(record),
+        error: (error: unknown) => {
+          void this.alertService.error(
+            'Load Failed',
+            formatApiErrorMessage(error, 'Failed to load Crushed Risen Consumption details.'),
+          );
+          this.backToPurchaseRequest();
+        },
+      });
+  }
+
+  private populateForm(record: CrushedRisenConsumptionDetail): void {
+    this.headerForm.set({
+      series: record.series,
+      signedUser: record.signedUser,
+      remark: record.remark,
+      itemNameFromProduction: record.itemNameFromProduction,
+      documentNumberFromProduction: record.documentNumberFromProduction,
+      cancel: '',
+      status: record.status,
+      itemCodeFromProduction: record.itemCodeFromProduction,
+      productDocEntry: record.productDocEntry,
+      crcNumber: record.crcNumber,
+      createDate: record.createDate.slice(0, 10),
+      createTime: record.createTime,
+      updateDate: record.updateDate.slice(0, 10),
+      updateTime: record.updateTime,
+    });
+    this.contentLines.set(
+      record.lines.map((line) => ({
+        machineId: line.machineId,
+        machineName: line.machineName,
+        moldNumberFromProductionOrder: line.moldNumber,
+        cavityNumberFromProductionOrder: line.cavityNumber,
+        employeeShift: line.employeeShift,
+        crushedRisenConsumption: line.crushedRisenConsumption,
+      })),
+    );
   }
 
   openProductionOrderDialog(): void {

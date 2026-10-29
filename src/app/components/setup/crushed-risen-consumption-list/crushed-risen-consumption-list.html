@@ -102,7 +102,7 @@
           <div>
             @if (detail(); as recordDetail) {
               @if (!detailEditing()) {
-                <button type="button" class="sir-secondary-button" (click)="detailEditing.set(true)">Edit</button>
+                <button type="button" class="sir-secondary-button" (click)="editRecord(recordDetail)">Edit</button>
               }
             }
             <button type="button" class="sir-modal-close" aria-label="Close details" [disabled]="updating()" (click)="closeDetail()">×</button>
