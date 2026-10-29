@@ -10,7 +10,17 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { EMPTY, Subscription, catchError } from 'rxjs';
+import {
+  Subscription,
+  catchError,
+  concatMap,
+  from,
+  of,
+  switchMap,
+  tap,
+  throwError,
+  timer,
+} from 'rxjs';
 import { ColumnResizeDirective } from '../../../../column-resize';
 import { PageToolbarComponent } from '../../../page-toolbar/page-toolbar';
 import { AlertService } from '../../../../services/alert.service';
@@ -196,6 +206,26 @@ function parseAttendanceDate(value: string | null | undefined): Date | null {
 
   const parsed = new Date(trimmed);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isLeaveRateLimitError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return typeof error === 'string' && /too many attempts|too many requests/i.test(error);
+  }
+
+  const failure = error as { status?: unknown; error?: unknown; message?: unknown };
+  if (failure.status === 429) {
+    return true;
+  }
+
+  const body = failure.error;
+  const bodyMessage =
+    typeof body === 'string'
+      ? body
+      : body && typeof body === 'object'
+        ? String((body as Record<string, unknown>)['message'] ?? '')
+        : '';
+  return /too many attempts|too many requests/i.test(`${String(failure.message ?? '')} ${bodyMessage}`);
 }
 
 @Component({
@@ -860,42 +890,83 @@ export class AttendanceManagmentComponent implements OnInit {
 
     this.leaveSummaryRequested = true;
     this.loadingLeaveSummary.set(true);
-    this.leaveSummarySub = this.leaveApplicationService
-      .fetchLeaveApplicationsForDateRange(this.fromDate, this.toDate)
-      .pipe(
-        catchError((error: unknown) => {
-          this.failedLeaveEmployeeKeys.clear();
-          this.dateRangeRows.forEach((row) => this.failedLeaveEmployeeKeys.add(row.employeeKey));
-          this.loadingLeaveSummary.set(false);
+    const pendingRows = this.dateRangeRows.filter((row) => row.absentDays > 0);
+    for (const row of this.dateRangeRows) {
+      if (row.absentDays === 0) {
+        this.dateRangePaidLeaveMap.set(row.employeeKey, 0);
+        this.dateRangeUnpaidLeaveMap.set(row.employeeKey, 0);
+        this.dateRangePaidLeaveDates.set(row.employeeKey, new Set());
+      }
+    }
+
+    if (pendingRows.length === 0) {
+      this.loadingLeaveSummary.set(false);
+      return;
+    }
+
+    const failedRows: DateRangeAttendanceRow[] = [];
+    let activeRowIndex = 0;
+    this.leaveSummarySub = from(pendingRows).pipe(
+      concatMap((row, index) => {
+        activeRowIndex = index;
+        const absentDates = Object.values(row.recordsByDate)
+          .filter((record) => record.status === 'Absent')
+          .map((record) => record.date);
+
+        return timer(index === 0 ? 0 : 1500).pipe(
+          switchMap(() =>
+            this.leaveApplicationService
+              .fetchLeaveApplicationsForEmployee(row.employeeCode, this.fromDate, this.toDate)
+              .pipe(
+                tap((records) => {
+                  const paidLeaveDates =
+                    indexPaidLeaveDates(
+                      [{ employeeKey: row.employeeKey, employeeCode: row.employeeCode, absentDates }],
+                      records,
+                      this.fromDate,
+                      this.toDate,
+                    ).get(row.employeeKey) ?? new Set<string>();
+                  this.dateRangePaidLeaveMap.set(row.employeeKey, paidLeaveDates.size);
+                  this.dateRangeUnpaidLeaveMap.set(row.employeeKey, row.absentDays - paidLeaveDates.size);
+                  this.dateRangePaidLeaveDates.set(row.employeeKey, paidLeaveDates);
+                }),
+                catchError((error: unknown) => {
+                  if (isLeaveRateLimitError(error)) {
+                    return throwError(() => error);
+                  }
+                  failedRows.push(row);
+                  this.failedLeaveEmployeeKeys.add(row.employeeKey);
+                  return of([]);
+                }),
+              ),
+          ),
+        );
+      }),
+    ).subscribe({
+      error: (error: unknown) => {
+        pendingRows.slice(activeRowIndex).forEach((row) => {
+          failedRows.push(row);
+          this.failedLeaveEmployeeKeys.add(row.employeeKey);
+        });
+        this.loadingLeaveSummary.set(false);
+        void this.alertService.error(
+          'Leave Summary Failed',
+          `${failedRows.length} employee leave request(s) could not be loaded. ${formatApiErrorMessage(
+            error,
+            'The leave service is rate limiting requests. Please wait before retrying.',
+          )}`,
+        );
+      },
+      complete: () => {
+        this.loadingLeaveSummary.set(false);
+        if (failedRows.length > 0) {
           void this.alertService.error(
             'Leave Summary Failed',
-            formatApiErrorMessage(error, 'Could not load employee leave data for this date range.'),
+            `${failedRows.length} employee leave request(s) could not be loaded.`,
           );
-          return EMPTY;
-        }),
-      )
-      .subscribe((records) => {
-        const leaveDatesByEmployee = indexPaidLeaveDates(
-          this.dateRangeRows.map((row) => ({
-            employeeKey: row.employeeKey,
-            employeeCode: row.employeeCode,
-            absentDates: Object.values(row.recordsByDate)
-              .filter((record) => record.status === 'Absent')
-              .map((record) => record.date),
-          })),
-          records,
-          this.fromDate,
-          this.toDate,
-        );
-        for (const row of this.dateRangeRows) {
-          const paidLeaveDates = leaveDatesByEmployee.get(row.employeeKey) ?? new Set<string>();
-          const paidLeaveDays = paidLeaveDates.size;
-          this.dateRangePaidLeaveMap.set(row.employeeKey, paidLeaveDays);
-          this.dateRangePaidLeaveDates.set(row.employeeKey, paidLeaveDates);
-          this.dateRangeUnpaidLeaveMap.set(row.employeeKey, Math.max(0, row.absentDays - paidLeaveDays));
         }
-        this.loadingLeaveSummary.set(false);
-      });
+      },
+    });
   }
 
   private getSlotSortableValue(row: AttendanceSlotRef, key: AttendanceColumnKey): string | number {

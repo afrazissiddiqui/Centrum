@@ -136,16 +136,10 @@ export class LeaveApplicationService {
       .set('to_date', toDate);
 
     return this.http.get<unknown>(LEAVE_APPLICATION_LIST_URL, { params }).pipe(
-      map((response) => this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item))),
-      tap((records) => this.leaveList.set(records)),
-    );
-  }
-
-  fetchLeaveApplicationsForDateRange(fromDate: string, toDate: string): Observable<LeaveApplicationRecord[]> {
-    const params = new HttpParams().set('from_date', fromDate).set('to_date', toDate);
-
-    return this.http.get<unknown>(LEAVE_APPLICATION_LIST_URL, { params }).pipe(
-      map((response) => this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item))),
+      map((response) => {
+        this.throwIfApiRequestFailed(response);
+        return this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item));
+      }),
       tap((records) => this.leaveList.set(records)),
     );
   }
@@ -300,6 +294,15 @@ export class LeaveApplicationService {
     const text = this.pickString(sources, keys);
     const parsed = Number.parseFloat(text);
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private throwIfApiRequestFailed(response: unknown): void {
+    if (response && typeof response === 'object' && !Array.isArray(response)) {
+      const result = response as Record<string, unknown>;
+      if (result['status'] === false || result['success'] === false) {
+        throw new Error(formatSapApiFailureMessage(response, 'Leave applications could not be loaded.'));
+      }
+    }
   }
 
   private mapDetailResponse(response: unknown): LeaveApplicationRecord {

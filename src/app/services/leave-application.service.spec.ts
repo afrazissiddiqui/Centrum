@@ -169,22 +169,16 @@ describe('LeaveApplicationService', () => {
     expect(records?.[0].RequestStatus).toBe('Submitted');
   });
 
-  it('loads date-range leave records in one request without an employee search parameter', () => {
-    let records: LeaveApplicationRecord[] | undefined;
-    service.fetchLeaveApplicationsForDateRange('2026-10-01', '2026-10-31').subscribe((result) => {
-      records = result;
-    });
+  it('surfaces API-level leave list failures instead of treating them as empty results', () => {
+    let requestError: unknown;
+    service
+      .fetchLeaveApplicationsForEmployee('Emp-00000011', '2026-10-01', '2026-10-31')
+      .subscribe({ error: (error: unknown) => (requestError = error) });
 
-    const request = httpMock.expectOne((req) =>
-      req.url.endsWith('/leave-application-list') &&
-      req.params.get('from_date') === '2026-10-01' &&
-      req.params.get('to_date') === '2026-10-31' &&
-      req.params.get('search') === null,
-    );
-    expect(request.request.method).toBe('GET');
-    request.flush({ status: true, message: 'Leave applications retrieved successfully', data: [] });
+    const request = httpMock.expectOne((req) => req.url.endsWith('/leave-application-list'));
+    request.flush({ status: false, message: 'Too Many Attempts', data: [] });
 
-    expect(records).toEqual([]);
+    expect(requestError).toEqual(new Error('Too Many Attempts'));
   });
 
   it('maps employee_code from leave list responses so searched requests are retained', () => {
