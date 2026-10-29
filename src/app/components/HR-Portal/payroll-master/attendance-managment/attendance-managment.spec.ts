@@ -44,4 +44,23 @@ describe('indexLeaveDatesByType', () => {
     expect([...result.get('employee-4')?.paidDates ?? []]).toEqual([]);
     expect([...result.get('employee-4')?.unpaidDates ?? []]).toEqual(['2026-10-10']);
   });
+
+  it('does not match another employee leave outside the attendance range', () => {
+    const result = indexLeaveDatesByType(
+      [{ employeeKey: 'employee-293', employeeCode: 'Emp-00000293', absentDates: ['2026-10-10'] }],
+      [
+        {
+          EmployeeId: 'Emp-00000115',
+          FromDate: '2026-09-13T00:00:00.000000Z',
+          ToDate: '2026-09-16T00:00:00.000000Z',
+          LeaveType: 'Annual',
+        },
+      ],
+      '2026-10-01',
+      '2026-10-29',
+    );
+
+    expect([...result.get('employee-293')?.paidDates ?? []]).toEqual([]);
+    expect([...result.get('employee-293')?.unpaidDates ?? []]).toEqual([]);
+  });
 });

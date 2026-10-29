@@ -453,15 +453,27 @@
                             }
                             @case ('readonly') {
                               @if (isRowLoaded(row.apiId)) {
-                                <div class="comp-input-wrap comp-input-wrap--readonly">
-                                  <input
-                                    type="text"
-                                    class="comp-input comp-input--readonly"
-                                    [value]="formatColumnDisplay(row, col)"
-                                    readonly
-                                    [attr.title]="readonlyReason(row, col)"
-                                  />
-                                </div>
+                                @if (isLeaveDaysColumn(col.key) && loadingLeaveDays()) {
+                                  <span
+                                    class="comp-skeleton comp-skeleton--input"
+                                    role="status"
+                                    [attr.aria-label]="'Loading ' + col.label + ' leave days'"
+                                  ></span>
+                                } @else if (isLeaveDaysColumn(col.key) && leaveDaysLoadFailed()) {
+                                  <span class="comp-input comp-input--readonly" title="Leave day data could not be loaded">
+                                    Unavailable
+                                  </span>
+                                } @else {
+                                  <div class="comp-input-wrap comp-input-wrap--readonly">
+                                    <input
+                                      type="text"
+                                      class="comp-input comp-input--readonly"
+                                      [value]="formatColumnDisplay(row, col)"
+                                      readonly
+                                      [attr.title]="readonlyReason(row, col)"
+                                    />
+                                  </div>
+                                }
                               } @else {
                                 <span class="comp-skeleton comp-skeleton--input" aria-hidden="true"></span>
                               }
@@ -540,7 +552,11 @@
                   <tr class="comp-total-row">
                     @for (col of payrollColumns; track col.key) {
                       <td class="comp-total-value" [class]="columnSectionClass(col)">
-                        @if (getGroupTotal(col) !== null) {
+                        @if (isLeaveDaysColumn(col.key) && loadingLeaveDays()) {
+                          <span class="comp-skeleton comp-skeleton--line comp-skeleton--line-sm" aria-label="Loading leave day total"></span>
+                        } @else if (isLeaveDaysColumn(col.key) && leaveDaysLoadFailed()) {
+                          Unavailable
+                        } @else if (getGroupTotal(col) !== null) {
                           {{ formatGroupTotal(col) }}
                         }
                       </td>

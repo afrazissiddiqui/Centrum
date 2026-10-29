@@ -279,7 +279,7 @@ describe('AttendanceManagementService calculated working hours', () => {
       toDate: '2026-10-30',
     }).subscribe(() => (loaded = true));
 
-    const request = httpMock.expectOne((req) => req.url.endsWith('/rawpunch'));
+    const request = httpMock.expectOne((req) => req.urlWithParams.includes('/rawpunch?'));
     expect(request.request.params.get('from_date')).toBe('2026-09-01');
     expect(request.request.params.get('to_date')).toBe('2026-10-30');
     expect(request.request.params.get('type')).toBe('calculated');
@@ -372,6 +372,55 @@ describe('AttendanceManagementService calculated working hours', () => {
       punchIn: '2026-09-10T18:57:44.000Z',
       punchOut: '',
       status: 'Present',
+    });
+  });
+
+  it('prefers the profile User ID over another employee code and displays EmployeeCode instead of apiId', () => {
+    employeeRecords = [{
+      EmployeeCode: 'Emp-00000115',
+      EmployeeName: 'Different Employee',
+      apiId: '401',
+      Department: '',
+      EmployeeNature: '',
+      Designation: '',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: 'Active',
+      userId: '401',
+    }, {
+      EmployeeCode: 'Emp-00003300',
+      EmployeeName: 'Sayed Awais Bilal Bukhari',
+      apiId: '293',
+      Department: '',
+      EmployeeNature: '',
+      Designation: '',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: 'Active',
+      userId: '115',
+    }];
+
+    service.loadSession({
+      mode: 'dateRange',
+      userId: 'Emp-00000115',
+      fromDate: '2026-09-01',
+      toDate: '2026-09-01',
+    }).subscribe();
+
+    const request = httpMock.expectOne((req) => req.urlWithParams.includes('/rawpunch?'));
+    const requestParams = new URL(request.request.urlWithParams).searchParams;
+    expect(requestParams.get('card_no')).toBe('00000115');
+    request.flush(JSON.stringify({ data: [] }));
+
+    expect(service.slots()).toHaveLength(1);
+    expect(service.slots()[0]).toMatchObject({
+      displayId: 'Emp-00003300',
+      employeeName: 'Sayed Awais Bilal Bukhari',
+      status: 'Absent',
     });
   });
 

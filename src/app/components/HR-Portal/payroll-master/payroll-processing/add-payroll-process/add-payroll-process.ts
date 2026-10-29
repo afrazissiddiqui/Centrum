@@ -13,24 +13,28 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, forkJoin } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import {
   ApplicationFormRecord,
   ApplicationFormService,
 } from '../../../../../services/application-form.service';
+import { AttendanceManagementService } from '../../../../../services/attendance-management.service';
 import { AlertService } from '../../../../../services/alert.service';
 import { AuthService } from '../../../../../services/auth.service';
 import {
   LoanAdvanceRecord,
   LoanAdvanceService,
 } from '../../../../../services/loan-advance.service';
+import { LeaveApplicationService } from '../../../../../services/leave-application.service';
 import { OvertimeListRecord, OvertimeListService } from '../../../../../services/overtime-list.service';
 import {
   PayrollProcessingService,
   PayrollProcessingSubmitPayload,
 } from '../../../../../services/payroll-processing.service';
+import { canonicalAttendanceKey } from '../../../../../services/attendance-management.service';
 import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
+import { countPayrollLeaveDays, PayrollLeaveDayCounts } from '../payroll-leave.util';
 import {
   PayrollSetupService,
   computeBasicSalary,
@@ -114,6 +118,8 @@ export interface PayrollProcessRow {
   loanAdjustment: number;
   loanAdvForm: number;
   lateAttendDeduction: number;
+  paidLeaveDays: number;
+  unpaidLeaveDays: number;
   costToCompany: number;
   taxDeduction: number;
   approved: boolean;
@@ -165,6 +171,8 @@ export class AddPayrollProcessComponent implements OnInit {
   private readonly alertService = inject(AlertService);
   private readonly authService = inject(AuthService);
   private readonly loanAdvanceService = inject(LoanAdvanceService);
+  private readonly leaveApplicationService = inject(LeaveApplicationService);
+  private readonly attendanceManagementService = inject(AttendanceManagementService);
   private readonly overtimeListService = inject(OvertimeListService);
   private readonly payrollSetupService = inject(PayrollSetupService);
   private readonly payrollProcessingService = inject(PayrollProcessingService);
@@ -178,6 +186,8 @@ export class AddPayrollProcessComponent implements OnInit {
   readonly rowCache = signal<Map<string, PayrollProcessRow>>(new Map());
   readonly loading = signal(true);
   readonly loadingPageDetails = signal(false);
+  readonly loadingLeaveDays = signal(false);
+  readonly leaveDaysLoadFailed = signal(false);
   readonly saving = signal(false);
   readonly currentPage = signal(1);
   readonly pageSize = signal(10);
@@ -217,7 +227,9 @@ export class AddPayrollProcessComponent implements OnInit {
   private readonly scrollPane = viewChild<ElementRef<HTMLElement>>('scrollPane');
   private syncingScroll = false;
   private pageDetailsSub?: Subscription;
+  private leaveDaysSub?: Subscription;
   private pageDetailsGeneration = 0;
+  private leaveDaysByEmployee = new Map<string, PayrollLeaveDayCounts>();
   private readonly lastMonthGrossSalaryCache = new Map<string, number>();
   private readonly approvalOverrides = signal<Map<string, boolean>>(new Map());
 
@@ -259,9 +271,11 @@ export class AddPayrollProcessComponent implements OnInit {
     { key: 'eobiEmployee', label: 'EOBI (Employee)', groupId: 'eobi', type: 'readonly', minWidth: 152 },
     { key: 'arrears', label: 'Arrears', groupId: 'other', type: 'currency', minWidth: 145 },
     { key: 'gratuity', label: 'Gratuity', groupId: 'other', type: 'currency', minWidth: 145 },
+    { key: 'paidLeaveDays', label: 'Paid', groupId: 'loan', type: 'readonly', minWidth: 110 },
+    { key: 'unpaidLeaveDays', label: 'Unpaid', groupId: 'loan', type: 'readonly', minWidth: 110 },
     { key: 'loanAdjustment', label: 'Loan Deduction', groupId: 'loan', type: 'currency', minWidth: 158 },
     { key: 'loanAdvForm', label: 'Advance Deduction', groupId: 'loan', type: 'currency', minWidth: 152 },
-    { key: 'lateAttendDeduction', label: 'Late Attendence Deduction', groupId: 'loan', type: 'currency', minWidth: 182 },
+    { key: 'lateAttendDeduction', label: 'Leaves Deduction', groupId: 'loan', type: 'currency', minWidth: 182 },
     // { key: 'costToCompany', label: 'Cost to Company', groupId: 'final', type: 'currency', minWidth: 168 },
     { key: 'netPayable', label: 'Gross Payable', groupId: 'final', type: 'readonly', minWidth: 160 },
     { key: 'taxDeduction', label: 'Tax Deduction', groupId: 'final', type: 'readonly', minWidth: 160 },
@@ -360,6 +374,8 @@ export class AddPayrollProcessComponent implements OnInit {
       loanAdjustment: 0,
       loanAdvForm: 0,
       lateAttendDeduction: 0,
+      paidLeaveDays: 0,
+      unpaidLeaveDays: 0,
       costToCompany: 0,
       taxDeduction: 0,
       netPayable: 0,
@@ -397,6 +413,8 @@ export class AddPayrollProcessComponent implements OnInit {
       totals.loanAdjustment += row.loanAdjustment;
       totals.loanAdvForm += row.loanAdvForm;
       totals.lateAttendDeduction += row.lateAttendDeduction;
+      totals.paidLeaveDays += row.paidLeaveDays;
+      totals.unpaidLeaveDays += row.unpaidLeaveDays;
       totals.costToCompany += row.costToCompany;
       totals.taxDeduction += row.taxDeduction;
       totals.netPayable += this.grossPayableForRow(row);
@@ -411,6 +429,7 @@ export class AddPayrollProcessComponent implements OnInit {
 
   ngOnInit(): void {
     this.destroyRef.onDestroy(() => this.pageDetailsSub?.unsubscribe());
+    this.destroyRef.onDestroy(() => this.leaveDaysSub?.unsubscribe());
     this.loadWithholdingTaxes();
     this.loadLoanAdvances();
     this.loadOvertimeRecords();
@@ -440,11 +459,13 @@ export class AddPayrollProcessComponent implements OnInit {
   onSelectedMonthChange(value: string | number): void {
     this.selectedMonth.set(Number(value));
     this.refreshPayrollRows();
+    this.loadPayrollMonthLeaveDays();
   }
 
   onSelectedYearChange(value: string | number): void {
     this.selectedYear.set(Number(value));
     this.refreshPayrollRows();
+    this.loadPayrollMonthLeaveDays();
   }
 
   onBranchChange(value: string): void {
@@ -703,6 +724,9 @@ export class AddPayrollProcessComponent implements OnInit {
 
   formatColumnDisplay(row: PayrollProcessRow, column: PayrollColumnDef): string {
     const value = this.getColumnValue(row, column);
+    if (this.isLeaveDaysColumn(column.key)) {
+      return `${typeof value === 'number' ? value : this.parseAmount(value)} days`;
+    }
     if (column.key === 'overtimeHours' || column.key === 'allowedLiters') {
       return typeof value === 'number'
         ? value.toLocaleString('en-PK', { maximumFractionDigits: 2 })
@@ -718,6 +742,10 @@ export class AddPayrollProcessComponent implements OnInit {
       key === 'carAllowance' ||
       key === 'otherAllowances'
     );
+  }
+
+  isLeaveDaysColumn(key: string): boolean {
+    return key === 'paidLeaveDays' || key === 'unpaidLeaveDays';
   }
 
   readonlyReason(row: PayrollProcessRow, column: PayrollColumnDef): string {
@@ -763,6 +791,9 @@ export class AddPayrollProcessComponent implements OnInit {
     const total = this.getGroupTotal(column);
     if (total === null) {
       return '';
+    }
+    if (this.isLeaveDaysColumn(column.key)) {
+      return `${total} days`;
     }
     if (column.key === 'allowedLiters' || column.key === 'overtimeHours') {
       return total.toLocaleString('en-PK', { maximumFractionDigits: 2 });
@@ -837,6 +868,16 @@ export class AddPayrollProcessComponent implements OnInit {
     const totalEarnings = this.totalEarningsForRow(row);
     const grossPayable = this.grossPayableForRow(row);
     const netPayable = this.netPayableAfterTaxForRow(row);
+    const paidLeaveDays = this.leaveDaysLoadFailed()
+      ? 'Unavailable'
+      : this.loadingLeaveDays()
+        ? 'Loading...'
+        : `${row.paidLeaveDays} days`;
+    const unpaidLeaveDays = this.leaveDaysLoadFailed()
+      ? 'Unavailable'
+      : this.loadingLeaveDays()
+        ? 'Loading...'
+        : `${row.unpaidLeaveDays} days`;
     const monthLabel =
       this.monthOptions.find((option) => option.value === this.selectedMonth())?.label ??
       String(this.selectedMonth());
@@ -871,9 +912,11 @@ export class AddPayrollProcessComponent implements OnInit {
       ['EOBI Employee', this.formatMoney(row.eobiEmployee)],
       ['EOBI Employer', this.formatMoney(row.eobiEmployer)],
       ['Arrears', this.formatMoney(row.arrears)],
+      ['Paid Leave Days', paidLeaveDays],
+      ['Unpaid Leave Days', unpaidLeaveDays],
       ['Loan Deduction', this.formatMoney(row.loanAdjustment)],
       ['Advance Deduction', this.formatMoney(row.loanAdvForm)],
-      ['Late Attendance Deduction', this.formatMoney(row.lateAttendDeduction)],
+      ['Leaves Deduction', this.formatMoney(row.lateAttendDeduction)],
       ['Tax Deduction', this.formatMoney(row.taxDeduction)],
       ['Total Earnings', this.formatMoney(totalEarnings)],
       ['Gross Payable', this.formatMoney(grossPayable)],
@@ -1144,6 +1187,7 @@ export class AddPayrollProcessComponent implements OnInit {
         this.employeeSummaries.set(withApiId);
         this.currentPage.set(1);
         this.loading.set(false);
+        this.loadPayrollMonthLeaveDays();
 
         if (withApiId.length === 0) {
           this.cdr.markForCheck();
@@ -1203,6 +1247,69 @@ export class AddPayrollProcessComponent implements OnInit {
         );
       },
     });
+  }
+
+  private loadPayrollMonthLeaveDays(): void {
+    this.leaveDaysSub?.unsubscribe();
+    this.leaveDaysByEmployee = new Map();
+    this.loadingLeaveDays.set(true);
+    this.leaveDaysLoadFailed.set(false);
+
+    const employees = this.employeeSummaries();
+    if (employees.length === 0) {
+      this.loadingLeaveDays.set(false);
+      return;
+    }
+
+    const [year, month] = this.getSelectedPayrollMonth().split('-').map(Number);
+    const fromDate = `${this.getSelectedPayrollMonth()}-01`;
+    const toDate = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+
+    this.leaveDaysSub = forkJoin({
+      leaveRecords: this.leaveApplicationService.fetchLeaveApplicationsForDateRange(fromDate, toDate),
+      attendanceSlots: this.attendanceManagementService.fetchDateRangeSlots(employees, fromDate, toDate),
+    })
+      .subscribe({
+        next: ({ leaveRecords, attendanceSlots }) => {
+          const absentDatesByEmployee = new Map<string, string[]>();
+          for (const slot of attendanceSlots) {
+            if (slot.status !== 'Absent') {
+              continue;
+            }
+            const dates = absentDatesByEmployee.get(slot.employeeKey) ?? [];
+            dates.push(slot.date);
+            absentDatesByEmployee.set(slot.employeeKey, dates);
+          }
+          this.leaveDaysByEmployee = countPayrollLeaveDays(
+            leaveRecords,
+            this.getSelectedPayrollMonth(),
+            absentDatesByEmployee,
+          );
+          this.rowCache.update((cache) => {
+            const next = new Map(cache);
+            for (const [apiId, row] of next) {
+              const leaveDays = this.getLeaveDays(row.employeeCode);
+              next.set(apiId, {
+                ...row,
+                paidLeaveDays: leaveDays.paid,
+                unpaidLeaveDays: leaveDays.unpaid,
+              });
+            }
+            return next;
+          });
+          this.loadingLeaveDays.set(false);
+          this.cdr.markForCheck();
+        },
+        error: (error: unknown) => {
+          this.leaveDaysLoadFailed.set(true);
+          this.loadingLeaveDays.set(false);
+          void this.alertService.error(
+            'Leave Days Unavailable',
+            formatApiErrorMessage(error, 'Paid and unpaid leave days could not be loaded for this payroll month.'),
+          );
+          this.cdr.markForCheck();
+        },
+      });
   }
 
   private refreshPayrollRows(): void {
@@ -1320,6 +1427,8 @@ export class AddPayrollProcessComponent implements OnInit {
       loanAdjustment: 0,
       loanAdvForm: 0,
       lateAttendDeduction: 0,
+      paidLeaveDays: this.getLeaveDays(record.EmployeeCode).paid,
+      unpaidLeaveDays: this.getLeaveDays(record.EmployeeCode).unpaid,
       costToCompany: 0,
       taxDeduction: 0,
       approved: this.approvalForEmployee(this.resolveEmployeeKey(record)),
@@ -1406,6 +1515,8 @@ export class AddPayrollProcessComponent implements OnInit {
       loanAdjustment: this.resolvePayrollLoanAdjustment(employeeCode, employeeName),
       loanAdvForm: this.resolvePayrollAdvanceDeduction(employeeCode, employeeName),
       lateAttendDeduction: 0,
+      paidLeaveDays: this.getLeaveDays(employeeCode).paid,
+      unpaidLeaveDays: this.getLeaveDays(employeeCode).unpaid,
       costToCompany: 0,
       taxDeduction: 0,
       approved: this.approvalForEmployee(record.apiId ?? record.EmployeeCode),
@@ -1460,6 +1571,7 @@ export class AddPayrollProcessComponent implements OnInit {
       grossSalaryBreakdown.grossSalaryInBank,
       row.location,
     );
+    const leaveDeduction = Math.trunc(((grossSalary * 12) / 365) * row.unpaidLeaveDays);
     const costToCompany =
       grossSalary +
       fuelAllowance +
@@ -1472,7 +1584,7 @@ export class AddPayrollProcessComponent implements OnInit {
       row.arrears +
       gratuity +
       providentFund -
-      (socialSecurityPunjab + socialSecurityKpk + eobiEmployee + providentFund + row.loanAdjustment + row.loanAdvForm + row.lateAttendDeduction);
+      (socialSecurityPunjab + socialSecurityKpk + eobiEmployee + providentFund + row.loanAdjustment + row.loanAdvForm + leaveDeduction);
     const taxDeduction = computeMonthlyWithholdingTax(
       grossSalaryBreakdown.grossSalaryInBank,
       this.withholdingTaxBrackets(),
@@ -1498,6 +1610,7 @@ export class AddPayrollProcessComponent implements OnInit {
       gratuity,
       eobiEmployee,
       eobiEmployer,
+      lateAttendDeduction: leaveDeduction,
       costToCompany,
       taxDeduction,
     };
@@ -1636,6 +1749,10 @@ export class AddPayrollProcessComponent implements OnInit {
 
   private getSelectedPayrollMonth(): string {
     return `${this.selectedYear()}-${String(this.selectedMonth()).padStart(2, '0')}`;
+  }
+
+  private getLeaveDays(employeeCode: string): PayrollLeaveDayCounts {
+    return this.leaveDaysByEmployee.get(canonicalAttendanceKey(employeeCode)) ?? { paid: 0, unpaid: 0 };
   }
 
   private normalizePayrollMonth(value: string): string {

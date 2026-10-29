@@ -197,6 +197,17 @@ export class AttendanceManagementService {
     );
   }
 
+  fetchDateRangeSlots(
+    employees: ApplicationFormRecord[],
+    fromDate: string,
+    toDate: string,
+  ): Observable<AttendanceSlotRef[]> {
+    const query: AttendanceQuery = { mode: 'dateRange', fromDate, toDate };
+    return this.fetchPunches(query, employees).pipe(
+      map((punches) => this.createSession(punches, employees, query).slots),
+    );
+  }
+
   fetchEmployeeRosterAttendance(
     employee: ApplicationFormRecord,
     fromDate: string,
@@ -861,16 +872,22 @@ function findEmployeeByAttendanceUserId(
     return undefined;
   }
 
+  const loginUserMatch = employees.find((record) =>
+    [record.userId, record.detail?.loginDetails.userId].some(
+      (candidate) =>
+        !!candidate &&
+        canonicalAttendanceKey(extractAttendanceUserId(candidate)) === requestedUserKey,
+    ),
+  );
+  if (loginUserMatch) {
+    return loginUserMatch;
+  }
+
   return employees.find((record) =>
-    [
-      resolveAttendanceUserId(record),
-      record.userId,
-      record.EmployeeCode,
-      record.detail?.loginDetails.userId,
-      record.detail?.loginDetails.employeeCode,
-    ].some((candidate) =>
-      !!candidate &&
-      canonicalAttendanceKey(extractAttendanceUserId(candidate)) === requestedUserKey,
+    [record.EmployeeCode, record.detail?.loginDetails.employeeCode].some(
+      (candidate) =>
+        !!candidate &&
+        canonicalAttendanceKey(extractAttendanceUserId(candidate)) === requestedUserKey,
     ),
   );
 }
@@ -1060,7 +1077,7 @@ function buildEmployeeAttendanceIndex(employees: ApplicationFormRecord[]): Emplo
     }
 
     const employeeName = employee.EmployeeName?.trim() || '';
-    registerEmployeeAliases(index, canonical, employee.apiId?.trim() || employeeCode || cardNo || rawUserId, employeeName, [
+    registerEmployeeAliases(index, canonical, employeeCode || cardNo || rawUserId, employeeName, [
       employee.ExtEmpNo,
       employee.detail?.loginDetails.legacyCode,
     ]);
@@ -1077,7 +1094,7 @@ function buildEmployeeAttendanceIndex(employees: ApplicationFormRecord[]): Emplo
     const loginCode = employee.detail?.loginDetails.employeeCode?.trim() || '';
     const employeeName = employee.EmployeeName?.trim() || '';
 
-    registerEmployeeAliases(index, canonical, employee.apiId?.trim() || employee.EmployeeCode?.trim() || cardNo || rawUserId, employeeName, [
+    registerEmployeeAliases(index, canonical, employee.EmployeeCode?.trim() || cardNo || rawUserId, employeeName, [
       rawUserId,
       cardNo,
       employee.detail?.loginDetails.legacyCode,
@@ -1086,7 +1103,6 @@ function buildEmployeeAttendanceIndex(employees: ApplicationFormRecord[]): Emplo
       employee.detail?.loginDetails.userId,
       employee.EmployeeCode,
       loginCode,
-      employee.apiId,
     ]);
   }
 

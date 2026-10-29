@@ -944,7 +944,12 @@ export class AttendanceManagmentComponent implements OnInit {
                         'Unannounced Leave',
                       ),
                     ),
-                    map((unannouncedLeaveRecords) => [...allLeaveRecords, ...unannouncedLeaveRecords]),
+                    map((unannouncedLeaveRecords) => [
+                      ...allLeaveRecords,
+                      ...unannouncedLeaveRecords.filter(
+                        (record) => record.LeaveType.trim().toLowerCase() === 'unannounced leave',
+                      ),
+                    ]),
                   ),
                 ),
                 tap((records) => {
