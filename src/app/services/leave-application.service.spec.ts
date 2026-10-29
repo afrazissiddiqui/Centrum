@@ -181,6 +181,27 @@ describe('LeaveApplicationService', () => {
     expect(requestError).toEqual(new Error('Too Many Attempts'));
   });
 
+  it('supports filtering employee leave requests by leave type', () => {
+    let records: LeaveApplicationRecord[] | undefined;
+    service
+      .fetchLeaveApplicationsForEmployee('Emp-00000060', '2026-10-01', '2026-10-29', 'Unannounced Leave')
+      .subscribe((result) => {
+        records = result;
+      });
+
+    const request = httpMock.expectOne((req) =>
+      req.url.endsWith('/leave-application-list') &&
+      req.params.get('search') === 'Emp-00000060' &&
+      req.params.get('from_date') === '2026-10-01' &&
+      req.params.get('to_date') === '2026-10-29' &&
+      req.params.get('leave_type') === 'Unannounced Leave',
+    );
+    expect(request.request.method).toBe('GET');
+    request.flush({ status: true, data: [] });
+
+    expect(records).toEqual([]);
+  });
+
   it('maps employee_code from leave list responses so searched requests are retained', () => {
     let records: LeaveApplicationRecord[] | undefined;
     service.fetchLeaveApplicationsForEmployee('Emp-00000011', '2026-10-01', '2026-10-30').subscribe((result) => {

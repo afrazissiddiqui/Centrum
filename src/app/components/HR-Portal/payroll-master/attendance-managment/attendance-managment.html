@@ -366,9 +366,9 @@
                   <span [attr.title]="row.employeeName || null">{{ row.employeeName || '—' }}</span>
                 </td>
                 <ng-container *ngFor="let date of dateRangeDates">
-                  <ng-container *ngIf="isDatePaidLeave(row.employeeKey, date); else attendanceDatePunches">
+                  <ng-container *ngIf="getDateRangeLeaveStatus(row.employeeKey, date) as leaveStatus; else attendanceDatePunches">
                     <td class="attendance-col--time" colspan="3">
-                      <span class="attendance-status attendance-status--leave">Paid Leave</span>
+                      <span class="attendance-status" [ngClass]="getStatusClass(leaveStatus)">{{ leaveStatus }}</span>
                     </td>
                   </ng-container>
                   <ng-template #attendanceDatePunches>
@@ -534,7 +534,11 @@
                 </td>
                 <td>{{ getDateRangeDetailRecord(date)?.WorkingHours || (getDateRangeDetailRecord(date) ? formatWorkingDuration(getDateRangeDetailRecord(date)?.WorkingMinutes ?? 0) : '—') }}</td>
                 <td>
-                  <span class="attendance-status" [ngClass]="getStatusClass(getDateRangeDetailStatus(date))">
+                  <span
+                    class="attendance-status"
+                    [ngClass]="getStatusClass(getDateRangeDetailStatus(date))"
+                    [class.attendance-status--unpaid-leave]="getDateRangeDetailStatus(date) === 'Unpaid Leave'"
+                  >
                     {{ getDateRangeDetailStatus(date) }}
                   </span>
                 </td>

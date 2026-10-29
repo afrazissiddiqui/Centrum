@@ -15,6 +15,7 @@ import {
   catchError,
   concatMap,
   from,
+  map,
   of,
   switchMap,
   tap,
@@ -98,18 +99,23 @@ export function calculateLeaveOverlapDays(
   return Math.floor((overlapEnd.getTime() - overlapStart.getTime()) / 86400000) + 1;
 }
 
-export function indexPaidLeaveDates(
+export interface MatchedLeaveDates {
+  paidDates: Set<string>;
+  unpaidDates: Set<string>;
+}
+
+export function indexLeaveDatesByType(
   employees: Array<Pick<DateRangeAttendanceRow, 'employeeKey' | 'employeeCode'> & { absentDates: string[] }>,
-  records: Array<Pick<LeaveApplicationRecord, 'EmployeeId' | 'FromDate' | 'ToDate'>>,
+  records: Array<Pick<LeaveApplicationRecord, 'EmployeeId' | 'FromDate' | 'ToDate' | 'LeaveType'>>,
   rangeFromDate: string,
   rangeToDate: string,
-): Map<string, Set<string>> {
+): Map<string, MatchedLeaveDates> {
   const employeeByCode = new Map(
     employees.map((employee) => [canonicalAttendanceKey(employee.employeeCode), employee]),
   );
   const rangeStart = parseAttendanceDate(rangeFromDate);
   const rangeEnd = parseAttendanceDate(rangeToDate);
-  const intervalsByEmployee = new Map<string, Array<[number, number]>>();
+  const intervalsByEmployeeAndType = new Map<string, Array<[number, number]>>();
 
   if (!rangeStart || !rangeEnd) {
     return new Map();
@@ -131,55 +137,50 @@ export function indexPaidLeaveDates(
       continue;
     }
 
-    const intervals = intervalsByEmployee.get(employee.employeeKey) ?? [];
+    const leaveType = record.LeaveType.trim().toLowerCase() === 'unannounced leave' ? 'unpaid' : 'paid';
+    const groupKey = `${employee.employeeKey}|${leaveType}`;
+    const intervals = intervalsByEmployeeAndType.get(groupKey) ?? [];
     intervals.push([startDay, endDay]);
-    intervalsByEmployee.set(employee.employeeKey, intervals);
+    intervalsByEmployeeAndType.set(groupKey, intervals);
   }
 
-  const paidLeaveDatesByEmployee = new Map<string, Set<string>>();
+  const leaveDatesByEmployee = new Map<string, MatchedLeaveDates>();
   const dayMilliseconds = 86400000;
   for (const employee of employees) {
-    const intervals = intervalsByEmployee.get(employee.employeeKey);
-    if (!intervals?.length || !employee.absentDates.length) {
-      paidLeaveDatesByEmployee.set(employee.employeeKey, new Set());
-      continue;
-    }
-
-    intervals.sort(([startA], [startB]) => startA - startB);
-    const mergedIntervals: Array<[number, number]> = [];
-    let [currentStart, currentEnd] = intervals[0];
-    for (let index = 1; index < intervals.length; index += 1) {
-      const [start, end] = intervals[index];
-      if (start <= currentEnd + 1) {
-        currentEnd = Math.max(currentEnd, end);
-        continue;
-      }
-      mergedIntervals.push([currentStart, currentEnd]);
-      currentStart = start;
-      currentEnd = end;
-    }
-    mergedIntervals.push([currentStart, currentEnd]);
-
-    const paidDates = new Set<string>();
-    let intervalIndex = 0;
+    const matchedDates: MatchedLeaveDates = { paidDates: new Set(), unpaidDates: new Set() };
     const absentDays = employee.absentDates
       .map((date) => ({ date, day: parseAttendanceDate(date)?.getTime() ?? Number.NaN }))
       .filter((entry) => Number.isFinite(entry.day))
       .sort((left, right) => left.day - right.day);
-    for (const absent of absentDays) {
-      const day = absent.day / dayMilliseconds;
-      while (intervalIndex < mergedIntervals.length && mergedIntervals[intervalIndex][1] < day) {
-        intervalIndex += 1;
+
+    for (const leaveType of ['paid', 'unpaid'] as const) {
+      const intervals = intervalsByEmployeeAndType.get(`${employee.employeeKey}|${leaveType}`);
+      if (!intervals?.length) {
+        continue;
       }
-      const interval = mergedIntervals[intervalIndex];
-      if (interval && interval[0] <= day && day <= interval[1]) {
-        paidDates.add(absent.date);
+
+      intervals.sort(([startA], [startB]) => startA - startB);
+      let intervalIndex = 0;
+      const matchedDatesForType = leaveType === 'paid' ? matchedDates.paidDates : matchedDates.unpaidDates;
+      for (const absent of absentDays) {
+        const day = absent.day / dayMilliseconds;
+        while (intervalIndex < intervals.length && intervals[intervalIndex][1] < day) {
+          intervalIndex += 1;
+        }
+        const interval = intervals[intervalIndex];
+        if (interval && interval[0] <= day && day <= interval[1]) {
+          matchedDatesForType.add(absent.date);
+        }
       }
     }
-    paidLeaveDatesByEmployee.set(employee.employeeKey, paidDates);
+
+    for (const date of matchedDates.unpaidDates) {
+      matchedDates.paidDates.delete(date);
+    }
+    leaveDatesByEmployee.set(employee.employeeKey, matchedDates);
   }
 
-  return paidLeaveDatesByEmployee;
+  return leaveDatesByEmployee;
 }
 
 function parseAttendanceDate(value: string | null | undefined): Date | null {
@@ -265,6 +266,7 @@ export class AttendanceManagmentComponent implements OnInit {
   private readonly dateRangePaidLeaveMap = new Map<string, number>();
   private readonly dateRangeUnpaidLeaveMap = new Map<string, number>();
   private readonly dateRangePaidLeaveDates = new Map<string, Set<string>>();
+  private readonly dateRangeUnpaidLeaveDates = new Map<string, Set<string>>();
   private readonly failedLeaveEmployeeKeys = new Set<string>();
   private attendanceSearchTimeout: ReturnType<typeof setTimeout> | null = null;
   private attendanceSearchUserId = '';
@@ -676,6 +678,9 @@ export class AttendanceManagmentComponent implements OnInit {
     if (normalized === 'paid leave') {
       return 'attendance-status--leave';
     }
+    if (normalized === 'unpaid leave') {
+      return 'attendance-status--unpaid-leave';
+    }
     return 'attendance-status--default';
   }
 
@@ -716,8 +721,8 @@ export class AttendanceManagmentComponent implements OnInit {
 
   getDateRangeDetailStatus(date: string): string {
     const record = this.getDateRangeDetailRecord(date);
-    return record?.AttendanceStatus === 'Absent' && this.isDatePaidLeave(this.selectedDateRangeEmployeeKey, date)
-      ? 'Paid Leave'
+    return record?.AttendanceStatus === 'Absent'
+      ? this.getDateRangeLeaveStatus(this.selectedDateRangeEmployeeKey, date) ?? record.AttendanceStatus
       : record?.AttendanceStatus ?? '—';
   }
 
@@ -741,6 +746,13 @@ export class AttendanceManagmentComponent implements OnInit {
     return this.dateRangePaidLeaveDates.get(employeeKey)?.has(date) ?? false;
   }
 
+  getDateRangeLeaveStatus(employeeKey: string, date: string): 'Paid Leave' | 'Unpaid Leave' | null {
+    if (this.dateRangeUnpaidLeaveDates.get(employeeKey)?.has(date)) {
+      return 'Unpaid Leave';
+    }
+    return this.isDatePaidLeave(employeeKey, date) ? 'Paid Leave' : null;
+  }
+
   closeViewDialog(): void {
     this.showViewDialog.set(false);
     this.selectedRecord.set(null);
@@ -757,6 +769,7 @@ export class AttendanceManagmentComponent implements OnInit {
     this.dateRangePaidLeaveMap.clear();
     this.dateRangeUnpaidLeaveMap.clear();
     this.dateRangePaidLeaveDates.clear();
+    this.dateRangeUnpaidLeaveDates.clear();
     this.failedLeaveEmployeeKeys.clear();
     if (this.attendanceSearchTimeout) {
       clearTimeout(this.attendanceSearchTimeout);
@@ -789,6 +802,7 @@ export class AttendanceManagmentComponent implements OnInit {
         this.dateRangePaidLeaveMap.clear();
         this.dateRangeUnpaidLeaveMap.clear();
         this.dateRangePaidLeaveDates.clear();
+        this.dateRangeUnpaidLeaveDates.clear();
         this.leaveSummaryRequested = false;
         this.failedLeaveEmployeeKeys.clear();
         this.pageRecords.set([]);
@@ -813,6 +827,7 @@ export class AttendanceManagmentComponent implements OnInit {
     this.dateRangePaidLeaveMap.clear();
     this.dateRangeUnpaidLeaveMap.clear();
     this.dateRangePaidLeaveDates.clear();
+    this.dateRangeUnpaidLeaveDates.clear();
     this.leaveSummaryRequested = false;
     this.failedLeaveEmployeeKeys.clear();
     this.attendanceService.clearSession();
@@ -896,6 +911,7 @@ export class AttendanceManagmentComponent implements OnInit {
         this.dateRangePaidLeaveMap.set(row.employeeKey, 0);
         this.dateRangeUnpaidLeaveMap.set(row.employeeKey, 0);
         this.dateRangePaidLeaveDates.set(row.employeeKey, new Set());
+        this.dateRangeUnpaidLeaveDates.set(row.employeeKey, new Set());
       }
     }
 
@@ -918,17 +934,31 @@ export class AttendanceManagmentComponent implements OnInit {
             this.leaveApplicationService
               .fetchLeaveApplicationsForEmployee(row.employeeCode, this.fromDate, this.toDate)
               .pipe(
+                concatMap((allLeaveRecords) =>
+                  timer(1500).pipe(
+                    switchMap(() =>
+                      this.leaveApplicationService.fetchLeaveApplicationsForEmployee(
+                        row.employeeCode,
+                        this.fromDate,
+                        this.toDate,
+                        'Unannounced Leave',
+                      ),
+                    ),
+                    map((unannouncedLeaveRecords) => [...allLeaveRecords, ...unannouncedLeaveRecords]),
+                  ),
+                ),
                 tap((records) => {
-                  const paidLeaveDates =
-                    indexPaidLeaveDates(
+                  const leaveDates =
+                    indexLeaveDatesByType(
                       [{ employeeKey: row.employeeKey, employeeCode: row.employeeCode, absentDates }],
                       records,
                       this.fromDate,
                       this.toDate,
-                    ).get(row.employeeKey) ?? new Set<string>();
-                  this.dateRangePaidLeaveMap.set(row.employeeKey, paidLeaveDates.size);
-                  this.dateRangeUnpaidLeaveMap.set(row.employeeKey, row.absentDays - paidLeaveDates.size);
-                  this.dateRangePaidLeaveDates.set(row.employeeKey, paidLeaveDates);
+                    ).get(row.employeeKey) ?? { paidDates: new Set<string>(), unpaidDates: new Set<string>() };
+                  this.dateRangePaidLeaveMap.set(row.employeeKey, leaveDates.paidDates.size);
+                  this.dateRangeUnpaidLeaveMap.set(row.employeeKey, leaveDates.unpaidDates.size);
+                  this.dateRangePaidLeaveDates.set(row.employeeKey, leaveDates.paidDates);
+                  this.dateRangeUnpaidLeaveDates.set(row.employeeKey, leaveDates.unpaidDates);
                 }),
                 catchError((error: unknown) => {
                   if (isLeaveRateLimitError(error)) {

@@ -1005,6 +1005,12 @@
   border: 1px solid #84caff;
 }
 
+.attendance-status--unpaid-leave {
+  color: #b54708;
+  background: #fffaeb;
+  border: 1px solid #fec84b;
+}
+
 .attendance-status--holiday,
 .attendance-status--weekend {
   color: #475467;

@@ -1,6 +1,6 @@
 import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
-import { attendanceSearchUserId, calculateLeaveOverlapDays, indexPaidLeaveDates } from './attendance-managment';
+import { attendanceSearchUserId, calculateLeaveOverlapDays, indexLeaveDatesByType } from './attendance-managment';
 
 describe('attendanceSearchUserId', () => {
   it('uses exact numeric employee searches to scope date-range requests', () => {
@@ -22,23 +22,26 @@ describe('calculateLeaveOverlapDays', () => {
   });
 });
 
-describe('indexPaidLeaveDates', () => {
-  it('marks only absent dates covered by a leave request and merges overlapping intervals', () => {
-    const result = indexPaidLeaveDates(
+describe('indexLeaveDatesByType', () => {
+  it('marks unannounced leave as unpaid and other requested leave as paid on absent days only', () => {
+    const result = indexLeaveDatesByType(
       [
         { employeeKey: 'employee-3', employeeCode: 'Emp-00000003', absentDates: ['2026-10-01', '2026-10-04', '2026-10-07'] },
         { employeeKey: 'employee-4', employeeCode: 'Emp-00000004', absentDates: ['2026-10-10', '2026-10-13'] },
       ],
       [
-        { EmployeeId: '3', FromDate: '2026-10-01', ToDate: '2026-10-03' },
-        { EmployeeId: 'Emp-00000003', FromDate: '2026-10-03', ToDate: '2026-10-05' },
-        { EmployeeId: 'Emp-00000004', FromDate: '2026-10-10', ToDate: '2026-10-12' },
+        { EmployeeId: '3', FromDate: '2026-10-01', ToDate: '2026-10-03', LeaveType: 'Annual' },
+        { EmployeeId: 'Emp-00000003', FromDate: '2026-10-03', ToDate: '2026-10-05', LeaveType: 'Annual' },
+        { EmployeeId: 'Emp-00000003', FromDate: '2026-10-07', ToDate: '2026-10-07', LeaveType: 'Unannounced Leave' },
+        { EmployeeId: 'Emp-00000004', FromDate: '2026-10-10', ToDate: '2026-10-12', LeaveType: 'Unannounced Leave' },
       ],
       '2026-10-01',
       '2026-10-31',
     );
 
-    expect([...result.get('employee-3') ?? []]).toEqual(['2026-10-01', '2026-10-04']);
-    expect([...result.get('employee-4') ?? []]).toEqual(['2026-10-10']);
+    expect([...result.get('employee-3')?.paidDates ?? []]).toEqual(['2026-10-01', '2026-10-04']);
+    expect([...result.get('employee-3')?.unpaidDates ?? []]).toEqual(['2026-10-07']);
+    expect([...result.get('employee-4')?.paidDates ?? []]).toEqual([]);
+    expect([...result.get('employee-4')?.unpaidDates ?? []]).toEqual(['2026-10-10']);
   });
 });

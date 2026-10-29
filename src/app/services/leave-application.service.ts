@@ -125,15 +125,19 @@ export class LeaveApplicationService {
     employeeCode: string,
     fromDate: string,
     toDate: string,
+    leaveType?: string,
   ): Observable<LeaveApplicationRecord[]> {
     if (!employeeCode.trim()) {
       return of([]);
     }
 
-    const params = new HttpParams()
+    let params = new HttpParams()
       .set('search', employeeCode)
       .set('from_date', fromDate)
       .set('to_date', toDate);
+    if (leaveType?.trim()) {
+      params = params.set('leave_type', leaveType.trim());
+    }
 
     return this.http.get<unknown>(LEAVE_APPLICATION_LIST_URL, { params }).pipe(
       map((response) => {
