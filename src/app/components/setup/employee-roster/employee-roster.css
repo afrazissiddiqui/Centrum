@@ -137,6 +137,8 @@ h1 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 22px;
 .unpaid-leave-report-item ul { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0 0; padding: 0; list-style: none; }
 .unpaid-leave-report-item li { padding: 4px 7px; border-radius: 4px; background: #ffe1e4; color: #a43e4d; font: 11px Georgia, 'Times New Roman', serif; }
 .unpaid-leave-report-dialog .shift-dialog__footer { justify-content: space-between; gap: 8px; }
+.unpaid-leave-progress { display: grid; gap: 6px; padding: 10px 12px; color: #1d3555; font: 600 12px Georgia, 'Times New Roman', serif; }
+.unpaid-leave-progress progress { display: block; width: 100%; height: 10px; accent-color: #245a93; }
 .employee-leave-summary { overflow-y: auto; padding: 18px; color: #53647d; font: 12px Georgia, 'Times New Roman', serif; }
 .employee-leave-summary > p { margin: 12px 0 0; line-height: 1.5; }
 .employee-leave-total { display: flex; align-items: baseline; gap: 8px; color: #a43e4d; }
@@ -263,4 +265,3 @@ h1 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 22px;
 .roster-page--unpaid-leave > .unpaid-leave-overview { flex: 0 0 auto; min-height: min-content; overflow: visible; }
 @media (max-width: 1000px) { .unpaid-leave-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }.unpaid-leave-filter-actions { align-self: end; }.unpaid-leave-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .unpaid-leave-overview { padding: 14px 10px 20px; }.unpaid-leave-kpis { grid-template-columns: 1fr 1fr; gap: 8px; }.unpaid-leave-kpi { min-height: 86px; padding: 10px; }.unpaid-leave-kpi div > span { font-size: 12px; }.unpaid-leave-kpi strong { font-size: 29px; }.unpaid-leave-kpi small { font-size: 10px; }.unpaid-leave-filters { grid-template-columns: 1fr; }.unpaid-leave-date-range input { min-width: 0; }.unpaid-leave-filter-actions { justify-content: flex-end; }.unpaid-leave-table-toolbar { align-items: flex-start; flex-direction: column; padding: 12px; }.unpaid-leave-table-actions { width: 100%; flex-wrap: wrap; }.unpaid-leave-table-search { flex: 1; }.unpaid-leave-table { min-width: 720px; }.unpaid-leave-pagination { grid-template-columns: 1fr auto; padding: 8px; }.unpaid-leave-pagination-controls { grid-column: 1 / -1; grid-row: 2; justify-content: center; }.unpaid-leave-page-size { grid-column: 2; grid-row: 1; } }
-

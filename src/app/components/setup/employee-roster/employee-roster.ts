@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { catchError, concatMap, finalize, forkJoin, from, map, Observable, of, Subscription, switchMap, toArray } from 'rxjs';
+import { catchError, concatMap, finalize, forkJoin, from, map, MonoTypeOperatorFunction, Observable, of, retry, Subscription, switchMap, tap, throwError, timer, toArray } from 'rxjs';
 import { ApplicationFormDetail, ApplicationFormRecord, ApplicationFormService, canonicalizeEmployeeCodeValue, EmployeeProfileAddPayload, EmployeeRosterAddPayload, EmployeeRosterListRecord } from '../../../services/application-form.service';
 import { AlertService } from '../../../services/alert.service';
 import {
@@ -87,6 +87,49 @@ interface UnannouncedLeaveProfileSyncResult {
 interface EmployeeRosterProfileFlagUpdateResult {
   profileFlagUpdated: boolean;
   profileFlagError: unknown | null;
+}
+
+interface UnannouncedLeaveFormNumberSequence {
+  value: number;
+}
+
+function isRateLimitError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return /too many attempts|too many requests/i.test(String(error ?? ''));
+  }
+  const failure = error as { status?: unknown; message?: unknown; error?: unknown };
+  const responseBody =
+    failure.error && typeof failure.error === 'object'
+      ? (failure.error as Record<string, unknown>)
+      : null;
+  const message = [
+    failure.message,
+    responseBody?.['message'],
+    responseBody?.['error'],
+  ].map((value) => String(value ?? '')).join(' ');
+  return failure.status === 429 || /too many attempts|too many requests/i.test(message);
+}
+
+function isDuplicateFormNumberError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /form number.*(already been taken|already exists|duplicate)|duplicate.*form number/i.test(message);
+}
+
+function retryRateLimitedRequest<T>(): MonoTypeOperatorFunction<T> {
+  return retry({
+    count: 5,
+    delay: (error: unknown, retryCount: number) =>
+      isRateLimitError(error)
+        ? timer(Math.min(30_000, 1_000 * 2 ** (retryCount - 1)))
+        : throwError(() => error),
+  });
+}
+
+function firstAvailableHeaderValue(...values: unknown[]): string {
+  return values
+    .map((value) => String(value ?? '').trim())
+    .find((value) => value && !['—', '-', 'n/a', 'null', 'undefined'].includes(value.toLowerCase()))
+    ?? 'Not specified';
 }
 
 interface EmployeeRosterLoadIndex {
@@ -1214,6 +1257,11 @@ export class EmployeeRosterComponent implements OnInit {
   );
   readonly selectedUnpaidLeaveEmployees = signal(new Set<string>());
   readonly unpaidLeaveReportPosting = signal(false);
+  readonly unpaidLeaveReportProgress = signal({ completed: 0, total: 0 });
+  readonly unpaidLeaveReportProgressPercent = computed(() => {
+    const progress = this.unpaidLeaveReportProgress();
+    return progress.total ? Math.round((progress.completed / progress.total) * 100) : 0;
+  });
   readonly selectableUnpaidLeaveReportEntries = computed(() =>
     this.filteredUnpaidLeaveReport().filter((entry) => entry.pendingDates.length > 0),
   );
@@ -1875,42 +1923,59 @@ export class EmployeeRosterComponent implements OnInit {
       return;
     }
 
+    this.unpaidLeaveReportProgress.set({ completed: 0, total: selectedEntries.length });
+    const formNumberSequence = { value: Date.now() % 10_000 };
     this.unpaidLeaveReportPosting.set(true);
-    from(selectedEntries).pipe(
-      concatMap(({ employee, pendingDates }) => {
-        if (!employee.apiId?.trim() || !employee.detail) {
-          return of({
-            employee,
-            successfulDates: [],
-            postingError: new Error('Employee profile details are unavailable.'),
-            profileError: null,
-          });
-        }
-        return this.submitUnannouncedLeaveDates(employee, pendingDates).pipe(
-          switchMap((postResult) => {
-            const successfulDates = postResult.successfulDates;
-            const postingError = postResult.results.find((result) => result.error !== null)?.error ?? null;
-            if (!successfulDates.length) {
-              return of({ employee, successfulDates, postingError, profileError: null });
-            }
-            return this.updateProfileAfterPostedUnannouncedLeave(employee, successfulDates).pipe(
-              map((profileResult) => ({
+    this.ensureUnannouncedLeaveType().pipe(
+      switchMap((leaveType) =>
+        from(selectedEntries).pipe(
+          concatMap(({ employee, pendingDates }) => {
+            if (!employee.apiId?.trim() || !employee.detail) {
+              return of({
                 employee,
-                successfulDates,
+                successfulDates: [],
+                postingError: new Error('Employee profile details are unavailable.'),
+                profileError: null,
+              });
+            }
+            return this.submitUnannouncedLeaveDates(
+              employee,
+              pendingDates,
+              formNumberSequence,
+              leaveType,
+            ).pipe(
+              switchMap((postResult) => {
+                const successfulDates = postResult.successfulDates;
+                const postingError = postResult.results.find((result) => result.error !== null)?.error ?? null;
+                if (!successfulDates.length) {
+                  return of({ employee, successfulDates, postingError, profileError: null });
+                }
+                return this.updateProfileAfterPostedUnannouncedLeave(employee, successfulDates).pipe(
+                  map((profileResult) => ({
+                    employee,
+                    successfulDates,
+                    postingError,
+                    profileError: profileResult.profileError,
+                  })),
+                );
+              }),
+              catchError((postingError: unknown) => of({
+                employee,
+                successfulDates: [],
                 postingError,
-                profileError: profileResult.profileError,
+                profileError: null,
               })),
             );
           }),
-          catchError((postingError: unknown) => of({
-            employee,
-            successfulDates: [],
-            postingError,
-            profileError: null,
-          })),
-        );
-      }),
-      toArray(),
+          tap(() =>
+            this.unpaidLeaveReportProgress.update((progress) => ({
+              ...progress,
+              completed: progress.completed + 1,
+            })),
+          ),
+          toArray(),
+        ),
+      ),
       finalize(() => this.unpaidLeaveReportPosting.set(false)),
     ).subscribe({
       next: (results) => {
@@ -1955,6 +2020,7 @@ export class EmployeeRosterComponent implements OnInit {
 
   private ensureUnannouncedLeaveType(): Observable<string> {
     return this.leaveTypeService.fetchLeaveTypes().pipe(
+      retryRateLimitedRequest(),
       switchMap((leaveTypes) => {
         const leaveTypeExists = leaveTypes.some((leaveType) =>
           [leaveType.name, leaveType.code]
@@ -1967,7 +2033,7 @@ export class EmployeeRosterComponent implements OnInit {
               code: UNANNOUNCED_LEAVE_TYPE,
               description: UNANNOUNCED_LEAVE_DESCRIPTION,
               status: 1,
-            }).pipe(map(() => UNANNOUNCED_LEAVE_TYPE));
+            }).pipe(retryRateLimitedRequest(), map(() => UNANNOUNCED_LEAVE_TYPE));
       }),
     );
   }
@@ -1975,16 +2041,32 @@ export class EmployeeRosterComponent implements OnInit {
   private submitUnannouncedLeaveDates(
     employee: RosterEmployee,
     dates: string[],
+    formNumberSequence: UnannouncedLeaveFormNumberSequence = { value: Date.now() % 10_000 },
+    knownLeaveType?: string,
   ): Observable<UnannouncedLeavePostResult> {
     const dateRange = rosterUnannouncedLeaveDateRange(dates);
-    const suffix = Number(String(Date.now()).slice(-4));
-    return this.ensureUnannouncedLeaveType().pipe(
+    const leaveType$ = knownLeaveType ? of(knownLeaveType) : this.ensureUnannouncedLeaveType();
+    return leaveType$.pipe(
       switchMap((leaveType) => {
-        const payload = this.buildUnannouncedLeavePayload(employee, leaveType, dateRange, suffix, 0);
-        return this.leaveApplicationService.addLeaveApplication(payload).pipe(
-          map(() => ({ dateRange, error: null })),
-          catchError((error: unknown) => of({ dateRange, error })),
-          map((result) => {
+        const postWithAvailableFormNumber = (duplicateAttempts: number): Observable<unknown | null> => {
+          const sequence = formNumberSequence.value;
+          formNumberSequence.value = (sequence + 1) % 10_000;
+          const payload = this.buildUnannouncedLeavePayload(employee, leaveType, dateRange, sequence, 0);
+          return this.leaveApplicationService.addLeaveApplication(payload).pipe(
+            map(() => null),
+            retryRateLimitedRequest(),
+            catchError((error: unknown) => {
+              if (isDuplicateFormNumberError(error) && duplicateAttempts < 3) {
+                return postWithAvailableFormNumber(duplicateAttempts + 1);
+              }
+              return of(error);
+            }),
+          );
+        };
+
+        return postWithAvailableFormNumber(0).pipe(
+          map((error) => {
+            const result = { dateRange, error };
             const results = [result];
             const successfulDates = result.error === null ? dateRange : [];
             this.postedUnannouncedLeaveDateKeys.update((current) => {
@@ -2015,6 +2097,7 @@ export class EmployeeRosterComponent implements OnInit {
     const updatedEmployee = { ...employee, detail: updatedDetail };
     const profilePayload = this.employeeService.buildFlatEmployeeProfilePayload(updatedDetail);
     return this.employeeService.updateEmployeeProfile(employee.apiId!, profilePayload).pipe(
+      retryRateLimitedRequest(),
       map(() => {
         this.employeeService.upsertApplicationRecord(updatedEmployee);
         this.employees.update((employees) =>
@@ -2431,10 +2514,18 @@ export class EmployeeRosterComponent implements OnInit {
         employeeCategory: personalInfo.employmentCategory || employee.EmploymentCategory,
         employmentNature: personalInfo.employmentNature || employee.EmployeeNature,
         employmentType: employee.EmploymentType,
-        workGradeLevel: personalInfo.workGradeLevel || personalInfo.roleSalary,
+        workGradeLevel: firstAvailableHeaderValue(
+          personalInfo.workGradeLevel,
+          personalInfo.roleSalary,
+          detail.hrSettings.salaryStructure,
+        ),
         department: employee.Department || personalInfo.departmentInAhcp,
         jobTitle: personalInfo.designation || employee.Designation,
-        location: personalInfo.branchLocation || detail.requisition.location || employee.hub,
+        location: firstAvailableHeaderValue(
+          personalInfo.branchLocation,
+          detail.requisition.location,
+          employee.hub,
+        ),
       },
       leaveRequest: {
         requestDate,

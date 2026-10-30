@@ -50,8 +50,9 @@ describe('AttendanceManagementService calculated working hours', () => {
     ).subscribe((value) => (result.hours = value));
 
     const request = httpMock.expectOne((req) => req.urlWithParams.includes('card_no=00004023'));
-    expect(request.request.params.get('from_date')).toBe('2026-09-29');
-    expect(request.request.params.get('to_date')).toBe('2026-09-29');
+    const requestParams = new URL(request.request.urlWithParams).searchParams;
+    expect(requestParams.get('from_date')).toBe('2026-09-29');
+    expect(requestParams.get('to_date')).toBe('2026-09-29');
     expect(request.request.headers.has('X-API-Key')).toBe(true);
     request.flush(JSON.stringify({ data: [{ hours_worked: '6h 16m' }] }));
 
@@ -66,8 +67,9 @@ describe('AttendanceManagementService calculated working hours', () => {
     ).subscribe((value) => (dailyHours = value));
 
     const request = httpMock.expectOne((req) => req.urlWithParams.includes('card_no=00004023'));
-    expect(request.request.params.get('from_date')).toBe('2026-09-01');
-    expect(request.request.params.get('to_date')).toBe('2026-09-30');
+    const requestParams = new URL(request.request.urlWithParams).searchParams;
+    expect(requestParams.get('from_date')).toBe('2026-09-01');
+    expect(requestParams.get('to_date')).toBe('2026-09-30');
     expect(request.request.headers.has('X-API-Key')).toBe(true);
     request.flush(JSON.stringify({
       data: [
@@ -102,10 +104,12 @@ describe('AttendanceManagementService calculated working hours', () => {
       result = record;
     });
 
-    const request = httpMock.expectOne((req) => req.urlWithParams.includes('card_no=00001161'));
+    const request = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
     const requestParams = new URL(request.request.urlWithParams).searchParams;
-    expect(requestParams.get('from_date')).toBe('2026-10-16');
-    expect(requestParams.get('to_date')).toBe('2026-10-16');
+    expect(requestParams.get('date')).toBe('2026-10-16');
+    expect(requestParams.get('card_no')).toBe('00001161');
+    expect(requestParams.get('per_page')).toBe('100');
+    expect(requestParams.get('page')).toBe('1');
     request.flush(JSON.stringify({
       data: [{
         card_no: '00001161',
@@ -119,6 +123,72 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(result?.PunchIn).toBe('2026-10-16T09:00:00');
     expect(result?.PunchOut).toBe('2026-10-16T17:15:00');
     expect(result?.WorkingHours).toBe('8h 15m');
+  });
+
+  it('loads every page from the attendance list API', () => {
+    let loaded = false;
+    service.loadSession({ mode: 'date', date: '2026-10-16' }).subscribe(() => {
+      loaded = true;
+    });
+
+    const firstPage = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
+    const firstParams = new URL(firstPage.request.urlWithParams).searchParams;
+    expect(firstParams.get('date')).toBe('2026-10-16');
+    expect(firstParams.get('per_page')).toBe('100');
+    expect(firstParams.get('page')).toBe('1');
+    firstPage.flush(JSON.stringify({
+      current_page: 1,
+      last_page: 2,
+      data: [{
+        id: 'attendance-1',
+        card_no: '00000001',
+        date: '2026-10-16',
+        punch_in: '09:00:00',
+        punch_out: '17:00:00',
+      }],
+    }));
+
+    const secondPage = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
+    expect(new URL(secondPage.request.urlWithParams).searchParams.get('page')).toBe('2');
+    secondPage.flush(JSON.stringify({
+      current_page: 2,
+      last_page: 2,
+      data: [{
+        card_no: '00000002',
+        date: '2026-10-16',
+        punch_in: '08:00:00',
+        punch_out: '16:00:00',
+      }],
+    }));
+
+    expect(loaded).toBe(true);
+    expect(service.slots()).toHaveLength(2);
+    expect(service.materializeSlots([service.slots()[0]])[0].Punches[0].RecordId).toBe('attendance-1');
+  });
+
+  it('updates an attendance record using its API ID and the supplied payload', () => {
+    const payload = {
+      card_no: '00000003',
+      punch_in: '2026-10-28 09:00:00',
+      punch_out: '2026-10-28 17:30:00',
+      hours_worked: '8h 30m',
+      machine_id: '3',
+      status: '01',
+      attendance_date: '2026-10-28 17:30:00',
+    };
+    let updated = false;
+
+    service.updateAttendanceRecord('raw/id 3', payload).subscribe(() => {
+      updated = true;
+    });
+
+    const request = httpMock.expectOne(
+      'http://alhafiz.vdc.services:8084/ahcp/public/api/attendance-raw-punch-update/raw%2Fid%203',
+    );
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toEqual(payload);
+    request.flush({ message: 'updated' });
+    expect(updated).toBe(true);
   });
 
   it('indexes monthly punches by employee code and date for roster absence checks', () => {
@@ -194,7 +264,7 @@ describe('AttendanceManagementService calculated working hours', () => {
       attendance = result;
     });
 
-    const request = httpMock.expectOne((req) => req.urlWithParams.includes('/rawpunch?'));
+    const request = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
     request.flush(JSON.stringify({
       data: [{
         card_no: '00000076',
@@ -256,7 +326,7 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(attendance.has('emp-00000007|2026-06-02')).toBe(false);
   });
 
-  it('resolves the user ID to the padded legacy card number for calculated range punches', () => {
+  it('resolves the user ID to the padded legacy card number for date-range punches', () => {
     let loaded = false;
     employeeRecords = [{
       EmployeeCode: '00000007',
@@ -279,11 +349,13 @@ describe('AttendanceManagementService calculated working hours', () => {
       toDate: '2026-10-30',
     }).subscribe(() => (loaded = true));
 
-    const request = httpMock.expectOne((req) => req.urlWithParams.includes('/rawpunch?'));
-    expect(request.request.params.get('from_date')).toBe('2026-09-01');
-    expect(request.request.params.get('to_date')).toBe('2026-10-30');
-    expect(request.request.params.get('type')).toBe('calculated');
-    expect(request.request.params.get('card_no')).toBe('00001161');
+    const request = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
+    const requestParams = new URL(request.request.urlWithParams).searchParams;
+    expect(requestParams.get('from_date')).toBe('2026-09-01');
+    expect(requestParams.get('to_date')).toBe('2026-10-30');
+    expect(requestParams.get('card_no')).toBe('00001161');
+    expect(requestParams.get('per_page')).toBe('100');
+    expect(requestParams.get('page')).toBe('1');
     request.flush(JSON.stringify({
       data: [
         {
@@ -306,7 +378,7 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(record.WorkingMinutes).toBe(525);
   });
 
-  it('loads calculated date-range punches by card number when searching by employee code', () => {
+  it('loads date-range punches by card number when searching by employee code', () => {
     employeeRecords = [{
       EmployeeCode: '00000076',
       EmployeeName: 'Sakhi Marjan',
@@ -345,7 +417,7 @@ describe('AttendanceManagementService calculated working hours', () => {
       toDate: '2026-09-30',
     }).subscribe();
 
-    const request = httpMock.expectOne((req) => req.urlWithParams.includes('/rawpunch?'));
+    const request = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
     const requestParams = new URL(request.request.urlWithParams).searchParams;
     expect(requestParams.get('card_no')).toBe('00000076');
     request.flush(JSON.stringify({
@@ -411,7 +483,7 @@ describe('AttendanceManagementService calculated working hours', () => {
       toDate: '2026-09-01',
     }).subscribe();
 
-    const request = httpMock.expectOne((req) => req.urlWithParams.includes('/rawpunch?'));
+    const request = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
     const requestParams = new URL(request.request.urlWithParams).searchParams;
     expect(requestParams.get('card_no')).toBe('00000115');
     request.flush(JSON.stringify({ data: [] }));
@@ -446,8 +518,8 @@ describe('AttendanceManagementService calculated working hours', () => {
       toDate: '2026-09-30',
     }).subscribe();
 
-    const request = httpMock.expectOne((req) => req.url.endsWith('/rawpunch'));
-    expect(request.request.params.get('card_no')).toBe('00001161');
+    const request = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
+    expect(new URL(request.request.urlWithParams).searchParams.get('card_no')).toBe('00001161');
     request.flush(JSON.stringify({
       data: [
         {
@@ -468,7 +540,7 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(service.slots()[0].punchCount).toBe(4);
   });
 
-  it('fetches all employees for a calculated date range when no user ID is provided', () => {
+  it('fetches all employees for a date range when no user ID is provided', () => {
     let loaded = false;
     service.loadSession({
       mode: 'dateRange',
@@ -476,11 +548,13 @@ describe('AttendanceManagementService calculated working hours', () => {
       toDate: '2026-10-31',
     }).subscribe(() => (loaded = true));
 
-    const request = httpMock.expectOne((req) => req.url.endsWith('/rawpunch'));
-    expect(request.request.params.get('from_date')).toBe('2026-09-01');
-    expect(request.request.params.get('to_date')).toBe('2026-10-31');
-    expect(request.request.params.get('type')).toBe('calculated');
-    expect(request.request.params.has('card_no')).toBe(false);
+    const request = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
+    const requestParams = new URL(request.request.urlWithParams).searchParams;
+    expect(requestParams.get('from_date')).toBe('2026-09-01');
+    expect(requestParams.get('to_date')).toBe('2026-10-31');
+    expect(requestParams.get('per_page')).toBe('100');
+    expect(requestParams.get('page')).toBe('1');
+    expect(requestParams.has('card_no')).toBe(false);
     request.flush(JSON.stringify({
       data: [
         {
@@ -506,7 +580,7 @@ describe('AttendanceManagementService calculated working hours', () => {
 
   it('uses the calculated hours_worked value even when it differs from the punch-time difference', () => {
     service.loadSession({ mode: 'date', userId: '00000007', date: '2026-09-01' }).subscribe();
-    const request = httpMock.expectOne((req) => req.url.endsWith('/rawpunch'));
+    const request = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
     request.flush(JSON.stringify({
       data: [{
         card_no: '00001161',

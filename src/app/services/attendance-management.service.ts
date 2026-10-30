@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, catchError, last, map, of, switchMap, throwError } from 'rxjs';
-import { BIOMETRICS_API_BASE_URL, BIOMETRICS_API_KEY } from '../config/api.config';
+import { EMPTY, Observable, catchError, expand, last, map, of, reduce, switchMap, throwError } from 'rxjs';
+import { apiUrl, BIOMETRICS_API_BASE_URL, BIOMETRICS_API_KEY } from '../config/api.config';
 import { ApplicationFormRecord, ApplicationFormService } from './application-form.service';
 
 export type AttendanceQueryMode = 'today' | 'date' | 'dateRange';
@@ -16,6 +16,7 @@ export interface AttendanceQuery {
 
 export interface AttendancePunchRecord {
   No: number;
+  RecordId?: string | number;
   EmployeeId: string;
   PunchDatetime: string;
   DeviceNo: string;
@@ -39,6 +40,16 @@ export interface AttendanceDailyRecord {
   PunchCount: number;
   Punches: AttendancePunchRecord[];
   selected?: boolean;
+}
+
+export interface AttendanceRawPunchUpdatePayload {
+  card_no: string;
+  punch_in: string;
+  punch_out: string;
+  hours_worked: string;
+  machine_id: string;
+  status: string;
+  attendance_date: string;
 }
 
 /** Lightweight row used for filtering, sorting, and pagination before page materialization. */
@@ -88,6 +99,7 @@ interface BiometricsPunchApiRecord {
   UserId?: string;
   userId?: string;
   PunchDatetime?: string;
+  punch_datetime?: string;
   punchDatetime?: string;
   'Punch Datetime'?: string;
   'Device No'?: string;
@@ -96,6 +108,14 @@ interface BiometricsPunchApiRecord {
   Status?: string | null;
   status?: string | null;
 }
+
+interface AttendanceListPage {
+  page: number;
+  punches: AttendancePunchRecord[];
+  hasMore: boolean;
+}
+
+const ATTENDANCE_LIST_PAGE_SIZE = 100;
 
 @Injectable({
   providedIn: 'root',
@@ -603,84 +623,90 @@ export class AttendanceManagementService {
       );
   }
 
+  updateAttendanceRecord(
+    id: string | number,
+    payload: AttendanceRawPunchUpdatePayload,
+  ): Observable<unknown> {
+    return this.http.put(
+      `${apiUrl('attendance-raw-punch-update')}/${encodeURIComponent(String(id))}`,
+      payload,
+    );
+  }
+
   private fetchPunches(
     query: AttendanceQuery,
     employees: ApplicationFormRecord[],
   ): Observable<AttendancePunchRecord[]> {
     const normalized = this.normalizeQuery(query);
     const requestedCardNo = normalized.userId?.trim();
-    if (!requestedCardNo) {
-      return this.loadPunchUrl(this.buildQueryUrl(normalized));
-    }
+    const cardNo = requestedCardNo
+      ? resolveEmployeeLegacyCode(requestedCardNo, employees) || requestedCardNo
+      : undefined;
 
-    const legacyCode = resolveEmployeeLegacyCode(normalized.userId ?? '', employees);
-    return this.loadPunchUrl(this.buildQueryUrl(normalized, legacyCode || requestedCardNo));
+    return this.loadAttendanceListPage(normalized, cardNo, 1).pipe(
+      expand((result) =>
+        result.hasMore
+          ? this.loadAttendanceListPage(normalized, cardNo, result.page + 1)
+          : EMPTY,
+      ),
+      reduce((punches, result) => [...punches, ...result.punches], [] as AttendancePunchRecord[]),
+    );
   }
 
-  private loadPunchUrl(url: string): Observable<AttendancePunchRecord[]> {
+  private loadAttendanceListPage(
+    query: AttendanceQuery,
+    cardNo: string | undefined,
+    page: number,
+  ): Observable<AttendanceListPage> {
+    const params = new URLSearchParams({
+      per_page: String(ATTENDANCE_LIST_PAGE_SIZE),
+      page: String(page),
+    });
+    if (query.mode === 'dateRange') {
+      const { fromDate, toDate } = resolveAttendanceRequestDates(query);
+      params.set('from_date', fromDate);
+      params.set('to_date', toDate);
+    } else {
+      params.set('date', query.date ?? formatIsoDate(new Date()));
+    }
+    if (cardNo) {
+      params.set('card_no', formatAttendanceCardNo(cardNo));
+    }
 
-    const parse = (response: unknown): AttendancePunchRecord[] => {
-      if (typeof response === 'string') {
-        const trimmed = response.trim();
-        if (trimmed.startsWith('<!') || trimmed.toLowerCase().startsWith('<html')) {
-          throw new Error(
-            'Biometrics proxy is not configured. Deploy with public/web.config (IIS ARR proxy for /biometrics-api) or use ng serve with proxy.conf.json.',
-          );
-        }
+    return this.http
+      .get(`${apiUrl('attendance-raw-punch-list')}?${params.toString()}`, { responseType: 'text' })
+      .pipe(
+        map((text) => {
+          let response: unknown;
+          try {
+            response = JSON.parse(text) as unknown;
+          } catch {
+            throw new Error('Attendance API returned invalid JSON.');
+          }
 
-        try {
-          response = JSON.parse(trimmed) as unknown;
-        } catch {
-          throw new Error('Biometrics API returned invalid JSON.');
-        }
-      }
-
-      return this.extractApiItems(response).flatMap((item) => this.mapApiItem(item));
-    };
-
-    const loadUrl = (url: string) =>
-      this.http
-        .get(url, {
-          headers: new HttpHeaders({ 'X-API-Key': BIOMETRICS_API_KEY }),
-          responseType: 'text',
-        })
-        .pipe(
-        map((text) => parse(text)),
+          const items = this.extractApiItems(response);
+          const lastPage = extractApiLastPage(response);
+          return {
+            page,
+            punches: items.flatMap((item) => this.mapApiItem(item)),
+            hasMore: lastPage === null ? items.length === ATTENDANCE_LIST_PAGE_SIZE : page < lastPage,
+          };
+        }),
         catchError((error: unknown) => {
+          if (error instanceof Error && error.message === 'Attendance API returned invalid JSON.') {
+            return throwError(() => error);
+          }
+
           const status = (error as { status?: number })?.status;
-          if (status === 0) {
-            return throwError(
-              () =>
-                new Error(
-                  'Biometrics API is unreachable. Check the network connection and confirm pioneerattendance.com:3002 is available through /biometrics-api.',
-                ),
-            );
-          }
-
-          if (status === 502 || status === 504) {
-            return throwError(
-              () =>
-                new Error(
-                  `Biometrics API proxy could not reach pioneerattendance.com:3002 (HTTP ${status}). Verify that the attendance API server is running and reachable.`,
-                ),
-            );
-          }
-
           const statusText = (error as { statusText?: string })?.statusText;
           return throwError(
             () =>
               new Error(
-                `Biometrics API request failed${status ? ` (HTTP ${status})` : ''}${statusText ? `: ${statusText}` : '.'}`,
+                `Attendance API request failed${status ? ` (HTTP ${status})` : ''}${statusText ? `: ${statusText}` : '.'}`,
               ),
           );
         }),
       );
-
-    return loadUrl(url);
-  }
-
-  private buildFallbackPunchUrls(query: AttendanceQuery): string[] {
-    return [];
   }
 
   private normalizeQuery(query: AttendanceQuery): AttendanceQuery {
@@ -711,6 +737,7 @@ export class AttendanceManagementService {
     );
     const punchDatetime = String(
       item.PunchDatetime ??
+        item.punch_datetime ??
         item.punchDatetime ??
         item['Punch Datetime'] ??
         record['PunchDateTime'] ??
@@ -734,6 +761,11 @@ export class AttendanceManagementService {
       canonicalAttendanceKey(rawEmployeeId) || extractAttendanceUserId(rawEmployeeId) || rawEmployeeId;
 
     const no = Number(item.No ?? item.id ?? record['no'] ?? 0);
+    const recordIdValue = item.id ?? item.No ?? record['no'];
+    const recordId =
+      typeof recordIdValue === 'string' || typeof recordIdValue === 'number'
+        ? recordIdValue
+        : undefined;
     const deviceNo = String(
       item['Device No'] ?? item.DeviceNo ?? item.deviceNo ?? item.machine_id ?? record['DeviceNo'] ?? '',
       ).trim();
@@ -748,6 +780,7 @@ export class AttendanceManagementService {
         ...(punchOut ? [{ No: no + 1, PunchDatetime: joinPunchDateAndTime(dateValue, punchOut), PunchType: 'out' as const }] : []),
       ].map((punch) => ({
         ...punch,
+        ...(recordId !== undefined && recordId !== null ? { RecordId: recordId } : {}),
         EmployeeId: normalizedEmployeeId,
         DeviceNo: deviceNo,
         Status: status,
@@ -758,6 +791,7 @@ export class AttendanceManagementService {
 
     return [{
       No: no,
+      ...(recordId !== undefined && recordId !== null ? { RecordId: recordId } : {}),
       EmployeeId: normalizedEmployeeId,
       PunchDatetime: punchDatetime,
       DeviceNo: deviceNo,
@@ -962,6 +996,28 @@ function biometricsPathEmployeeId(userId: string): string {
 function formatAttendanceCardNo(value: string): string {
   const digits = extractAttendanceUserId(value);
   return /^\d+$/.test(digits) ? digits.padStart(8, '0') : value.trim();
+}
+
+function extractApiLastPage(value: unknown): number | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const pageValue = record['last_page'] ?? record['lastPage'];
+  const lastPage = Number(pageValue);
+  if (Number.isInteger(lastPage) && lastPage > 0) {
+    return lastPage;
+  }
+
+  for (const nested of [record['meta'], record['pagination'], record['data']]) {
+    const nestedLastPage = extractApiLastPage(nested);
+    if (nestedLastPage !== null) {
+      return nestedLastPage;
+    }
+  }
+
+  return null;
 }
 
 function resolveAttendanceRequestDates(query: AttendanceQuery): { fromDate: string; toDate: string } {

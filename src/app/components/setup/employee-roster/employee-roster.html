@@ -81,6 +81,20 @@
             </button>
           </div>
         </header>
+        @if (unpaidLeaveReportPosting()) {
+          <div class="unpaid-leave-progress" role="status" aria-live="polite">
+            <label for="unpaid-leave-progress-main">
+              Posting employee {{ unpaidLeaveReportProgress().completed }} of {{ unpaidLeaveReportProgress().total }}
+              ({{ unpaidLeaveReportProgressPercent() }}%)
+            </label>
+            <progress
+              id="unpaid-leave-progress-main"
+              [max]="unpaidLeaveReportProgress().total"
+              [value]="unpaidLeaveReportProgress().completed"
+              [attr.aria-valuetext]="unpaidLeaveReportProgressPercent() + '% complete'"
+            ></progress>
+          </div>
+        }
         <div class="unpaid-leave-table-scroll">
           <table class="unpaid-leave-table">
             <thead>
@@ -446,6 +460,20 @@
         <button type="button" aria-label="Next report month" (click)="changeUnpaidLeaveReportMonth(1)">›</button>
       </nav>
       <div class="unpaid-leave-report-list">
+        @if (unpaidLeaveReportPosting()) {
+          <div class="unpaid-leave-progress" role="status" aria-live="polite">
+            <label for="unpaid-leave-progress-dialog">
+              Posting employee {{ unpaidLeaveReportProgress().completed }} of {{ unpaidLeaveReportProgress().total }}
+              ({{ unpaidLeaveReportProgressPercent() }}%)
+            </label>
+            <progress
+              id="unpaid-leave-progress-dialog"
+              [max]="unpaidLeaveReportProgress().total"
+              [value]="unpaidLeaveReportProgress().completed"
+              [attr.aria-valuetext]="unpaidLeaveReportProgressPercent() + '% complete'"
+            ></progress>
+          </div>
+        }
         <label class="unpaid-leave-report-search">
           <ui5-icon name="search" aria-hidden="true"></ui5-icon>
           <input

@@ -120,6 +120,10 @@
   width: 20%;
 }
 
+.attendance-punch-log__action-column {
+  width: 12%;
+}
+
 .attendance-punch-log__table th,
 .attendance-punch-log__table td {
   padding: 8px 10px;
@@ -1049,6 +1053,94 @@
   transform: translateY(-1px);
 }
 
+.attendance-update-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 76px;
+  padding: 6px 10px;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%);
+  color: #047857;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.attendance-update-btn:hover:not(:disabled) {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.attendance-update-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.attendance-table:not(.attendance-table--date-range) .attendance-table__actions,
+.attendance-table:not(.attendance-table--date-range) .attendance-table__actions-header {
+  width: 176px;
+  min-width: 176px;
+  max-width: 176px;
+}
+
+.attendance-update-overlay {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(2px);
+}
+
+.attendance-update-modal {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: min(820px, calc(100vh - 40px));
+  overflow: auto;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.3);
+}
+
+.attendance-update-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 20px 24px;
+}
+
+.attendance-update-form label {
+  display: grid;
+  gap: 6px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.attendance-update-form__full,
+.attendance-update-form__actions {
+  grid-column: 1 / -1;
+}
+
+.attendance-update-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.attendance-update-form__actions button:disabled,
+.attendance-close-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .attendance-pagination {
   margin-top: 12px;
   border: 1px solid #e2e8f0;
@@ -1186,5 +1278,15 @@
 
   .attendance-table-panel {
     padding: 0 12px 12px;
+  }
+
+  .attendance-update-form {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .attendance-update-form__full,
+  .attendance-update-form__actions {
+    grid-column: auto;
   }
 }

@@ -30,6 +30,7 @@ import {
   AttendanceManagementService,
   AttendanceQuery,
   AttendanceQueryMode,
+  AttendanceRawPunchUpdatePayload,
   AttendanceSlotRef,
   formatIsoDate,
   formatPunchDate,
@@ -183,6 +184,24 @@ export function indexLeaveDatesByType(
   return leaveDatesByEmployee;
 }
 
+function toDateTimeLocalValue(value: string): string {
+  const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+  if (match) {
+    return `${match[1]}T${match[2]}`;
+  }
+  const date = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return date ? `${date[1]}T00:00` : '';
+}
+
+function toApiDateTimeValue(value: string): string {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?/);
+  if (match) {
+    return `${match[1]} ${match[2]}:${match[3] ?? '00'}`;
+  }
+  return trimmed;
+}
+
 function parseAttendanceDate(value: string | null | undefined): Date | null {
   if (!value || typeof value !== 'string') {
     return null;
@@ -252,6 +271,7 @@ export class AttendanceManagmentComponent implements OnInit {
   readonly selectedRecord = signal<AttendanceDailyRecord | null>(null);
   readonly selectedDateRangeRecords = signal<AttendanceDailyRecord[]>([]);
   readonly pageRecords = signal<AttendanceDailyRecord[]>([]);
+  readonly updatingAttendance = signal(false);
 
   @ViewChild('tableScroll') private tableScroll?: ElementRef<HTMLDivElement>;
 
@@ -270,6 +290,9 @@ export class AttendanceManagmentComponent implements OnInit {
   private readonly failedLeaveEmployeeKeys = new Set<string>();
   private attendanceSearchTimeout: ReturnType<typeof setTimeout> | null = null;
   private attendanceSearchUserId = '';
+  attendanceUpdateRecordId: string | number | null = null;
+  attendanceUpdateForm: AttendanceRawPunchUpdatePayload = this.emptyAttendanceUpdateForm();
+  showAttendanceUpdateDialog = false;
 
   Math = Math;
   searchText = '';
@@ -705,6 +728,85 @@ export class AttendanceManagmentComponent implements OnInit {
     this.selectedRecord.set(record);
   }
 
+  canUpdateAttendance(record: AttendanceDailyRecord | null | undefined): boolean {
+    return !!record?.Punches.some((punch) => punch.RecordId !== undefined && punch.RecordId !== null);
+  }
+
+  openAttendanceUpdate(record: AttendanceDailyRecord): void {
+    const sourcePunch = record.Punches.find(
+      (punch) => punch.RecordId !== undefined && punch.RecordId !== null,
+    );
+    if (!sourcePunch) {
+      void this.alertService.warning('Cannot Update Attendance', 'The attendance record ID is missing.');
+      return;
+    }
+
+    this.attendanceUpdateRecordId = sourcePunch.RecordId ?? null;
+    this.attendanceUpdateForm = {
+      card_no: sourcePunch.EmployeeId,
+      punch_in: toDateTimeLocalValue(record.PunchIn),
+      punch_out: toDateTimeLocalValue(record.PunchOut),
+      hours_worked: record.WorkingHours || formatWorkingDuration(record.WorkingMinutes),
+      machine_id: sourcePunch.DeviceNo,
+      status: sourcePunch.Status,
+      attendance_date: toDateTimeLocalValue(record.PunchOut || record.PunchIn || record.AttendanceDate),
+    };
+    this.showAttendanceUpdateDialog = true;
+  }
+
+  closeAttendanceUpdate(): void {
+    if (this.updatingAttendance()) {
+      return;
+    }
+    this.showAttendanceUpdateDialog = false;
+    this.attendanceUpdateRecordId = null;
+  }
+
+  closeAttendanceUpdateFromBackdrop(event: MouseEvent): void {
+    if (event.target === event.currentTarget) {
+      this.closeAttendanceUpdate();
+    }
+  }
+
+  isAttendanceUpdateValid(): boolean {
+    return this.attendanceUpdateRecordId !== null &&
+      !!this.attendanceUpdateForm.card_no.trim() &&
+      !!this.attendanceUpdateForm.attendance_date.trim();
+  }
+
+  saveAttendanceUpdate(): void {
+    const id = this.attendanceUpdateRecordId;
+    if (id === null || !this.isAttendanceUpdateValid()) {
+      void this.alertService.validation('Card number and attendance date are required.');
+      return;
+    }
+
+    const payload: AttendanceRawPunchUpdatePayload = {
+      ...this.attendanceUpdateForm,
+      punch_in: toApiDateTimeValue(this.attendanceUpdateForm.punch_in),
+      punch_out: toApiDateTimeValue(this.attendanceUpdateForm.punch_out),
+      attendance_date: toApiDateTimeValue(this.attendanceUpdateForm.attendance_date),
+    };
+    this.updatingAttendance.set(true);
+    this.attendanceService.updateAttendanceRecord(id, payload).subscribe({
+      next: () => {
+        this.updatingAttendance.set(false);
+        this.showAttendanceUpdateDialog = false;
+        this.attendanceUpdateRecordId = null;
+        this.closeViewDialog();
+        this.alertService.success('Attendance Updated', 'The attendance record was updated successfully.');
+        this.loadRecords();
+      },
+      error: (error: unknown) => {
+        this.updatingAttendance.set(false);
+        void this.alertService.error(
+          'Update Failed',
+          formatApiErrorMessage(error, 'Failed to update the attendance record.'),
+        );
+      },
+    });
+  }
+
   viewDateRangeRecord(row: DateRangeAttendanceRow): void {
     const slots = this.attendanceService.slots().filter(
       (slot) => slot.employeeKey === row.employeeKey && this.dateRangeDates.includes(slot.date),
@@ -760,6 +862,18 @@ export class AttendanceManagmentComponent implements OnInit {
     this.selectedDateRangeEmployeeKey = '';
   }
 
+  private emptyAttendanceUpdateForm(): AttendanceRawPunchUpdatePayload {
+    return {
+      card_no: '',
+      punch_in: '',
+      punch_out: '',
+      hours_worked: '',
+      machine_id: '',
+      status: '',
+      attendance_date: '',
+    };
+  }
+
   private loadRecords(): void {
     this.loading.set(true);
     this.attendanceSessionReady = false;
@@ -808,7 +922,7 @@ export class AttendanceManagmentComponent implements OnInit {
         this.pageRecords.set([]);
         void this.alertService.error(
           'Load Failed',
-          formatApiErrorMessage(error, 'Failed to load attendance records from Pioneer Biometrics.'),
+          formatApiErrorMessage(error, 'Failed to load attendance records.'),
         );
       },
     });
