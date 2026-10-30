@@ -1007,25 +1007,21 @@ export class AttendanceManagmentComponent implements OnInit {
   }
 
   private refreshDateRangeLeaveSummary(): void {
-    if (this.queryMode !== 'dateRange' || !this.dateRangeRows.length || this.leaveSummaryRequested) {
+    const employees = this.dateRangeRows;
+    if (this.queryMode !== 'dateRange' || !employees.length || this.leaveSummaryRequested) {
       return;
     }
 
     this.leaveSummaryRequested = true;
     this.loadingLeaveSummary.set(true);
-    const pendingRows = this.dateRangeRows.filter((row) => row.absentDays > 0);
-    for (const row of this.dateRangeRows) {
+    const pendingRows = employees.filter((row) => row.absentDays > 0);
+    for (const row of employees) {
       if (row.absentDays === 0) {
         this.dateRangePaidLeaveMap.set(row.employeeKey, 0);
         this.dateRangeUnpaidLeaveMap.set(row.employeeKey, 0);
         this.dateRangePaidLeaveDates.set(row.employeeKey, new Set());
         this.dateRangeUnpaidLeaveDates.set(row.employeeKey, new Set());
       }
-    }
-
-    if (pendingRows.length === 0) {
-      this.loadingLeaveSummary.set(false);
-      return;
     }
 
     const employeesWithAbsences = pendingRows.map((row) => ({
@@ -1036,7 +1032,8 @@ export class AttendanceManagmentComponent implements OnInit {
         .map((record) => record.date),
     }));
 
-    const unpaidLeaveRequests = from(pendingRows).pipe(
+    const pendingEmployeeKeys = new Set(pendingRows.map((row) => row.employeeKey));
+    const unpaidLeaveRequests = from(employees).pipe(
       mergeMap(
         (row) =>
           this.leaveApplicationService
@@ -1064,7 +1061,9 @@ export class AttendanceManagmentComponent implements OnInit {
         next: ({ allLeaveRecords, unpaidLeaveResults }) => {
           const failedRequests = unpaidLeaveResults.filter((result) => 'error' in result);
           for (const result of failedRequests) {
-            this.failedLeaveEmployeeKeys.add(result.employeeKey);
+            if (pendingEmployeeKeys.has(result.employeeKey)) {
+              this.failedLeaveEmployeeKeys.add(result.employeeKey);
+            }
           }
 
           const unpaidLeaveRecords = unpaidLeaveResults.flatMap((result) => result.records);
