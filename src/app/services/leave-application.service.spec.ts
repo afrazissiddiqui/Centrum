@@ -232,6 +232,86 @@ describe('LeaveApplicationService', () => {
     });
   });
 
+  it('supports loading one leave type separately for a date range', () => {
+    let records: LeaveApplicationRecord[] | undefined;
+    service
+      .fetchLeaveApplicationsForDateRange('2026-10-01', '2026-10-31', 'Unannounced Leave')
+      .subscribe((result) => {
+        records = result;
+      });
+
+    const request = httpMock.expectOne((req) =>
+      req.url.endsWith('/leave-application-list') &&
+      req.params.get('from_date') === '2026-10-01' &&
+      req.params.get('to_date') === '2026-10-31' &&
+      req.params.get('leave_type') === 'Unannounced Leave' &&
+      !req.params.has('search'),
+    );
+    request.flush({
+      status: true,
+      data: [{
+        id: 2502,
+        employee_id: 'Emp-00000011',
+        leave_type: 'Unannounced Leave',
+        from_date: '2026-10-15',
+        to_date: '2026-10-16',
+      }],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records?.[0].LeaveType).toBe('Unannounced Leave');
+  });
+
+  it('loads all pages of date-range leave applications', () => {
+    let records: LeaveApplicationRecord[] | undefined;
+    service.fetchLeaveApplicationsForDateRange('2026-10-01', '2026-10-31').subscribe((result) => {
+      records = result;
+    });
+
+    const firstPage = httpMock.expectOne((req) =>
+      req.url.endsWith('/leave-application-list') &&
+      req.params.get('from_date') === '2026-10-01' &&
+      req.params.get('to_date') === '2026-10-31' &&
+      req.params.get('per_page') === '100' &&
+      req.params.get('page') === '1',
+    );
+    firstPage.flush({
+      status: true,
+      data: {
+        current_page: 1,
+        last_page: 2,
+        data: [{
+          id: 2503,
+          employee_id: 'Emp-00000011',
+          leave_type: 'Annual',
+          from_date: '2026-10-05',
+          to_date: '2026-10-06',
+        }],
+      },
+    });
+
+    const secondPage = httpMock.expectOne((req) =>
+      req.url.endsWith('/leave-application-list') &&
+      req.params.get('page') === '2',
+    );
+    secondPage.flush({
+      status: true,
+      data: {
+        current_page: 2,
+        last_page: 2,
+        data: [{
+          id: 2504,
+          employee_id: 'Emp-00000011',
+          leave_type: 'Unannounced Leave',
+          from_date: '2026-10-15',
+          to_date: '2026-10-16',
+        }],
+      },
+    });
+
+    expect(records?.map((record) => record.Id)).toEqual([2503, 2504]);
+  });
+
   it('maps employee_code from leave list responses so searched requests are retained', () => {
     let records: LeaveApplicationRecord[] | undefined;
     service.fetchLeaveApplicationsForEmployee('Emp-00000011', '2026-10-01', '2026-10-30').subscribe((result) => {

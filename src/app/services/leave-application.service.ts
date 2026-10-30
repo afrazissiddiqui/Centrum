@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, map, of, tap } from 'rxjs';
+import { EMPTY, Observable, expand, map, of, reduce, tap } from 'rxjs';
 import { apiUrl } from '../config/api.config';
 import { AuthService } from './auth.service';
 import { filterRecordsBySessionBranches } from '../utils/branch-filter.util';
@@ -76,6 +76,13 @@ const LEAVE_APPLICATION_VIEW_URL = apiUrl('leave-application-detail');
 const LEAVE_APPLICATION_ADD_URL = apiUrl('leave-application-add');
 const LEAVE_APPLICATION_UPDATE_URL = apiUrl('leave-application-update');
 const LEAVE_APPLICATION_DELETE_URL = apiUrl('leave-application-delete');
+const LEAVE_APPLICATION_PAGE_SIZE = 100;
+
+interface LeaveApplicationListPage {
+  page: number;
+  records: LeaveApplicationRecord[];
+  lastPage: number | null;
+}
 
 @Injectable({
   providedIn: 'root',
@@ -148,16 +155,72 @@ export class LeaveApplicationService {
     );
   }
 
-  fetchLeaveApplicationsForDateRange(fromDate: string, toDate: string): Observable<LeaveApplicationRecord[]> {
-    const params = new HttpParams().set('from_date', fromDate).set('to_date', toDate);
+  fetchLeaveApplicationsForDateRange(
+    fromDate: string,
+    toDate: string,
+    leaveType?: string,
+  ): Observable<LeaveApplicationRecord[]> {
+    return this.fetchLeaveApplicationsForDateRangePage(fromDate, toDate, leaveType, 1).pipe(
+      expand(
+        (result) =>
+          result.lastPage !== null && result.page < result.lastPage
+            ? this.fetchLeaveApplicationsForDateRangePage(fromDate, toDate, leaveType, result.page + 1)
+            : EMPTY,
+        1,
+      ),
+      reduce((records, result) => [...records, ...result.records], [] as LeaveApplicationRecord[]),
+      tap((records) => this.leaveList.set(records)),
+    );
+  }
+
+  private fetchLeaveApplicationsForDateRangePage(
+    fromDate: string,
+    toDate: string,
+    leaveType: string | undefined,
+    page: number,
+  ): Observable<LeaveApplicationListPage> {
+    let params = new HttpParams()
+      .set('from_date', fromDate)
+      .set('to_date', toDate)
+      .set('per_page', String(LEAVE_APPLICATION_PAGE_SIZE))
+      .set('page', String(page));
+    if (leaveType?.trim()) {
+      params = params.set('leave_type', leaveType.trim());
+    }
 
     return this.http.get<unknown>(LEAVE_APPLICATION_LIST_URL, { params }).pipe(
       map((response) => {
         this.throwIfApiRequestFailed(response);
-        return this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item));
+        const items = this.extractApiItems(response);
+        return {
+          page,
+          records: items.map((item) => this.mapApiItemToRecord(item)),
+          lastPage: this.extractLastPage(response),
+        };
       }),
-      tap((records) => this.leaveList.set(records)),
     );
+  }
+
+  private extractLastPage(value: unknown): number | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const record = this.asRecord(value);
+    const lastPageValue = record['last_page'] ?? record['lastPage'];
+    const lastPage = Number(lastPageValue);
+    if (Number.isInteger(lastPage) && lastPage > 0) {
+      return lastPage;
+    }
+
+    for (const nested of [record['meta'], record['pagination'], record['data']]) {
+      const nestedLastPage = this.extractLastPage(nested);
+      if (nestedLastPage !== null) {
+        return nestedLastPage;
+      }
+    }
+
+    return null;
   }
 
   fetchLeaveApplicationDetail(id: string | number): Observable<LeaveApplicationRecord> {

@@ -1,9 +1,10 @@
 import '@angular/compiler';
+import { HttpHeaders } from '@angular/common/http';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { BrowserDynamicTestingModule, platformBrowserDynamicTesting } from '@angular/platform-browser-dynamic/testing';
 import { of } from 'rxjs';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApplicationFormDetail, ApplicationFormRecord, ApplicationFormService } from './application-form.service';
 import {
   AttendanceDailyRecord,
@@ -108,8 +109,8 @@ describe('AttendanceManagementService calculated working hours', () => {
     const requestParams = new URL(request.request.urlWithParams).searchParams;
     expect(requestParams.get('date')).toBe('2026-10-16');
     expect(requestParams.get('card_no')).toBe('00001161');
-    expect(requestParams.get('per_page')).toBe('100');
-    expect(requestParams.get('page')).toBe('1');
+    expect(requestParams.has('per_page')).toBe(false);
+    expect(requestParams.has('page')).toBe(false);
     request.flush(JSON.stringify({
       data: [{
         card_no: '00001161',
@@ -125,7 +126,7 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(result?.WorkingHours).toBe('8h 15m');
   });
 
-  it('loads every page from the attendance list API', () => {
+  it('loads all attendance records without pagination parameters', () => {
     let loaded = false;
     service.loadSession({ mode: 'date', date: '2026-10-16' }).subscribe(() => {
       loaded = true;
@@ -134,36 +135,55 @@ describe('AttendanceManagementService calculated working hours', () => {
     const firstPage = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
     const firstParams = new URL(firstPage.request.urlWithParams).searchParams;
     expect(firstParams.get('date')).toBe('2026-10-16');
-    expect(firstParams.get('per_page')).toBe('100');
-    expect(firstParams.get('page')).toBe('1');
+    expect(firstParams.has('per_page')).toBe(false);
+    expect(firstParams.has('page')).toBe(false);
     firstPage.flush(JSON.stringify({
-      current_page: 1,
-      last_page: 2,
-      data: [{
-        id: 'attendance-1',
-        card_no: '00000001',
-        date: '2026-10-16',
-        punch_in: '09:00:00',
-        punch_out: '17:00:00',
-      }],
-    }));
-
-    const secondPage = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
-    expect(new URL(secondPage.request.urlWithParams).searchParams.get('page')).toBe('2');
-    secondPage.flush(JSON.stringify({
-      current_page: 2,
-      last_page: 2,
-      data: [{
-        card_no: '00000002',
-        date: '2026-10-16',
-        punch_in: '08:00:00',
-        punch_out: '16:00:00',
-      }],
+      data: [
+        {
+          id: 'attendance-1',
+          card_no: '00000001',
+          date: '2026-10-16',
+          punch_in: '09:00:00',
+          punch_out: '17:00:00',
+        },
+        {
+          id: 'attendance-2',
+          card_no: '00000002',
+          date: '2026-10-16',
+          punch_in: '08:00:00',
+          punch_out: '16:00:00',
+        },
+      ],
     }));
 
     expect(loaded).toBe(true);
     expect(service.slots()).toHaveLength(2);
     expect(service.materializeSlots([service.slots()[0]])[0].Punches[0].RecordId).toBe('attendance-1');
+  });
+
+  it('retries attendance list requests after HTTP 429 using Retry-After', async () => {
+    vi.useFakeTimers();
+    try {
+      let loaded = false;
+      service.loadSession({ mode: 'date', date: '2026-10-16' }).subscribe(() => {
+        loaded = true;
+      });
+
+      const rateLimitedRequest = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
+      rateLimitedRequest.flush('Too Many Requests', {
+        status: 429,
+        statusText: 'Too Many Requests',
+        headers: new HttpHeaders({ 'Retry-After': '1' }),
+      });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      const retryRequest = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
+      retryRequest.flush(JSON.stringify({ data: [] }));
+
+      expect(loaded).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('updates an attendance record using its API ID and the supplied payload', () => {
@@ -379,8 +399,8 @@ describe('AttendanceManagementService calculated working hours', () => {
     expect(requestParams.get('from_date')).toBe('2026-09-01');
     expect(requestParams.get('to_date')).toBe('2026-10-30');
     expect(requestParams.get('card_no')).toBe('00001161');
-    expect(requestParams.get('per_page')).toBe('100');
-    expect(requestParams.get('page')).toBe('1');
+    expect(requestParams.has('per_page')).toBe(false);
+    expect(requestParams.has('page')).toBe(false);
     request.flush(JSON.stringify({
       data: [
         {
@@ -577,8 +597,8 @@ describe('AttendanceManagementService calculated working hours', () => {
     const requestParams = new URL(request.request.urlWithParams).searchParams;
     expect(requestParams.get('from_date')).toBe('2026-09-01');
     expect(requestParams.get('to_date')).toBe('2026-10-31');
-    expect(requestParams.get('per_page')).toBe('100');
-    expect(requestParams.get('page')).toBe('1');
+    expect(requestParams.has('per_page')).toBe(false);
+    expect(requestParams.has('page')).toBe(false);
     expect(requestParams.has('card_no')).toBe(false);
     request.flush(JSON.stringify({
       data: [

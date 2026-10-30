@@ -1,6 +1,6 @@
+import { HttpErrorResponse, HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { EMPTY, Observable, catchError, expand, last, map, of, reduce, switchMap, throwError } from 'rxjs';
+import { Observable, catchError, last, map, of, retry, switchMap, throwError, timer } from 'rxjs';
 import { apiUrl, BIOMETRICS_API_BASE_URL, BIOMETRICS_API_KEY } from '../config/api.config';
 import { ApplicationFormRecord, ApplicationFormService } from './application-form.service';
 
@@ -111,13 +111,31 @@ interface BiometricsPunchApiRecord {
   status?: string | null;
 }
 
-interface AttendanceListPage {
-  page: number;
-  punches: AttendancePunchRecord[];
-  hasMore: boolean;
-}
+const ATTENDANCE_RATE_LIMIT_RETRIES = 4;
+const ATTENDANCE_RETRY_BASE_DELAY_MS = 1000;
+const ATTENDANCE_RETRY_MAX_DELAY_MS = 30000;
 
-const ATTENDANCE_LIST_PAGE_SIZE = 100;
+function attendanceRetryDelay(error: unknown, retryCount: number): Observable<unknown> {
+  if (!(error instanceof HttpErrorResponse) || error.status !== 429) {
+    return throwError(() => error);
+  }
+
+  const backoffLimit = Math.min(
+    ATTENDANCE_RETRY_BASE_DELAY_MS * 2 ** (retryCount - 1),
+    ATTENDANCE_RETRY_MAX_DELAY_MS,
+  );
+  const jitteredBackoff = Math.floor(Math.random() * backoffLimit);
+  const retryAfter = error.headers.get('Retry-After');
+  const retryAfterSeconds = retryAfter ? Number(retryAfter) : Number.NaN;
+  const retryAfterDate = retryAfter ? Date.parse(retryAfter) : Number.NaN;
+  const serverDelay = Number.isFinite(retryAfterSeconds)
+    ? Math.max(0, retryAfterSeconds * 1000)
+    : Number.isFinite(retryAfterDate)
+      ? Math.max(0, retryAfterDate - Date.now())
+      : 0;
+
+  return timer(Math.max(serverDelay, jitteredBackoff));
+}
 
 @Injectable({
   providedIn: 'root',
@@ -651,25 +669,14 @@ export class AttendanceManagementService {
       ? resolveEmployeeLegacyCode(requestedCardNo, employees) || requestedCardNo
       : undefined;
 
-    return this.loadAttendanceListPage(normalized, cardNo, 1).pipe(
-      expand((result) =>
-        result.hasMore
-          ? this.loadAttendanceListPage(normalized, cardNo, result.page + 1)
-          : EMPTY,
-      ),
-      reduce((punches, result) => [...punches, ...result.punches], [] as AttendancePunchRecord[]),
-    );
+    return this.loadAttendanceList(normalized, cardNo);
   }
 
-  private loadAttendanceListPage(
+  private loadAttendanceList(
     query: AttendanceQuery,
     cardNo: string | undefined,
-    page: number,
-  ): Observable<AttendanceListPage> {
-    const params = new URLSearchParams({
-      per_page: String(ATTENDANCE_LIST_PAGE_SIZE),
-      page: String(page),
-    });
+  ): Observable<AttendancePunchRecord[]> {
+    const params = new URLSearchParams();
     if (query.mode === 'dateRange') {
       const { fromDate, toDate } = resolveAttendanceRequestDates(query);
       params.set('from_date', fromDate);
@@ -684,6 +691,10 @@ export class AttendanceManagementService {
     return this.http
       .get(`${apiUrl('attendance-raw-punch-list')}?${params.toString()}`, { responseType: 'text' })
       .pipe(
+        retry({
+          count: ATTENDANCE_RATE_LIMIT_RETRIES,
+          delay: (error: unknown, retryCount: number) => attendanceRetryDelay(error, retryCount),
+        }),
         map((text) => {
           let response: unknown;
           try {
@@ -692,13 +703,7 @@ export class AttendanceManagementService {
             throw new Error('Attendance API returned invalid JSON.');
           }
 
-          const items = this.extractApiItems(response);
-          const lastPage = extractApiLastPage(response);
-          return {
-            page,
-            punches: items.flatMap((item) => this.mapApiItem(item)),
-            hasMore: lastPage === null ? items.length === ATTENDANCE_LIST_PAGE_SIZE : page < lastPage,
-          };
+          return this.extractApiItems(response).flatMap((item) => this.mapApiItem(item));
         }),
         catchError((error: unknown) => {
           if (error instanceof Error && error.message === 'Attendance API returned invalid JSON.') {
@@ -707,6 +712,11 @@ export class AttendanceManagementService {
 
           const status = (error as { status?: number })?.status;
           const statusText = (error as { statusText?: string })?.statusText;
+          if (status === 429) {
+            return throwError(
+              () => new Error('Attendance API rate limit reached after several retries. Please try again later.'),
+            );
+          }
           return throwError(
             () =>
               new Error(
@@ -1004,28 +1014,6 @@ function biometricsPathEmployeeId(userId: string): string {
 function formatAttendanceCardNo(value: string): string {
   const digits = extractAttendanceUserId(value);
   return /^\d+$/.test(digits) ? digits.padStart(8, '0') : value.trim();
-}
-
-function extractApiLastPage(value: unknown): number | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  const pageValue = record['last_page'] ?? record['lastPage'];
-  const lastPage = Number(pageValue);
-  if (Number.isInteger(lastPage) && lastPage > 0) {
-    return lastPage;
-  }
-
-  for (const nested of [record['meta'], record['pagination'], record['data']]) {
-    const nestedLastPage = extractApiLastPage(nested);
-    if (nestedLastPage !== null) {
-      return nestedLastPage;
-    }
-  }
-
-  return null;
 }
 
 function resolveAttendanceRequestDates(query: AttendanceQuery): { fromDate: string; toDate: string } {

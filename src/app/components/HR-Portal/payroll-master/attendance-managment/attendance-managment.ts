@@ -10,18 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import {
-  Subscription,
-  catchError,
-  concatMap,
-  from,
-  map,
-  of,
-  switchMap,
-  tap,
-  throwError,
-  timer,
-} from 'rxjs';
+import { Subscription, forkJoin, map } from 'rxjs';
 import { ColumnResizeDirective } from '../../../../column-resize';
 import { PageToolbarComponent } from '../../../page-toolbar/page-toolbar';
 import { AlertService } from '../../../../services/alert.service';
@@ -202,6 +191,15 @@ function toApiDateTimeValue(value: string): string {
   return trimmed;
 }
 
+function toTimeInputValue(value: string): string {
+  return value.trim().match(/(?:T|\s)(\d{2}:\d{2})/)?.[1] ?? '';
+}
+
+function combineDateAndTime(dateTime: string, time: string): string {
+  const date = dateTime.trim().match(/^(\d{4}-\d{2}-\d{2})/)?.[1] ?? '';
+  return date && time ? `${date} ${time}:00` : '';
+}
+
 function parseAttendanceDate(value: string | null | undefined): Date | null {
   if (!value || typeof value !== 'string') {
     return null;
@@ -226,26 +224,6 @@ function parseAttendanceDate(value: string | null | undefined): Date | null {
 
   const parsed = new Date(trimmed);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function isLeaveRateLimitError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') {
-    return typeof error === 'string' && /too many attempts|too many requests/i.test(error);
-  }
-
-  const failure = error as { status?: unknown; error?: unknown; message?: unknown };
-  if (failure.status === 429) {
-    return true;
-  }
-
-  const body = failure.error;
-  const bodyMessage =
-    typeof body === 'string'
-      ? body
-      : body && typeof body === 'object'
-        ? String((body as Record<string, unknown>)['message'] ?? '')
-        : '';
-  return /too many attempts|too many requests/i.test(`${String(failure.message ?? '')} ${bodyMessage}`);
 }
 
 @Component({
@@ -292,6 +270,8 @@ export class AttendanceManagmentComponent implements OnInit {
   private attendanceSearchUserId = '';
   attendanceUpdateRecordId: string | number | null = null;
   attendanceUpdateForm: AttendanceRawPunchUpdatePayload = this.emptyAttendanceUpdateForm();
+  attendanceUpdatePunchIn = '';
+  attendanceUpdatePunchOut = '';
   showAttendanceUpdateDialog = false;
 
   Math = Math;
@@ -744,15 +724,20 @@ export class AttendanceManagmentComponent implements OnInit {
     }
 
     this.attendanceUpdateRecordId = cardNo;
+    const attendanceDateTime = toApiDateTimeValue(
+      toDateTimeLocalValue(record.PunchOut || record.PunchIn || record.AttendanceDate),
+    );
     this.attendanceUpdateForm = {
       card_no: cardNo,
-      punch_in: toDateTimeLocalValue(record.PunchIn),
-      punch_out: toDateTimeLocalValue(record.PunchOut),
+      punch_in: toApiDateTimeValue(record.PunchIn),
+      punch_out: toApiDateTimeValue(record.PunchOut),
       hours_worked: record.WorkingHours || formatWorkingDuration(record.WorkingMinutes),
       machine_id: sourcePunch?.DeviceNo ?? record.PunchInDevice ?? '',
       status: sourcePunch?.Status ?? '',
-      attendance_date: toDateTimeLocalValue(record.PunchOut || record.PunchIn || record.AttendanceDate),
+      attendance_date: attendanceDateTime,
     };
+    this.attendanceUpdatePunchIn = toTimeInputValue(record.PunchIn);
+    this.attendanceUpdatePunchOut = toTimeInputValue(record.PunchOut);
     this.showAttendanceUpdateDialog = true;
   }
 
@@ -762,6 +747,8 @@ export class AttendanceManagmentComponent implements OnInit {
     }
     this.showAttendanceUpdateDialog = false;
     this.attendanceUpdateRecordId = null;
+    this.attendanceUpdatePunchIn = '';
+    this.attendanceUpdatePunchOut = '';
   }
 
   closeAttendanceUpdateFromBackdrop(event: MouseEvent): void {
@@ -773,21 +760,21 @@ export class AttendanceManagmentComponent implements OnInit {
   isAttendanceUpdateValid(): boolean {
     return this.attendanceUpdateRecordId !== null &&
       !!this.attendanceUpdateForm.card_no.trim() &&
-      !!this.attendanceUpdateForm.attendance_date.trim();
+      !!this.attendanceUpdateForm.attendance_date.trim() &&
+      (!!this.attendanceUpdatePunchIn || !!this.attendanceUpdatePunchOut);
   }
 
   saveAttendanceUpdate(): void {
     const id = this.attendanceUpdateRecordId;
     if (id === null || !this.isAttendanceUpdateValid()) {
-      void this.alertService.validation('Card number and attendance date are required.');
+      void this.alertService.validation('Enter a punch-in or punch-out time to update attendance.');
       return;
     }
 
     const payload: AttendanceRawPunchUpdatePayload = {
       ...this.attendanceUpdateForm,
-      punch_in: toApiDateTimeValue(this.attendanceUpdateForm.punch_in),
-      punch_out: toApiDateTimeValue(this.attendanceUpdateForm.punch_out),
-      attendance_date: toApiDateTimeValue(this.attendanceUpdateForm.attendance_date),
+      punch_in: combineDateAndTime(this.attendanceUpdateForm.attendance_date, this.attendanceUpdatePunchIn),
+      punch_out: combineDateAndTime(this.attendanceUpdateForm.attendance_date, this.attendanceUpdatePunchOut),
     };
     this.updatingAttendance.set(true);
     this.attendanceService.updateAttendanceRecord(id, payload).subscribe({
@@ -795,6 +782,8 @@ export class AttendanceManagmentComponent implements OnInit {
         this.updatingAttendance.set(false);
         this.showAttendanceUpdateDialog = false;
         this.attendanceUpdateRecordId = null;
+        this.attendanceUpdatePunchIn = '';
+        this.attendanceUpdatePunchOut = '';
         this.closeViewDialog();
         this.alertService.success('Attendance Updated', 'The attendance record was updated successfully.');
         this.loadRecords();
@@ -1036,88 +1025,69 @@ export class AttendanceManagmentComponent implements OnInit {
       return;
     }
 
-    const failedRows: DateRangeAttendanceRow[] = [];
-    let activeRowIndex = 0;
-    this.leaveSummarySub = from(pendingRows).pipe(
-      concatMap((row, index) => {
-        activeRowIndex = index;
-        const absentDates = Object.values(row.recordsByDate)
-          .filter((record) => record.status === 'Absent')
-          .map((record) => record.date);
+    const employeesWithAbsences = pendingRows.map((row) => ({
+      employeeKey: row.employeeKey,
+      employeeCode: row.employeeCode,
+      absentDates: Object.values(row.recordsByDate)
+        .filter((record) => record.status === 'Absent')
+        .map((record) => record.date),
+    }));
 
-        return timer(index === 0 ? 0 : 1500).pipe(
-          switchMap(() =>
-            this.leaveApplicationService
-              .fetchLeaveApplicationsForEmployee(row.employeeCode, this.fromDate, this.toDate)
-              .pipe(
-                concatMap((allLeaveRecords) =>
-                  timer(1500).pipe(
-                    switchMap(() =>
-                      this.leaveApplicationService.fetchLeaveApplicationsForEmployee(
-                        row.employeeCode,
-                        this.fromDate,
-                        this.toDate,
-                        'Unannounced Leave',
-                      ),
-                    ),
-                    map((unannouncedLeaveRecords) => [
-                      ...allLeaveRecords,
-                      ...unannouncedLeaveRecords.filter(
-                        (record) => record.LeaveType.trim().toLowerCase() === 'unannounced leave',
-                      ),
-                    ]),
-                  ),
-                ),
-                tap((records) => {
-                  const leaveDates =
-                    indexLeaveDatesByType(
-                      [{ employeeKey: row.employeeKey, employeeCode: row.employeeCode, absentDates }],
-                      records,
-                      this.fromDate,
-                      this.toDate,
-                    ).get(row.employeeKey) ?? { paidDates: new Set<string>(), unpaidDates: new Set<string>() };
-                  this.dateRangePaidLeaveMap.set(row.employeeKey, leaveDates.paidDates.size);
-                  this.dateRangeUnpaidLeaveMap.set(row.employeeKey, leaveDates.unpaidDates.size);
-                  this.dateRangePaidLeaveDates.set(row.employeeKey, leaveDates.paidDates);
-                  this.dateRangeUnpaidLeaveDates.set(row.employeeKey, leaveDates.unpaidDates);
-                }),
-                catchError((error: unknown) => {
-                  if (isLeaveRateLimitError(error)) {
-                    return throwError(() => error);
-                  }
-                  failedRows.push(row);
-                  this.failedLeaveEmployeeKeys.add(row.employeeKey);
-                  return of([]);
-                }),
-              ),
-          ),
-        );
+    this.leaveSummarySub = forkJoin({
+      allLeaveRecords: this.leaveApplicationService.fetchLeaveApplicationsForDateRange(this.fromDate, this.toDate),
+      unpaidLeaveRecords: this.leaveApplicationService.fetchLeaveApplicationsForDateRange(
+        this.fromDate,
+        this.toDate,
+        'Unannounced Leave',
+      ),
+    }).pipe(
+      map(({ allLeaveRecords, unpaidLeaveRecords }) => {
+        const merged = new Map<string, LeaveApplicationRecord>();
+        for (const record of [...allLeaveRecords, ...unpaidLeaveRecords]) {
+          const key = record.Id
+            ? String(record.Id)
+            : [
+                canonicalAttendanceKey(record.EmployeeId),
+                record.LeaveType.trim().toLowerCase(),
+                record.FromDate,
+                record.ToDate,
+              ].join('|');
+          merged.set(key, record);
+        }
+        return [...merged.values()];
       }),
     ).subscribe({
-      error: (error: unknown) => {
-        pendingRows.slice(activeRowIndex).forEach((row) => {
-          failedRows.push(row);
-          this.failedLeaveEmployeeKeys.add(row.employeeKey);
-        });
-        this.loadingLeaveSummary.set(false);
-        void this.alertService.error(
-          'Leave Summary Failed',
-          `${failedRows.length} employee leave request(s) could not be loaded. ${formatApiErrorMessage(
-            error,
-            'The leave service is rate limiting requests. Please wait before retrying.',
-          )}`,
-        );
-      },
-      complete: () => {
-        this.loadingLeaveSummary.set(false);
-        if (failedRows.length > 0) {
+        next: (records) => {
+          const leaveDatesByEmployee = indexLeaveDatesByType(
+            employeesWithAbsences,
+            records,
+            this.fromDate,
+            this.toDate,
+          );
+          for (const row of pendingRows) {
+            const leaveDates = leaveDatesByEmployee.get(row.employeeKey) ?? {
+              paidDates: new Set<string>(),
+              unpaidDates: new Set<string>(),
+            };
+            this.dateRangePaidLeaveMap.set(row.employeeKey, leaveDates.paidDates.size);
+            this.dateRangeUnpaidLeaveMap.set(row.employeeKey, leaveDates.unpaidDates.size);
+            this.dateRangePaidLeaveDates.set(row.employeeKey, leaveDates.paidDates);
+            this.dateRangeUnpaidLeaveDates.set(row.employeeKey, leaveDates.unpaidDates);
+          }
+          this.loadingLeaveSummary.set(false);
+        },
+        error: (error: unknown) => {
+          pendingRows.forEach((row) => this.failedLeaveEmployeeKeys.add(row.employeeKey));
+          this.loadingLeaveSummary.set(false);
           void this.alertService.error(
             'Leave Summary Failed',
-            `${failedRows.length} employee leave request(s) could not be loaded.`,
+            `Leave summaries for ${pendingRows.length} employee(s) could not be loaded. ${formatApiErrorMessage(
+              error,
+              'The leave service could not load records for the selected date range.',
+            )}`,
           );
-        }
-      },
-    });
+        },
+      });
   }
 
   private getSlotSortableValue(row: AttendanceSlotRef, key: AttendanceColumnKey): string | number {

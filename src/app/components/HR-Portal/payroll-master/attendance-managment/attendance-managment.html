@@ -193,6 +193,23 @@
         </div>
       </header>
 
+      <div
+        *ngIf="queryMode === 'dateRange' && loadingLeaveSummary()"
+        class="attendance-leave-loader"
+        role="status"
+        aria-live="polite"
+      >
+        <span>Loading paid and unpaid leave summaries…</span>
+        <div
+          class="attendance-leave-loader__track"
+          role="progressbar"
+          aria-label="Loading paid and unpaid leave summaries"
+          aria-valuetext="Loading"
+        >
+          <div class="attendance-leave-loader__bar"></div>
+        </div>
+      </div>
+
       <div class="attendance-table-panel">
         <div class="attendance-table-scroll" #tableScroll>
           <table *ngIf="queryMode !== 'dateRange'" class="attendance-table" [attr.aria-busy]="loading()">
@@ -358,9 +375,41 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngIf="loading()" class="attendance-skeleton-row">
-                <td class="attendance-table__empty" [attr.colspan]="7 + dateRangeDates.length * 3">Loading attendance…</td>
-              </tr>
+              <ng-container *ngIf="loading()">
+                <tr
+                  *ngFor="let skeletonRow of skeletonRows; let i = index"
+                  class="attendance-skeleton-row"
+                  [class.attendance-skeleton-row--alt]="i % 2 === 1"
+                  aria-hidden="true"
+                >
+                  <td class="attendance-col--identity attendance-table__date-range-employee-code">
+                    <span class="attendance-skeleton attendance-skeleton--text"></span>
+                  </td>
+                  <td class="attendance-col--identity attendance-table__date-range-employee-name">
+                    <span class="attendance-skeleton attendance-skeleton--name"></span>
+                  </td>
+                  <ng-container *ngFor="let date of dateRangeDates">
+                    <td class="attendance-col--time"><span class="attendance-skeleton attendance-skeleton--time"></span></td>
+                    <td class="attendance-col--time"><span class="attendance-skeleton attendance-skeleton--time"></span></td>
+                    <td class="attendance-col--time"><span class="attendance-skeleton attendance-skeleton--text"></span></td>
+                  </ng-container>
+                  <td class="attendance-col--time attendance-table__date-range-summary-value">
+                    <span class="attendance-skeleton attendance-skeleton--text"></span>
+                  </td>
+                  <td class="attendance-col--time attendance-table__date-range-summary-value">
+                    <span class="attendance-skeleton attendance-skeleton--text"></span>
+                  </td>
+                  <td class="attendance-col--time attendance-table__date-range-summary-value">
+                    <span class="attendance-skeleton attendance-skeleton--text"></span>
+                  </td>
+                  <td class="attendance-col--time attendance-table__date-range-summary-value">
+                    <span class="attendance-skeleton attendance-skeleton--text"></span>
+                  </td>
+                  <td class="attendance-table__actions attendance-table__date-range-view">
+                    <span class="attendance-skeleton attendance-skeleton--button"></span>
+                  </td>
+                </tr>
+              </ng-container>
               <tr *ngIf="!loading() && dateRangeRows.length === 0">
                 <td class="attendance-table__empty" [attr.colspan]="7 + dateRangeDates.length * 3">
                   No attendance records found for the selected date range.
@@ -658,39 +707,17 @@
         </button>
       </div>
       <form class="attendance-update-form" (ngSubmit)="saveAttendanceUpdate()">
-        <label>
-          Card Number
-          <input class="attendance-control" name="card_no" [(ngModel)]="attendanceUpdateForm.card_no" required />
-        </label>
+        <div class="attendance-update-form__date">
+          <span>Attendance Date</span>
+          <strong>{{ attendanceUpdateForm.attendance_date.slice(0, 10) }}</strong>
+        </div>
         <label>
           Punch In
-          <input class="attendance-control" type="datetime-local" name="punch_in" [(ngModel)]="attendanceUpdateForm.punch_in" />
+          <input class="attendance-control" type="time" name="punch_in" [(ngModel)]="attendanceUpdatePunchIn" />
         </label>
         <label>
           Punch Out
-          <input class="attendance-control" type="datetime-local" name="punch_out" [(ngModel)]="attendanceUpdateForm.punch_out" />
-        </label>
-        <label>
-          Working Hours
-          <input class="attendance-control" name="hours_worked" [(ngModel)]="attendanceUpdateForm.hours_worked" />
-        </label>
-        <label>
-          Machine ID
-          <input class="attendance-control" name="machine_id" [(ngModel)]="attendanceUpdateForm.machine_id" />
-        </label>
-        <label>
-          Status
-          <input class="attendance-control" name="status" [(ngModel)]="attendanceUpdateForm.status" placeholder="e.g. 01 / 02" />
-        </label>
-        <label class="attendance-update-form__full">
-          Attendance Date
-          <input
-            class="attendance-control"
-            type="datetime-local"
-            name="attendance_date"
-            [(ngModel)]="attendanceUpdateForm.attendance_date"
-            required
-          />
+          <input class="attendance-control" type="time" name="punch_out" [(ngModel)]="attendanceUpdatePunchOut" />
         </label>
         <div class="attendance-update-form__actions">
           <button type="button" class="btn-secondary" (click)="closeAttendanceUpdate()" [disabled]="updatingAttendance()">Cancel</button>
