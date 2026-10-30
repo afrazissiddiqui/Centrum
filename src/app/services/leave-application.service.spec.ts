@@ -184,17 +184,19 @@ describe('LeaveApplicationService', () => {
   it('supports filtering employee leave requests by leave type', () => {
     let records: LeaveApplicationRecord[] | undefined;
     service
-      .fetchLeaveApplicationsForEmployee('Emp-00000060', '2026-10-01', '2026-10-29', 'Unannounced Leave')
+      .fetchLeaveApplicationsForEmployee('emp-00000060', '2026-10-01', '2026-10-29', 'Unannounced Leave')
       .subscribe((result) => {
         records = result;
       });
 
     const request = httpMock.expectOne((req) =>
       req.url.endsWith('/leave-application-list') &&
-      req.params.get('search') === 'Emp-00000060' &&
+      req.params.get('search') === 'emp-00000060' &&
       req.params.get('from_date') === '2026-10-01' &&
       req.params.get('to_date') === '2026-10-29' &&
-      req.params.get('leave_type') === 'Unannounced Leave',
+      req.params.get('leave_type') === 'Unannounced Leave' &&
+      !req.params.has('per_page') &&
+      !req.params.has('page'),
     );
     expect(request.request.method).toBe('GET');
     request.flush({ status: true, data: [] });

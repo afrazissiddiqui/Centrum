@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { EMPTY, Observable, expand, map, of, reduce, tap } from 'rxjs';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { EMPTY, Observable, expand, map, of, reduce, retry, tap, throwError, timer } from 'rxjs';
 import { apiUrl } from '../config/api.config';
 import { AuthService } from './auth.service';
 import { filterRecordsBySessionBranches } from '../utils/branch-filter.util';
@@ -77,11 +77,36 @@ const LEAVE_APPLICATION_ADD_URL = apiUrl('leave-application-add');
 const LEAVE_APPLICATION_UPDATE_URL = apiUrl('leave-application-update');
 const LEAVE_APPLICATION_DELETE_URL = apiUrl('leave-application-delete');
 const LEAVE_APPLICATION_PAGE_SIZE = 100;
+const LEAVE_APPLICATION_RATE_LIMIT_RETRIES = 4;
+const LEAVE_APPLICATION_RETRY_BASE_DELAY_MS = 1000;
+const LEAVE_APPLICATION_RETRY_MAX_DELAY_MS = 30000;
 
 interface LeaveApplicationListPage {
   page: number;
   records: LeaveApplicationRecord[];
   lastPage: number | null;
+}
+
+function leaveApplicationRetryDelay(error: unknown, retryCount: number): Observable<unknown> {
+  if (!(error instanceof HttpErrorResponse) || error.status !== 429) {
+    return throwError(() => error);
+  }
+
+  const backoffLimit = Math.min(
+    LEAVE_APPLICATION_RETRY_BASE_DELAY_MS * 2 ** (retryCount - 1),
+    LEAVE_APPLICATION_RETRY_MAX_DELAY_MS,
+  );
+  const jitteredBackoff = Math.floor(Math.random() * backoffLimit);
+  const retryAfter = error.headers.get('Retry-After');
+  const retryAfterSeconds = retryAfter ? Number(retryAfter) : Number.NaN;
+  const retryAfterDate = retryAfter ? Date.parse(retryAfter) : Number.NaN;
+  const serverDelay = Number.isFinite(retryAfterSeconds)
+    ? Math.max(0, retryAfterSeconds * 1000)
+    : Number.isFinite(retryAfterDate)
+      ? Math.max(0, retryAfterDate - Date.now())
+      : 0;
+
+  return timer(Math.max(serverDelay, jitteredBackoff));
 }
 
 @Injectable({
@@ -147,6 +172,10 @@ export class LeaveApplicationService {
     }
 
     return this.http.get<unknown>(LEAVE_APPLICATION_LIST_URL, { params }).pipe(
+      retry({
+        count: LEAVE_APPLICATION_RATE_LIMIT_RETRIES,
+        delay: leaveApplicationRetryDelay,
+      }),
       map((response) => {
         this.throwIfApiRequestFailed(response);
         return this.extractApiItems(response).map((item) => this.mapApiItemToRecord(item));
@@ -189,6 +218,10 @@ export class LeaveApplicationService {
     }
 
     return this.http.get<unknown>(LEAVE_APPLICATION_LIST_URL, { params }).pipe(
+      retry({
+        count: LEAVE_APPLICATION_RATE_LIMIT_RETRIES,
+        delay: leaveApplicationRetryDelay,
+      }),
       map((response) => {
         this.throwIfApiRequestFailed(response);
         const items = this.extractApiItems(response);
