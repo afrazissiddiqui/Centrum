@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
@@ -13,7 +14,20 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Subscription, catchError, concatMap, from, map, of, tap, toArray } from 'rxjs';
+import {
+  Subscription,
+  catchError,
+  concatMap,
+  from,
+  map,
+  of,
+  retry,
+  switchMap,
+  tap,
+  throwError,
+  timer,
+  toArray,
+} from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import {
   ApplicationFormRecord,
@@ -131,6 +145,25 @@ export interface PayrollProcessRow {
   approved: boolean;
 }
 
+const PAYROLL_PROFILE_REQUEST_INTERVAL_MS = 1100;
+
+function payrollProfileRetryDelay(error: unknown, retryCount: number) {
+  if (!(error instanceof HttpErrorResponse) || error.status !== 429) {
+    return throwError(() => error);
+  }
+
+  const retryAfter = error.headers.get('Retry-After');
+  const retryAfterSeconds = retryAfter ? Number(retryAfter) : Number.NaN;
+  const retryAfterDate = retryAfter ? Date.parse(retryAfter) : Number.NaN;
+  const serverDelay = Number.isFinite(retryAfterSeconds)
+    ? Math.max(0, retryAfterSeconds * 1000)
+    : Number.isFinite(retryAfterDate)
+      ? Math.max(0, retryAfterDate - Date.now())
+      : 1000 * 2 ** (retryCount - 1);
+
+  return timer(serverDelay);
+}
+
 interface PayrollEmployeeLeaveResult {
   employeeCode: string;
   records: LeaveApplicationRecord[];
@@ -240,6 +273,7 @@ export class AddPayrollProcessComponent implements OnInit {
   private pageDetailsSub?: Subscription;
   private leaveDaysSub?: Subscription;
   private pageDetailsGeneration = 0;
+  private readonly payrollDetailsLoaded = new Set<string>();
   private leaveDaysByEmployee = new Map<string, PayrollLeaveDayCounts>();
   private leaveDaysMonth = '';
   private readonly lastMonthGrossSalaryCache = new Map<string, number>();
@@ -1079,24 +1113,103 @@ export class AddPayrollProcessComponent implements OnInit {
       return;
     }
 
-    const visibleEmployeeKeys = new Set(
-      this.filteredEmployeeSummaries().map((summary) => this.resolveEmployeeKey(summary)),
-    );
-    const rows = Array.from(this.rowCache().values()).filter((row) =>
-      visibleEmployeeKeys.has(row.apiId),
-    );
-    if (visibleEmployeeKeys.size === 0) {
+    const employeeSummaries = this.filteredEmployeeSummaries();
+    if (employeeSummaries.length === 0) {
       void this.alertService.validation('No employees available to save.');
       return;
     }
 
-    const approvedRows = rows.filter((row) => row.approved);
-    if (approvedRows.length === 0) {
+    const approvedSummaries = employeeSummaries.filter((summary) =>
+      this.approvalForEmployee(this.resolveEmployeeKey(summary)),
+    );
+    if (approvedSummaries.length === 0) {
       void this.alertService.validation('Select at least one approved employee before saving.');
       return;
     }
 
+    const cachedRows = this.rowCache();
+    const rowsByEmployee = new Map<string, PayrollProcessRow>();
+    const summariesToLoad: ApplicationFormRecord[] = [];
+    for (const summary of approvedSummaries) {
+      const employeeKey = this.resolveEmployeeKey(summary);
+      const cachedRow = cachedRows.get(employeeKey);
+      if (summary.detail) {
+        rowsByEmployee.set(employeeKey, cachedRow ?? this.mapRecordToRow(summary));
+        this.payrollDetailsLoaded.add(employeeKey);
+      } else if (cachedRow && this.payrollDetailsLoaded.has(employeeKey)) {
+        rowsByEmployee.set(employeeKey, cachedRow);
+      } else {
+        summariesToLoad.push(summary);
+      }
+    }
+
     this.saving.set(true);
+    if (summariesToLoad.length === 0) {
+      this.submitAvailableApprovedRows(approvedSummaries, rowsByEmployee);
+      return;
+    }
+
+    from(summariesToLoad)
+      .pipe(
+        concatMap((summary) =>
+          timer(PAYROLL_PROFILE_REQUEST_INTERVAL_MS).pipe(
+            switchMap(() =>
+              this.applicationFormService.fetchEmployeeProfileDetail(summary.apiId!).pipe(
+                retry({ count: 2, delay: payrollProfileRetryDelay }),
+                map((record) => ({ summary, record: record.detail ? record : null })),
+                catchError(() => of({ summary, record: null })),
+              ),
+            ),
+          ),
+        ),
+        toArray(),
+      )
+      .subscribe((results) => {
+        const missedEmployees: string[] = [];
+        for (const { summary, record } of results) {
+          if (!record) {
+            missedEmployees.push(summary.EmployeeName || summary.EmployeeCode);
+            continue;
+          }
+          const row = this.mapRecordToRow(record);
+          const employeeKey = this.resolveEmployeeKey(summary);
+          rowsByEmployee.set(employeeKey, row);
+          this.payrollDetailsLoaded.add(employeeKey);
+        }
+        this.rowCache.update((cache) => new Map([...cache, ...rowsByEmployee]));
+        this.submitAvailableApprovedRows(approvedSummaries, rowsByEmployee, missedEmployees);
+      });
+  }
+
+  private submitAvailableApprovedRows(
+    approvedSummaries: ApplicationFormRecord[],
+    rowsByEmployee: Map<string, PayrollProcessRow>,
+    missedEmployees: string[] = [],
+  ): void {
+    const loadedRows = approvedSummaries
+      .map((summary) => rowsByEmployee.get(this.resolveEmployeeKey(summary)))
+      .filter((row): row is PayrollProcessRow => !!row);
+    const rowsMissingBranch = loadedRows.filter((row) => !row.location.trim());
+    const missedEmployeeNames = [
+      ...missedEmployees,
+      ...rowsMissingBranch.map((row) => row.personName || row.employeeCode),
+    ];
+    const approvedRows = loadedRows.filter((row) => !!row.location.trim());
+    if (approvedRows.length === 0) {
+      this.saving.set(false);
+      void this.alertService.errorAndWait(
+        'Payroll Not Saved',
+        `Reason: No selected employees have complete payroll details and a branch. Missing details for: ${missedEmployeeNames.slice(0, 3).join(', ') || 'selected employees'}.`,
+      );
+      return;
+    }
+    this.submitApprovedPayrollRows(approvedRows, missedEmployeeNames);
+  }
+
+  private submitApprovedPayrollRows(
+    approvedRows: PayrollProcessRow[],
+    missedEmployees: string[] = [],
+  ): void {
     const payload = this.buildPayload(approvedRows);
 
     this.payrollProcessingService
@@ -1104,16 +1217,29 @@ export class AddPayrollProcessComponent implements OnInit {
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
         next: () => {
-          void this.alertService.success(
-            'Success',
-            `Payroll process saved for ${approvedRows.length} approved employee(s).`,
-          );
-          this.back();
+          if (missedEmployees.length > 0) {
+            const missedNames = missedEmployees.slice(0, 3).join(', ');
+            const additionalCount = missedEmployees.length - 3;
+            const additionalMessage = additionalCount > 0 ? ` and ${additionalCount} more` : '';
+            void this.alertService
+              .warningAndWait(
+                'Payroll Partially Saved',
+                `Saved ${approvedRows.length} employee(s); skipped ${missedEmployees.length} (${missedNames}${additionalMessage}). Reason: required employee details or branch information was unavailable.`,
+              )
+              .then(() => this.back());
+          } else {
+            void this.alertService.success(
+              'Success',
+              `Payroll process saved for ${approvedRows.length} approved employee(s).`,
+            );
+            this.back();
+          }
         },
         error: (error: unknown) => {
-          void this.alertService.error(
+          const reason = formatApiErrorMessage(error, 'The payroll API rejected the request.');
+          void this.alertService.errorAndWait(
             'Save Failed',
-            formatApiErrorMessage(error, 'Failed to save payroll process.'),
+            `Payroll was not saved. Reason: ${reason}`,
           );
           this.cdr.markForCheck();
         },
@@ -1141,6 +1267,7 @@ export class AddPayrollProcessComponent implements OnInit {
         employeeId: row.apiId,
         employeeCode: row.employeeCode,
         personName: row.personName,
+        branch: resolveBranchCode(row.location),
         basicSalary: row.basicSalary,
         grossSalary: row.grossSalary,
         grossSalaryInCash: row.grossSalaryInCash,
@@ -1188,6 +1315,7 @@ export class AddPayrollProcessComponent implements OnInit {
   private loadEmployees(): void {
     this.loading.set(true);
     this.rowCache.set(new Map());
+    this.payrollDetailsLoaded.clear();
     this.applicationFormService.fetchEmployeeProfiles().subscribe({
       next: (records) => {
         this.loadLoggedInUserProfile();
@@ -1405,8 +1533,11 @@ export class AddPayrollProcessComponent implements OnInit {
 
           this.rowCache.update((cache) => {
             const next = new Map(cache);
-            for (const row of rows) {
+            for (const [index, row] of rows.entries()) {
               next.set(row.apiId, row);
+              if (records[index]?.detail) {
+                this.payrollDetailsLoaded.add(row.apiId);
+              }
             }
             return next;
           });

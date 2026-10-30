@@ -18,6 +18,7 @@ export interface PayrollProcessingDetailPayload {
   employeeId: string;
   employeeCode: string;
   personName: string;
+  branch: string;
   basicSalary: number;
   grossSalary: number;
   grossSalaryInCash: number;
@@ -165,6 +166,7 @@ export class PayrollProcessingService {
       employeeId: this.pickString([item], ['employeeId', 'employee_id', 'EmployeeId']),
       employeeCode: this.pickString([item], ['employeeCode', 'employee_code', 'EmployeeCode']),
       personName: this.pickString([item], ['personName', 'person_name', 'PersonName', 'employeeName', 'employee_name']),
+      branch: this.pickString([item], ['branch', 'Branch', 'location', 'Location']),
       basicSalary: this.pickAmount(item, ['basicSalary', 'basic_salary', 'BasicSalary']),
       grossSalary: this.pickAmount(item, ['grossSalary', 'gross_salary', 'GrossSalary']),
       grossSalaryInCash: this.pickAmount(item, ['grossSalaryInCash', 'gross_salary_in_cash', 'GrossSalaryInCash']),

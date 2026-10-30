@@ -35,6 +35,30 @@ export class AlertService {
     });
   }
 
+  errorAndWait(title: string, message: string): Promise<void> {
+    return Swal.fire({
+      title,
+      text: message,
+      icon: 'error',
+      confirmButtonText: 'OK',
+      confirmButtonColor: '#0052cc',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+    }).then(() => undefined);
+  }
+
+  warningAndWait(title: string, message: string): Promise<void> {
+    return Swal.fire({
+      title,
+      text: message,
+      icon: 'warning',
+      confirmButtonText: 'OK',
+      confirmButtonColor: '#0052cc',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+    }).then(() => undefined);
+  }
+
   warning(title: string, message: string): void {
     void Swal.fire({
       title: title,
