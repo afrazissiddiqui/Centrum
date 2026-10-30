@@ -13,20 +13,22 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Subscription, forkJoin } from 'rxjs';
+import { Subscription, catchError, concatMap, from, map, of, tap, toArray } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import {
   ApplicationFormRecord,
   ApplicationFormService,
 } from '../../../../../services/application-form.service';
-import { AttendanceManagementService } from '../../../../../services/attendance-management.service';
 import { AlertService } from '../../../../../services/alert.service';
 import { AuthService } from '../../../../../services/auth.service';
 import {
   LoanAdvanceRecord,
   LoanAdvanceService,
 } from '../../../../../services/loan-advance.service';
-import { LeaveApplicationService } from '../../../../../services/leave-application.service';
+import {
+  LeaveApplicationRecord,
+  LeaveApplicationService,
+} from '../../../../../services/leave-application.service';
 import { OvertimeListRecord, OvertimeListService } from '../../../../../services/overtime-list.service';
 import {
   PayrollProcessingService,
@@ -34,7 +36,11 @@ import {
 } from '../../../../../services/payroll-processing.service';
 import { canonicalAttendanceKey } from '../../../../../services/attendance-management.service';
 import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
-import { countPayrollLeaveDays, PayrollLeaveDayCounts } from '../payroll-leave.util';
+import {
+  countPayrollLeaveDays,
+  PayrollLeaveDayCounts,
+  payrollLeaveSearchEmployeeCode,
+} from '../payroll-leave.util';
 import {
   PayrollSetupService,
   computeBasicSalary,
@@ -125,6 +131,12 @@ export interface PayrollProcessRow {
   approved: boolean;
 }
 
+interface PayrollEmployeeLeaveResult {
+  employeeCode: string;
+  records: LeaveApplicationRecord[];
+  error?: unknown;
+}
+
 export type PayrollColumnTone =
   | 'salary'
   | 'allowances'
@@ -172,7 +184,6 @@ export class AddPayrollProcessComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly loanAdvanceService = inject(LoanAdvanceService);
   private readonly leaveApplicationService = inject(LeaveApplicationService);
-  private readonly attendanceManagementService = inject(AttendanceManagementService);
   private readonly overtimeListService = inject(OvertimeListService);
   private readonly payrollSetupService = inject(PayrollSetupService);
   private readonly payrollProcessingService = inject(PayrollProcessingService);
@@ -230,6 +241,7 @@ export class AddPayrollProcessComponent implements OnInit {
   private leaveDaysSub?: Subscription;
   private pageDetailsGeneration = 0;
   private leaveDaysByEmployee = new Map<string, PayrollLeaveDayCounts>();
+  private leaveDaysMonth = '';
   private readonly lastMonthGrossSalaryCache = new Map<string, number>();
   private readonly approvalOverrides = signal<Map<string, boolean>>(new Map());
 
@@ -448,12 +460,14 @@ export class AddPayrollProcessComponent implements OnInit {
     this.currentPage.set(page);
     this.scrollTablesToTop();
     this.loadCurrentPageDetails();
+    this.loadPayrollMonthLeaveDays();
   }
 
   onPageSizeChange(): void {
     this.currentPage.set(1);
     this.scrollTablesToTop();
     this.loadCurrentPageDetails();
+    this.loadPayrollMonthLeaveDays();
   }
 
   onSelectedMonthChange(value: string | number): void {
@@ -473,6 +487,7 @@ export class AddPayrollProcessComponent implements OnInit {
     this.currentPage.set(1);
     this.scrollTablesToTop();
     this.loadCurrentPageDetails();
+    this.loadPayrollMonthLeaveDays();
   }
 
   onSearchChange(value: string): void {
@@ -480,6 +495,7 @@ export class AddPayrollProcessComponent implements OnInit {
     this.currentPage.set(1);
     this.scrollTablesToTop();
     this.loadCurrentPageDetails();
+    this.loadPayrollMonthLeaveDays();
   }
 
   onFuelPriceAdjustChange(value: string | number): void {
@@ -1251,65 +1267,96 @@ export class AddPayrollProcessComponent implements OnInit {
 
   private loadPayrollMonthLeaveDays(): void {
     this.leaveDaysSub?.unsubscribe();
-    this.leaveDaysByEmployee = new Map();
-    this.loadingLeaveDays.set(true);
-    this.leaveDaysLoadFailed.set(false);
+    const payrollMonth = this.getSelectedPayrollMonth();
+    if (this.leaveDaysMonth !== payrollMonth) {
+      this.leaveDaysByEmployee.clear();
+      this.leaveDaysMonth = payrollMonth;
+      this.leaveDaysLoadFailed.set(false);
+    }
 
-    const employees = this.employeeSummaries();
-    if (employees.length === 0) {
+    const employeesToLoad = this.currentPageSummaries().filter((employee) =>
+      !this.leaveDaysByEmployee.has(canonicalAttendanceKey(employee.EmployeeCode)),
+    );
+    if (employeesToLoad.length === 0) {
       this.loadingLeaveDays.set(false);
       return;
     }
 
-    const [year, month] = this.getSelectedPayrollMonth().split('-').map(Number);
-    const fromDate = `${this.getSelectedPayrollMonth()}-01`;
+    this.loadingLeaveDays.set(true);
+    const [year, month] = payrollMonth.split('-').map(Number);
+    const fromDate = `${payrollMonth}-01`;
     const toDate = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+    const failedEmployees: Array<{ employeeCode: string; error: unknown }> = [];
+    this.leaveDaysSub = from(employeesToLoad).pipe(
+      concatMap((employee) => {
+        const employeeCode = employee.EmployeeCode || employee.detail?.loginDetails.employeeCode || '';
+        return this.leaveApplicationService
+          .fetchLeaveApplicationsForEmployee(
+            payrollLeaveSearchEmployeeCode(employeeCode),
+            fromDate,
+            toDate,
+          )
+          .pipe(
+            map((records): PayrollEmployeeLeaveResult => ({ employeeCode, records })),
+            catchError((error: unknown) =>
+              of<PayrollEmployeeLeaveResult>({ employeeCode, records: [], error }),
+            ),
+          );
+      }),
+      tap((result) => {
+        if (!('error' in result)) {
+          this.applyPayrollLeaveDays(result.employeeCode, result.records, payrollMonth);
+        }
+      }),
+      toArray(),
+    ).subscribe((results) => {
+      for (const result of results) {
+        if ('error' in result) {
+          failedEmployees.push({ employeeCode: result.employeeCode, error: result.error });
+        }
+      }
 
-    this.leaveDaysSub = forkJoin({
-      leaveRecords: this.leaveApplicationService.fetchLeaveApplicationsForDateRange(fromDate, toDate),
-      attendanceSlots: this.attendanceManagementService.fetchDateRangeSlots(employees, fromDate, toDate),
-    })
-      .subscribe({
-        next: ({ leaveRecords, attendanceSlots }) => {
-          const absentDatesByEmployee = new Map<string, string[]>();
-          for (const slot of attendanceSlots) {
-            if (slot.status !== 'Absent') {
-              continue;
-            }
-            const dates = absentDatesByEmployee.get(slot.employeeKey) ?? [];
-            dates.push(slot.date);
-            absentDatesByEmployee.set(slot.employeeKey, dates);
-          }
-          this.leaveDaysByEmployee = countPayrollLeaveDays(
-            leaveRecords,
-            this.getSelectedPayrollMonth(),
-            absentDatesByEmployee,
-          );
-          this.rowCache.update((cache) => {
-            const next = new Map(cache);
-            for (const [apiId, row] of next) {
-              const leaveDays = this.getLeaveDays(row.employeeCode);
-              next.set(apiId, {
-                ...row,
-                paidLeaveDays: leaveDays.paid,
-                unpaidLeaveDays: leaveDays.unpaid,
-              });
-            }
-            return next;
-          });
-          this.loadingLeaveDays.set(false);
-          this.cdr.markForCheck();
-        },
-        error: (error: unknown) => {
-          this.leaveDaysLoadFailed.set(true);
-          this.loadingLeaveDays.set(false);
-          void this.alertService.error(
-            'Leave Days Unavailable',
-            formatApiErrorMessage(error, 'Paid and unpaid leave days could not be loaded for this payroll month.'),
-          );
-          this.cdr.markForCheck();
-        },
-      });
+      this.leaveDaysLoadFailed.set(failedEmployees.length > 0);
+      this.loadingLeaveDays.set(false);
+      if (failedEmployees.length > 0) {
+        void this.alertService.error(
+          'Leave Days Unavailable',
+          `${failedEmployees.length} employee leave request(s) could not be loaded. ${formatApiErrorMessage(
+            failedEmployees[0].error,
+            'Paid and unpaid leave days could not be loaded for this payroll month.',
+          )}`,
+        );
+      }
+      this.cdr.markForCheck();
+    });
+  }
+
+  private applyPayrollLeaveDays(
+    employeeCode: string,
+    records: LeaveApplicationRecord[],
+    payrollMonth: string,
+  ): void {
+    const employeeKey = canonicalAttendanceKey(employeeCode);
+    const employeeLeaveCounts = countPayrollLeaveDays(records, payrollMonth);
+    this.leaveDaysByEmployee.set(
+      employeeKey,
+      employeeLeaveCounts.get(employeeKey) ?? { paid: 0, unpaid: 0 },
+    );
+    this.rowCache.update((cache) => {
+      const next = new Map(cache);
+      for (const [apiId, row] of next) {
+        if (canonicalAttendanceKey(row.employeeCode) !== employeeKey) {
+          continue;
+        }
+        const leaveDays = this.getLeaveDays(row.employeeCode);
+        next.set(apiId, this.recalculateRow({
+          ...row,
+          paidLeaveDays: leaveDays.paid,
+          unpaidLeaveDays: leaveDays.unpaid,
+        }));
+      }
+      return next;
+    });
   }
 
   private refreshPayrollRows(): void {

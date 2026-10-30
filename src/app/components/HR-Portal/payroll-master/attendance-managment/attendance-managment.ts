@@ -10,7 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Subscription, forkJoin, map } from 'rxjs';
+import { Subscription } from 'rxjs';
 import { ColumnResizeDirective } from '../../../../column-resize';
 import { PageToolbarComponent } from '../../../page-toolbar/page-toolbar';
 import { AlertService } from '../../../../services/alert.service';
@@ -1037,30 +1037,9 @@ export class AttendanceManagmentComponent implements OnInit {
         .map((record) => record.date),
     }));
 
-    this.leaveSummarySub = forkJoin({
-      allLeaveRecords: this.leaveApplicationService.fetchLeaveApplicationsForDateRange(this.fromDate, this.toDate),
-      unpaidLeaveRecords: this.leaveApplicationService.fetchLeaveApplicationsForDateRange(
-        this.fromDate,
-        this.toDate,
-        'Unannounced Leave',
-      ),
-    }).pipe(
-      map(({ allLeaveRecords, unpaidLeaveRecords }) => {
-        const merged = new Map<string, (typeof allLeaveRecords)[number]>();
-        for (const record of [...allLeaveRecords, ...unpaidLeaveRecords]) {
-          const key = record.Id
-            ? String(record.Id)
-            : [
-                canonicalAttendanceKey(record.EmployeeId),
-                record.LeaveType.trim().toLowerCase(),
-                record.FromDate,
-                record.ToDate,
-              ].join('|');
-          merged.set(key, record);
-        }
-        return [...merged.values()];
-      }),
-    ).subscribe({
+    this.leaveSummarySub = this.leaveApplicationService
+      .fetchLeaveApplicationsForDateRange(this.fromDate, this.toDate)
+      .subscribe({
       next: (records) => {
         const leaveDatesByEmployee = indexLeaveDatesByType(
           employeesWithAbsences,

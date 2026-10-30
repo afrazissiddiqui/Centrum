@@ -6,10 +6,14 @@ export interface PayrollLeaveDayCounts {
   unpaid: number;
 }
 
+export function payrollLeaveSearchEmployeeCode(employeeCode: string): string {
+  const normalized = canonicalAttendanceKey(employeeCode);
+  return /^\d+$/.test(normalized) ? `emp-${normalized}` : employeeCode.trim().toLowerCase();
+}
+
 export function countPayrollLeaveDays(
   records: Array<Pick<LeaveApplicationRecord, 'EmployeeId' | 'FromDate' | 'ToDate' | 'LeaveType'>>,
   payrollMonth: string,
-  absentDatesByEmployee: Map<string, string[]>,
 ): Map<string, PayrollLeaveDayCounts> {
   const [yearValue, monthValue] = payrollMonth.split('-').map(Number);
   if (!Number.isInteger(yearValue) || !Number.isInteger(monthValue) || monthValue < 1 || monthValue > 12) {
@@ -19,23 +23,12 @@ export function countPayrollLeaveDays(
   const monthStart = Date.UTC(yearValue, monthValue - 1, 1) / 86400000;
   const monthEnd = Date.UTC(yearValue, monthValue, 0) / 86400000;
   const datesByEmployee = new Map<string, { paid: Set<number>; unpaid: Set<number> }>();
-  const absentDaysByEmployee = new Map<string, Set<number>>();
-  for (const [employeeCode, dates] of absentDatesByEmployee) {
-    const employeeKey = canonicalAttendanceKey(employeeCode);
-    if (employeeKey) {
-      absentDaysByEmployee.set(
-        employeeKey,
-        new Set(dates.map(parseLeaveDay).filter((day): day is number => day !== null)),
-      );
-    }
-  }
 
   for (const record of records) {
     const employeeKey = canonicalAttendanceKey(record.EmployeeId);
-    const absentDays = absentDaysByEmployee.get(employeeKey);
     const leaveStart = parseLeaveDay(record.FromDate);
     const leaveEnd = parseLeaveDay(record.ToDate);
-    if (!employeeKey || !absentDays?.size || leaveStart === null || leaveEnd === null) {
+    if (!employeeKey || leaveStart === null || leaveEnd === null) {
       continue;
     }
 
@@ -49,9 +42,7 @@ export function countPayrollLeaveDays(
     const leaveType = record.LeaveType.trim().toLowerCase().replace(/[^a-z]/g, '');
     const target = leaveType === 'unannouncedleave' ? dates.unpaid : dates.paid;
     for (let day = start; day <= end; day += 1) {
-      if (absentDays.has(day)) {
-        target.add(day);
-      }
+      target.add(day);
     }
     datesByEmployee.set(employeeKey, dates);
   }
