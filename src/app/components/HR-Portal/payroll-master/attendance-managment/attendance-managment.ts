@@ -10,7 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Subscription, catchError, forkJoin, from, map, mergeMap, of, toArray } from 'rxjs';
+import { Subscription, forkJoin, map } from 'rxjs';
 import { ColumnResizeDirective } from '../../../../column-resize';
 import { PageToolbarComponent } from '../../../page-toolbar/page-toolbar';
 import { AlertService } from '../../../../services/alert.service';
@@ -1024,6 +1024,11 @@ export class AttendanceManagmentComponent implements OnInit {
       }
     }
 
+    if (pendingRows.length === 0) {
+      this.loadingLeaveSummary.set(false);
+      return;
+    }
+
     const employeesWithAbsences = pendingRows.map((row) => ({
       employeeKey: row.employeeKey,
       employeeCode: row.employeeCode,
@@ -1032,95 +1037,61 @@ export class AttendanceManagmentComponent implements OnInit {
         .map((record) => record.date),
     }));
 
-    const pendingEmployeeKeys = new Set(pendingRows.map((row) => row.employeeKey));
-    const unpaidLeaveRequests = from(employees).pipe(
-      mergeMap(
-        (row) =>
-          this.leaveApplicationService
-            .fetchLeaveApplicationsForEmployee(
-              row.employeeCode.toLowerCase(),
-              this.fromDate,
-              this.toDate,
-              'Unannounced Leave',
-            )
-            .pipe(
-              map((records) => ({ employeeKey: row.employeeKey, records })),
-              catchError((error: unknown) =>
-                of({ employeeKey: row.employeeKey, records: [], error }),
-              ),
-            ),
-        3,
-      ),
-      toArray(),
-    );
-
     this.leaveSummarySub = forkJoin({
       allLeaveRecords: this.leaveApplicationService.fetchLeaveApplicationsForDateRange(this.fromDate, this.toDate),
-      unpaidLeaveResults: unpaidLeaveRequests,
-    }).subscribe({
-        next: ({ allLeaveRecords, unpaidLeaveResults }) => {
-          const failedRequests = unpaidLeaveResults.filter((result) => 'error' in result);
-          for (const result of failedRequests) {
-            if (pendingEmployeeKeys.has(result.employeeKey)) {
-              this.failedLeaveEmployeeKeys.add(result.employeeKey);
-            }
-          }
-
-          const unpaidLeaveRecords = unpaidLeaveResults.flatMap((result) => result.records);
-          const merged = new Map<string, (typeof allLeaveRecords)[number]>();
-          for (const record of [...allLeaveRecords, ...unpaidLeaveRecords]) {
-            const key = record.Id
-              ? String(record.Id)
-              : [
-                  canonicalAttendanceKey(record.EmployeeId),
-                  record.LeaveType.trim().toLowerCase(),
-                  record.FromDate,
-                  record.ToDate,
-                ].join('|');
-            merged.set(key, record);
-          }
-          const leaveDatesByEmployee = indexLeaveDatesByType(
-            employeesWithAbsences,
-            [...merged.values()],
-            this.fromDate,
-            this.toDate,
-          );
-          for (const row of pendingRows) {
-            if (this.failedLeaveEmployeeKeys.has(row.employeeKey)) {
-              continue;
-            }
-            const leaveDates = leaveDatesByEmployee.get(row.employeeKey) ?? {
-              paidDates: new Set<string>(),
-              unpaidDates: new Set<string>(),
-            };
-            this.dateRangePaidLeaveMap.set(row.employeeKey, leaveDates.paidDates.size);
-            this.dateRangeUnpaidLeaveMap.set(row.employeeKey, leaveDates.unpaidDates.size);
-            this.dateRangePaidLeaveDates.set(row.employeeKey, leaveDates.paidDates);
-            this.dateRangeUnpaidLeaveDates.set(row.employeeKey, leaveDates.unpaidDates);
-          }
-          this.loadingLeaveSummary.set(false);
-          if (failedRequests.length > 0) {
-            void this.alertService.error(
-              'Unpaid Leave Summary Incomplete',
-              `Unannounced leave for ${failedRequests.length} employee(s) could not be loaded. ${formatApiErrorMessage(
-                failedRequests[0].error,
-                'The leave service could not load unpaid leave records.',
-              )}`,
-            );
-          }
-        },
-        error: (error: unknown) => {
-          pendingRows.forEach((row) => this.failedLeaveEmployeeKeys.add(row.employeeKey));
-          this.loadingLeaveSummary.set(false);
-          void this.alertService.error(
-            'Leave Summary Failed',
-            `Leave summaries for ${pendingRows.length} employee(s) could not be loaded. ${formatApiErrorMessage(
-              error,
-              'The leave service could not load records for the selected date range.',
-            )}`,
-          );
-        },
-      });
+      unpaidLeaveRecords: this.leaveApplicationService.fetchLeaveApplicationsForDateRange(
+        this.fromDate,
+        this.toDate,
+        'Unannounced Leave',
+      ),
+    }).pipe(
+      map(({ allLeaveRecords, unpaidLeaveRecords }) => {
+        const merged = new Map<string, (typeof allLeaveRecords)[number]>();
+        for (const record of [...allLeaveRecords, ...unpaidLeaveRecords]) {
+          const key = record.Id
+            ? String(record.Id)
+            : [
+                canonicalAttendanceKey(record.EmployeeId),
+                record.LeaveType.trim().toLowerCase(),
+                record.FromDate,
+                record.ToDate,
+              ].join('|');
+          merged.set(key, record);
+        }
+        return [...merged.values()];
+      }),
+    ).subscribe({
+      next: (records) => {
+        const leaveDatesByEmployee = indexLeaveDatesByType(
+          employeesWithAbsences,
+          records,
+          this.fromDate,
+          this.toDate,
+        );
+        for (const row of pendingRows) {
+          const leaveDates = leaveDatesByEmployee.get(row.employeeKey) ?? {
+            paidDates: new Set<string>(),
+            unpaidDates: new Set<string>(),
+          };
+          this.dateRangePaidLeaveMap.set(row.employeeKey, leaveDates.paidDates.size);
+          this.dateRangeUnpaidLeaveMap.set(row.employeeKey, leaveDates.unpaidDates.size);
+          this.dateRangePaidLeaveDates.set(row.employeeKey, leaveDates.paidDates);
+          this.dateRangeUnpaidLeaveDates.set(row.employeeKey, leaveDates.unpaidDates);
+        }
+        this.loadingLeaveSummary.set(false);
+      },
+      error: (error: unknown) => {
+        pendingRows.forEach((row) => this.failedLeaveEmployeeKeys.add(row.employeeKey));
+        this.loadingLeaveSummary.set(false);
+        void this.alertService.error(
+          'Leave Summary Failed',
+          `Leave summaries for ${pendingRows.length} employee(s) could not be loaded. ${formatApiErrorMessage(
+            error,
+            'The leave service could not load records for the selected date range.',
+          )}`,
+        );
+      },
+    });
   }
 
   private getSlotSortableValue(row: AttendanceSlotRef, key: AttendanceColumnKey): string | number {
