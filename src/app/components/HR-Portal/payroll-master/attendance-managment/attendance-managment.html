@@ -660,7 +660,7 @@
       <form class="attendance-update-form" (ngSubmit)="saveAttendanceUpdate()">
         <label>
           Card Number
-          <input class="attendance-control" name="card_no" [(ngModel)]="attendanceUpdateForm.card_no" readonly />
+          <input class="attendance-control" name="card_no" [(ngModel)]="attendanceUpdateForm.card_no" required />
         </label>
         <label>
           Punch In
@@ -676,11 +676,11 @@
         </label>
         <label>
           Machine ID
-          <input class="attendance-control" name="machine_id" [(ngModel)]="attendanceUpdateForm.machine_id" readonly />
+          <input class="attendance-control" name="machine_id" [(ngModel)]="attendanceUpdateForm.machine_id" />
         </label>
         <label>
           Status
-          <input class="attendance-control" name="status" [(ngModel)]="attendanceUpdateForm.status" readonly />
+          <input class="attendance-control" name="status" [(ngModel)]="attendanceUpdateForm.status" placeholder="e.g. 01 / 02" />
         </label>
         <label class="attendance-update-form__full">
           Attendance Date

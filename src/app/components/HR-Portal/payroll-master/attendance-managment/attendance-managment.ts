@@ -729,26 +729,28 @@ export class AttendanceManagmentComponent implements OnInit {
   }
 
   canUpdateAttendance(record: AttendanceDailyRecord | null | undefined): boolean {
-    return !!record?.Punches.some((punch) => punch.RecordId !== undefined && punch.RecordId !== null);
+    return !!record?.CardNo ||
+      !!record?.Punches.some((punch) => punch.RecordId !== undefined && punch.RecordId !== null);
   }
 
   openAttendanceUpdate(record: AttendanceDailyRecord): void {
     const sourcePunch = record.Punches.find(
       (punch) => punch.RecordId !== undefined && punch.RecordId !== null,
     );
-    if (!sourcePunch) {
-      void this.alertService.warning('Cannot Update Attendance', 'The attendance record ID is missing.');
+    const cardNo = record.CardNo || sourcePunch?.EmployeeId;
+    if (!cardNo) {
+      void this.alertService.warning('Cannot Update Attendance', 'The employee card number is missing.');
       return;
     }
 
-    this.attendanceUpdateRecordId = sourcePunch.RecordId ?? null;
+    this.attendanceUpdateRecordId = cardNo;
     this.attendanceUpdateForm = {
-      card_no: sourcePunch.EmployeeId,
+      card_no: cardNo,
       punch_in: toDateTimeLocalValue(record.PunchIn),
       punch_out: toDateTimeLocalValue(record.PunchOut),
       hours_worked: record.WorkingHours || formatWorkingDuration(record.WorkingMinutes),
-      machine_id: sourcePunch.DeviceNo,
-      status: sourcePunch.Status,
+      machine_id: sourcePunch?.DeviceNo ?? record.PunchInDevice ?? '',
+      status: sourcePunch?.Status ?? '',
       attendance_date: toDateTimeLocalValue(record.PunchOut || record.PunchIn || record.AttendanceDate),
     };
     this.showAttendanceUpdateDialog = true;

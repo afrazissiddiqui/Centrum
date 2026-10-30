@@ -28,6 +28,7 @@ export interface AttendancePunchRecord {
 
 export interface AttendanceDailyRecord {
   EmployeeId: string;
+  CardNo?: string;
   EmployeeName: string;
   AttendanceDate: string;
   PunchIn: string;
@@ -55,6 +56,7 @@ export interface AttendanceRawPunchUpdatePayload {
 /** Lightweight row used for filtering, sorting, and pagination before page materialization. */
 export interface AttendanceSlotRef {
   employeeKey: string;
+  CardNo?: string;
   displayId: string;
   employeeName: string;
   date: string;
@@ -428,8 +430,9 @@ export class AttendanceManagementService {
       const displayId =
         index.displayIdByKey.get(parsed.employeeKey) ?? formatAttendanceUserId(parsed.employeeKey);
       const employeeName = index.nameByKey.get(parsed.employeeKey) ?? '';
+      const cardNo = index.cardNoByKey.get(parsed.employeeKey) ?? dayPunches[0]?.EmployeeId;
       slots.push(
-        this.buildSlotRef(parsed.employeeKey, displayId, employeeName, parsed.date, dayPunches),
+        this.buildSlotRef(parsed.employeeKey, displayId, employeeName, parsed.date, dayPunches, cardNo),
       );
       covered.add(groupKey);
     }
@@ -438,13 +441,14 @@ export class AttendanceManagementService {
     for (const employeeKey of rosterKeys) {
       const displayId = index.displayIdByKey.get(employeeKey) ?? formatAttendanceUserId(employeeKey);
       const employeeName = index.nameByKey.get(employeeKey) ?? '';
+      const cardNo = index.cardNoByKey.get(employeeKey);
 
       for (const date of queryDates) {
         const groupKey = attendanceGroupKey(employeeKey, date);
         if (covered.has(groupKey)) {
           continue;
         }
-        slots.push(this.buildSlotRef(employeeKey, displayId, employeeName, date, []));
+        slots.push(this.buildSlotRef(employeeKey, displayId, employeeName, date, [], cardNo));
       }
     }
 
@@ -457,11 +461,13 @@ export class AttendanceManagementService {
     employeeName: string,
     date: string,
     punches: AttendancePunchRecord[],
+    cardNo?: string,
   ): AttendanceSlotRef {
     // API returns punch rows only (no punch-in / punch-out fields). Any row = Present.
     if (punches.length === 0) {
       return {
         employeeKey,
+        ...(cardNo ? { CardNo: formatAttendanceCardNo(cardNo) } : {}),
         displayId,
         employeeName,
         date,
@@ -490,6 +496,7 @@ export class AttendanceManagementService {
 
     return {
       employeeKey,
+      ...(cardNo ? { CardNo: formatAttendanceCardNo(cardNo) } : {}),
       displayId,
       employeeName,
       date,
@@ -511,6 +518,7 @@ export class AttendanceManagementService {
 
     return {
       EmployeeId: slot.displayId,
+      ...(slot.CardNo ? { CardNo: slot.CardNo } : {}),
       EmployeeName: slot.employeeName,
       AttendanceDate: slot.date,
       PunchIn: slot.punchIn,
@@ -1051,6 +1059,7 @@ interface EmployeeAttendanceIndex {
   aliasToCanonical: Map<string, string>;
   nameByKey: Map<string, string>;
   displayIdByKey: Map<string, string>;
+  cardNoByKey: Map<string, string>;
 }
 
 function attendanceKeyVariants(value: string): string[] {
@@ -1121,6 +1130,7 @@ function buildEmployeeAttendanceIndex(employees: ApplicationFormRecord[]): Emplo
     aliasToCanonical: new Map<string, string>(),
     nameByKey: new Map<string, string>(),
     displayIdByKey: new Map<string, string>(),
+    cardNoByKey: new Map<string, string>(),
   };
 
   for (const employee of employees) {
@@ -1133,6 +1143,10 @@ function buildEmployeeAttendanceIndex(employees: ApplicationFormRecord[]): Emplo
     }
 
     const employeeName = employee.EmployeeName?.trim() || '';
+    const resolvedCardNo = cardNo || rawUserId || employeeCode || '';
+    if (resolvedCardNo) {
+      index.cardNoByKey.set(canonical, formatAttendanceCardNo(resolvedCardNo));
+    }
     registerEmployeeAliases(index, canonical, employeeCode || cardNo || rawUserId, employeeName, [
       employee.ExtEmpNo,
       employee.detail?.loginDetails.legacyCode,

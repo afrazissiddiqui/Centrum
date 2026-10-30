@@ -178,17 +178,42 @@ describe('AttendanceManagementService calculated working hours', () => {
     };
     let updated = false;
 
-    service.updateAttendanceRecord('raw/id 3', payload).subscribe(() => {
+    service.updateAttendanceRecord(payload.card_no, payload).subscribe(() => {
       updated = true;
     });
 
     const request = httpMock.expectOne(
-      'http://alhafiz.vdc.services:8084/ahcp/public/api/attendance-raw-punch-update/raw%2Fid%203',
+      'http://alhafiz.vdc.services:8084/ahcp/public/api/attendance-raw-punch-update/00000003',
     );
     expect(request.request.method).toBe('PUT');
     expect(request.request.body).toEqual(payload);
     request.flush({ message: 'updated' });
     expect(updated).toBe(true);
+  });
+
+  it('keeps the employee card number on generated absent attendance slots', () => {
+    employeeRecords = [{
+      EmployeeCode: 'EMP-00000007',
+      EmployeeName: 'Test Employee',
+      ExtEmpNo: '00001161',
+      Department: '',
+      EmployeeNature: '',
+      Designation: '',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: 'Active',
+    }];
+    service.loadSession({ mode: 'date', date: '2026-10-28' }).subscribe();
+
+    const request = httpMock.expectOne((req) => req.url.includes('/api/attendance-raw-punch-list'));
+    request.flush(JSON.stringify({ data: [] }));
+
+    const [slot] = service.slots();
+    const [record] = service.materializeSlots([slot]);
+    expect(slot.status).toBe('Absent');
+    expect(record.CardNo).toBe('00001161');
   });
 
   it('indexes monthly punches by employee code and date for roster absence checks', () => {
