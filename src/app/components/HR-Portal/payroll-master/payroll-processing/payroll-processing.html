@@ -173,6 +173,8 @@
               <div class="js-detail-item"><label>Status:</label> <span>{{ record.Header.status }}</span></div>
               <div class="js-detail-item"><label>Processed By:</label> <span>{{ record.Header.processedBy }}</span></div>
               <div class="js-detail-item"><label>Processed Date:</label> <span>{{ record.Header.processedDate }}</span></div>
+              <div class="js-detail-item"><label>Monthly Fuel Rate Adjustment:</label> <span>{{ formatMoney(record.Header.fuelPriceAdjust || 0, record.Header.currency) }}</span></div>
+              <div class="js-detail-item"><label>Minimum Wage Adjustment:</label> <span>{{ formatMoney(record.Header.minimumWageAdjust || 0, record.Header.currency) }}</span></div>
             </div>
             <div class="js-detail-full" *ngIf="record.Header.remarks">
               <label>Remarks:</label>
@@ -183,33 +185,21 @@
           <div class="js-detail-section">
             <h3>Employee Lines ({{ record.Details.length }})</h3>
             <div style="overflow-x: auto;">
-              <table style="width: 100%; border-collapse: collapse; min-width: 1400px;">
+              <table style="width: 100%; border-collapse: collapse; min-width: 2800px;">
                 <thead style="background-color: #f8fafc;">
                   <tr>
-                    <th style="border: 1px solid #e2e8f0; padding: 8px; text-align: left;">Employee Code</th>
-                    <th style="border: 1px solid #e2e8f0; padding: 8px; text-align: left;">Name</th>
-                    <th style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">Basic Salary</th>
-                    <th style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">Gross Salary</th>
-                    <th style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">Fuel</th>
-                    <th style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">Overtime</th>
-                    <th style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">Bonus</th>
-                    <th style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">Total Earnings</th>
-                    <th style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">Net Payable</th>
-                    <th style="border: 1px solid #e2e8f0; padding: 8px; text-align: center;">Approved</th>
+                    <th *ngFor="let column of payrollDetailColumns"
+                      style="border: 1px solid #e2e8f0; padding: 8px; text-align: left; white-space: nowrap;">
+                      {{ column.label }}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let detail of record.Details">
-                    <td style="border: 1px solid #e2e8f0; padding: 8px;">{{ detail.employeeCode }}</td>
-                    <td style="border: 1px solid #e2e8f0; padding: 8px;">{{ detail.personName }}</td>
-                    <td style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">{{ formatMoney(detail.basicSalary, record.Header.currency) }}</td>
-                    <td style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">{{ formatMoney(detail.grossSalary, record.Header.currency) }}</td>
-                    <td style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">{{ formatMoney(detail.fuelAllowance, record.Header.currency) }}</td>
-                    <td style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">{{ formatMoney(detail.overtime, record.Header.currency) }}</td>
-                    <td style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">{{ formatMoney(detail.bonus, record.Header.currency) }}</td>
-                    <td style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">{{ formatMoney(detail.totalEarnings, record.Header.currency) }}</td>
-                    <td style="border: 1px solid #e2e8f0; padding: 8px; text-align: right;">{{ formatMoney(detail.netPayable, record.Header.currency) }}</td>
-                    <td style="border: 1px solid #e2e8f0; padding: 8px; text-align: center;">{{ detail.approved ? 'Yes' : 'No' }}</td>
+                    <td *ngFor="let column of payrollDetailColumns"
+                      style="border: 1px solid #e2e8f0; padding: 8px; white-space: nowrap;">
+                      {{ formatDetailValue(detail, column, record.Header.currency) }}
+                    </td>
                   </tr>
                 </tbody>
               </table>

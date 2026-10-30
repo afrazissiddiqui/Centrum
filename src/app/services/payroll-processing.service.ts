@@ -12,17 +12,34 @@ export interface PayrollProcessingHeaderPayload {
   processedBy: number;
   processedDate: string;
   fuelPriceAdjust?: number;
+  minimumWageAdjust?: number;
 }
 
 export interface PayrollProcessingDetailPayload {
   employeeId: string;
   employeeCode: string;
   personName: string;
+  username: string;
+  designation: string;
+  department: string;
+  employeeCategory: string;
+  employmentNature: string;
+  employmentType: string;
+  jobTitle: string;
   branch: string;
+  location: string;
+  workGradeLevel: string;
+  dateOfJoining: string;
+  yearsOfService: number;
+  overtimeApplicable: boolean;
+  allowancesApplicable: boolean;
+  eobiApplicable: boolean;
+  providentApplicable: boolean;
   basicSalary: number;
   grossSalary: number;
   grossSalaryInCash: number;
   grossSalaryInBank: number;
+  paymentMode: string;
   medicalAllowance: number;
   allowedLiters: number;
   monthlyFuelRate: number;
@@ -45,11 +62,14 @@ export interface PayrollProcessingDetailPayload {
   loanAdjustment: number;
   loanAdvForm: number;
   lateAttendDeduction: number;
+  paidLeaveDays: number;
+  unpaidLeaveDays: number;
   costToCompany: number;
   taxDeduction: number;
   totalEarnings: number;
   netPayable: number;
   netPayableAfterTax: number;
+  netPayableManagement: number;
   finalGrossSalary: number;
   approved: boolean;
 }
@@ -158,6 +178,7 @@ export class PayrollProcessingService {
       processedBy: this.pickNumber([source], ['processedBy', 'processed_by', 'ProcessedBy']),
       processedDate: this.pickString([source], ['processedDate', 'processed_date', 'ProcessedDate']),
       fuelPriceAdjust: this.pickAmount(source, ['fuelPriceAdjust', 'fuel_price_adjust', 'FuelPriceAdjust']),
+      minimumWageAdjust: this.pickAmount(source, ['minimumWageAdjust', 'minimum_wage_adjust', 'MinimumWageAdjust']),
     };
   }
 
@@ -166,11 +187,27 @@ export class PayrollProcessingService {
       employeeId: this.pickString([item], ['employeeId', 'employee_id', 'EmployeeId']),
       employeeCode: this.pickString([item], ['employeeCode', 'employee_code', 'EmployeeCode']),
       personName: this.pickString([item], ['personName', 'person_name', 'PersonName', 'employeeName', 'employee_name']),
+      username: this.pickString([item], ['username', 'userName', 'user_name', 'Username']),
+      designation: this.pickString([item], ['designation', 'Designation']),
+      department: this.pickString([item], ['department', 'Department']),
+      employeeCategory: this.pickString([item], ['employeeCategory', 'employee_category', 'EmployeeCategory']),
+      employmentNature: this.pickString([item], ['employmentNature', 'employment_nature', 'EmploymentNature']),
+      employmentType: this.pickString([item], ['employmentType', 'employment_type', 'EmploymentType']),
+      jobTitle: this.pickString([item], ['jobTitle', 'job_title', 'JobTitle']),
       branch: this.pickString([item], ['branch', 'Branch', 'location', 'Location']),
+      location: this.pickString([item], ['location', 'Location', 'branch', 'Branch']),
+      workGradeLevel: this.pickString([item], ['workGradeLevel', 'work_grade_level', 'WorkGradeLevel']),
+      dateOfJoining: this.pickString([item], ['dateOfJoining', 'date_of_joining', 'DateOfJoining']),
+      yearsOfService: this.pickAmount(item, ['yearsOfService', 'years_of_service', 'YearsOfService']),
+      overtimeApplicable: this.pickBoolean(item, ['overtimeApplicable', 'overtime_applicable', 'OvertimeApplicable']),
+      allowancesApplicable: this.pickBoolean(item, ['allowancesApplicable', 'allowances_applicable', 'AllowancesApplicable']),
+      eobiApplicable: this.pickBoolean(item, ['eobiApplicable', 'eobi_applicable', 'EobiApplicable']),
+      providentApplicable: this.pickBoolean(item, ['providentApplicable', 'provident_applicable', 'ProvidentApplicable']),
       basicSalary: this.pickAmount(item, ['basicSalary', 'basic_salary', 'BasicSalary']),
       grossSalary: this.pickAmount(item, ['grossSalary', 'gross_salary', 'GrossSalary']),
       grossSalaryInCash: this.pickAmount(item, ['grossSalaryInCash', 'gross_salary_in_cash', 'GrossSalaryInCash']),
       grossSalaryInBank: this.pickAmount(item, ['grossSalaryInBank', 'gross_salary_in_bank', 'GrossSalaryInBank']),
+      paymentMode: this.pickString([item], ['paymentMode', 'payment_mode', 'PaymentMode']),
       medicalAllowance: this.pickAmount(item, ['medicalAllowance', 'medical_allowance', 'MedicalAllowance']),
       allowedLiters: this.pickAmount(item, ['allowedLiters', 'allowed_liters', 'AllowedLiters']),
       monthlyFuelRate: this.pickAmount(item, ['monthlyFuelRate', 'monthly_fuel_rate', 'MonthlyFuelRate']),
@@ -193,11 +230,14 @@ export class PayrollProcessingService {
       loanAdjustment: this.pickAmount(item, ['loanAdjustment', 'loan_adjustment', 'LoanAdjustment', 'loanInstallment', 'loan_installment']),
       loanAdvForm: this.pickAmount(item, ['loanAdvForm', 'loan_adv_form', 'LoanAdvForm', 'otherDeductions', 'other_deductions']),
       lateAttendDeduction: this.pickAmount(item, ['lateAttendDeduction', 'late_attend_deduction', 'LateAttendDeduction']),
+      paidLeaveDays: this.pickAmount(item, ['paidLeaveDays', 'paid_leave_days', 'PaidLeaveDays']),
+      unpaidLeaveDays: this.pickAmount(item, ['unpaidLeaveDays', 'unpaid_leave_days', 'UnpaidLeaveDays']),
       costToCompany: this.pickAmount(item, ['costToCompany', 'cost_to_company', 'CostToCompany']),
       taxDeduction: this.pickAmount(item, ['taxDeduction', 'tax_deduction', 'TaxDeduction']),
       totalEarnings: this.pickAmount(item, ['totalEarnings', 'total_earnings', 'TotalEarnings']),
       netPayable: this.pickAmount(item, ['netPayable', 'net_payable', 'NetPayable']),
       netPayableAfterTax: this.pickAmount(item, ['netPayableAfterTax', 'net_payable_after_tax', 'NetPayableAfterTax']),
+      netPayableManagement: this.pickAmount(item, ['netPayableManagement', 'net_payable_management', 'NetPayableManagement']),
       finalGrossSalary: this.pickAmount(item, ['finalGrossSalary', 'final_gross_salary', 'FinalGrossSalary']),
       approved: this.pickBoolean(item, ['approved', 'Approved']),
     };

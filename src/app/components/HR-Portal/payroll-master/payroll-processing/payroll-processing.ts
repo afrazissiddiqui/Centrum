@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { PageToolbarComponent } from '../../../page-toolbar/page-toolbar';
 import { AlertService } from '../../../../services/alert.service';
 import {
+  PayrollProcessingDetailPayload,
   PayrollProcessingListRecord,
   PayrollProcessingRecord,
   PayrollProcessingService,
@@ -21,6 +22,107 @@ import { PermissionService } from '../../../../services/permission.service';
 const PAYROLL_PROCESSING_MODULE = 'payroll_processing_form';
 
 type PayrollProcessingColumnKey = Exclude<keyof PayrollProcessingListRecord, never>;
+type PayrollDetailColumnKind = 'text' | 'amount' | 'number' | 'boolean';
+
+interface PayrollDetailColumn {
+  key: keyof PayrollProcessingDetailPayload;
+  label: string;
+  kind: PayrollDetailColumnKind;
+}
+
+const PAYROLL_DETAIL_COLUMNS: PayrollDetailColumn[] = [
+  { key: 'employeeId', label: 'Employee ID', kind: 'text' },
+  { key: 'employeeCode', label: 'Employee Code', kind: 'text' },
+  { key: 'personName', label: 'Name', kind: 'text' },
+  { key: 'username', label: 'Username', kind: 'text' },
+  { key: 'designation', label: 'Designation', kind: 'text' },
+  { key: 'department', label: 'Department', kind: 'text' },
+  { key: 'employeeCategory', label: 'Employee Category', kind: 'text' },
+  { key: 'employmentNature', label: 'Employment Nature', kind: 'text' },
+  { key: 'employmentType', label: 'Employment Type', kind: 'text' },
+  { key: 'jobTitle', label: 'Job Title', kind: 'text' },
+  { key: 'branch', label: 'Branch', kind: 'text' },
+  { key: 'location', label: 'Location', kind: 'text' },
+  { key: 'workGradeLevel', label: 'Work Grade Level', kind: 'text' },
+  { key: 'dateOfJoining', label: 'Date of Joining', kind: 'text' },
+  { key: 'yearsOfService', label: 'Years of Service', kind: 'number' },
+  { key: 'overtimeApplicable', label: 'Overtime Applicable', kind: 'boolean' },
+  { key: 'allowancesApplicable', label: 'Allowances Applicable', kind: 'boolean' },
+  { key: 'eobiApplicable', label: 'EOBI Applicable', kind: 'boolean' },
+  { key: 'providentApplicable', label: 'Provident Fund Applicable', kind: 'boolean' },
+  { key: 'basicSalary', label: 'Basic Salary', kind: 'amount' },
+  { key: 'grossSalary', label: 'Gross Salary', kind: 'amount' },
+  { key: 'grossSalaryInCash', label: 'Gross Salary in Cash', kind: 'amount' },
+  { key: 'grossSalaryInBank', label: 'Gross Salary in Bank', kind: 'amount' },
+  { key: 'paymentMode', label: 'Payment Mode', kind: 'text' },
+  { key: 'medicalAllowance', label: 'Medical Allowance', kind: 'amount' },
+  { key: 'allowedLiters', label: 'Petrol Liters', kind: 'number' },
+  { key: 'monthlyFuelRate', label: 'Monthly Fuel Rate', kind: 'amount' },
+  { key: 'fuelAllowance', label: 'Fuel Allowance', kind: 'amount' },
+  { key: 'mobileAllowance', label: 'Mobile Allowance', kind: 'amount' },
+  { key: 'carAllowance', label: 'Car Allowance', kind: 'amount' },
+  { key: 'otherAllowances', label: 'Other Allowances', kind: 'amount' },
+  { key: 'bonus', label: 'Bonus', kind: 'amount' },
+  { key: 'lastMonthGrossSalary', label: 'Last Month Gross Salary', kind: 'amount' },
+  { key: 'overtimeHours', label: 'Overtime Hours', kind: 'number' },
+  { key: 'overtime', label: 'Overtime', kind: 'amount' },
+  { key: 'providentFundEmployer', label: 'Provident Fund (Employer)', kind: 'amount' },
+  { key: 'providentFund', label: 'Provident Fund (Employee)', kind: 'amount' },
+  { key: 'socialSecurityPunjab', label: 'Social Security Punjab', kind: 'amount' },
+  { key: 'socialSecurityKpk', label: 'Social Security KPK', kind: 'amount' },
+  { key: 'eobiEmployer', label: 'EOBI Employer', kind: 'amount' },
+  { key: 'eobiEmployee', label: 'EOBI Employee', kind: 'amount' },
+  { key: 'arrears', label: 'Arrears', kind: 'amount' },
+  { key: 'gratuity', label: 'Gratuity', kind: 'amount' },
+  { key: 'paidLeaveDays', label: 'Paid Leave Days', kind: 'number' },
+  { key: 'unpaidLeaveDays', label: 'Unpaid Leave Days', kind: 'number' },
+  { key: 'loanAdjustment', label: 'Loan Deduction', kind: 'amount' },
+  { key: 'loanAdvForm', label: 'Advance Deduction', kind: 'amount' },
+  { key: 'lateAttendDeduction', label: 'Leave Deduction', kind: 'amount' },
+  { key: 'costToCompany', label: 'Cost to Company', kind: 'amount' },
+  { key: 'taxDeduction', label: 'Tax Deduction', kind: 'amount' },
+  { key: 'totalEarnings', label: 'Total Earnings', kind: 'amount' },
+  { key: 'netPayable', label: 'Gross Payable', kind: 'amount' },
+  { key: 'netPayableAfterTax', label: 'Net Payable (Tax)', kind: 'amount' },
+  { key: 'netPayableManagement', label: 'Net Payable (Management)', kind: 'amount' },
+  { key: 'finalGrossSalary', label: 'Final Gross Salary', kind: 'amount' },
+  { key: 'approved', label: 'Approved', kind: 'boolean' },
+];
+
+const PAYROLL_EXCEL_COLUMNS: PayrollDetailColumn[] = [
+  { key: 'employeeId', label: 'Employee ID', kind: 'text' },
+  { key: 'personName', label: 'Employee Name', kind: 'text' },
+  { key: 'basicSalary', label: 'Basic Salary', kind: 'amount' },
+  { key: 'grossSalary', label: 'Gross Salary', kind: 'amount' },
+  { key: 'grossSalaryInCash', label: 'Gross Salary in Cash', kind: 'amount' },
+  { key: 'grossSalaryInBank', label: 'Gross Salary in Bank', kind: 'amount' },
+  { key: 'medicalAllowance', label: 'Medical', kind: 'amount' },
+  { key: 'allowedLiters', label: 'Petrol Liters', kind: 'number' },
+  { key: 'fuelAllowance', label: 'Fuel', kind: 'amount' },
+  { key: 'mobileAllowance', label: 'Mobile', kind: 'amount' },
+  { key: 'carAllowance', label: 'Car', kind: 'amount' },
+  { key: 'otherAllowances', label: 'Other Allowances', kind: 'amount' },
+  { key: 'bonus', label: 'Bonus', kind: 'amount' },
+  { key: 'overtimeHours', label: 'Overtime Hours (Month Total)', kind: 'number' },
+  { key: 'overtime', label: 'Overtime', kind: 'amount' },
+  { key: 'providentFundEmployer', label: 'P.Fund (Employer)', kind: 'amount' },
+  { key: 'providentFund', label: 'P.Fund (Employee)', kind: 'amount' },
+  { key: 'socialSecurityPunjab', label: 'Punjab', kind: 'amount' },
+  { key: 'socialSecurityKpk', label: 'KPK', kind: 'amount' },
+  { key: 'eobiEmployer', label: 'EOBI (Employer)', kind: 'amount' },
+  { key: 'eobiEmployee', label: 'EOBI (Employee)', kind: 'amount' },
+  { key: 'arrears', label: 'Arrears', kind: 'amount' },
+  { key: 'gratuity', label: 'Gratuity', kind: 'amount' },
+  { key: 'paidLeaveDays', label: 'Paid', kind: 'number' },
+  { key: 'unpaidLeaveDays', label: 'Unpaid', kind: 'number' },
+  { key: 'loanAdjustment', label: 'Loan Deduction', kind: 'amount' },
+  { key: 'loanAdvForm', label: 'Advance Deduction', kind: 'amount' },
+  { key: 'lateAttendDeduction', label: 'Leaves Deduction', kind: 'amount' },
+  { key: 'netPayable', label: 'Gross Payable', kind: 'amount' },
+  { key: 'taxDeduction', label: 'Tax Deduction', kind: 'amount' },
+  { key: 'netPayableAfterTax', label: 'Net Payable (TAX)', kind: 'amount' },
+  { key: 'netPayableManagement', label: 'Net Payable (Management)', kind: 'amount' },
+];
 
 @Component({
   selector: 'app-payroll-processing',
@@ -95,6 +197,7 @@ export class PayrollProcessingComponent implements OnInit {
   readonly showViewDialog = signal(false);
   readonly viewLoading = signal(false);
   readonly selectedRecord = signal<PayrollProcessingRecord | null>(null);
+  readonly payrollDetailColumns = PAYROLL_DETAIL_COLUMNS;
   searchText = '';
   selectedStatus = '';
   showDialog = false;
@@ -277,6 +380,23 @@ export class PayrollProcessingComponent implements OnInit {
     })}`;
   }
 
+  formatDetailValue(
+    detail: PayrollProcessingDetailPayload,
+    column: PayrollDetailColumn,
+    currency: string,
+  ): string {
+    const value = detail[column.key];
+    if (column.kind === 'boolean') {
+      return value ? 'Yes' : 'No';
+    }
+    if (column.kind === 'amount') {
+      return this.formatMoney(Number(value) || 0, currency);
+    }
+    return value === '' || value === null || value === undefined
+      ? '—'
+      : String(value);
+  }
+
   viewRecord(record: PayrollProcessingListRecord): void {
     if (!this.permissionService.assertCan(PAYROLL_PROCESSING_MODULE, 'view')) {
       return;
@@ -324,43 +444,6 @@ export class PayrollProcessingComponent implements OnInit {
           const rows = Array.isArray(detail.Details) ? detail.Details.slice() : [];
           rows.sort((a, b) => String(a.employeeCode).localeCompare(String(b.employeeCode), undefined, { sensitivity: 'base' }));
 
-          const exportColumns: Array<{ key: keyof PayrollProcessingRecord['Details'][number]; label: string }> = [
-            { key: 'employeeId', label: 'Employee ID' },
-            { key: 'employeeCode', label: 'Employee Code' },
-            { key: 'personName', label: 'Name' },
-            { key: 'basicSalary', label: 'Basic Salary' },
-            { key: 'grossSalary', label: 'Gross Salary' },
-            { key: 'medicalAllowance', label: 'Medical Allowance' },
-            { key: 'allowedLiters', label: 'Allowed Liters' },
-            { key: 'fuelAllowance', label: 'Fuel Allowance' },
-            { key: 'mobileAllowance', label: 'Mobile Allowance' },
-            { key: 'carAllowance', label: 'Car Allowance' },
-            { key: 'otherAllowances', label: 'Other Allowances' },
-            { key: 'bonus', label: 'Bonus' },
-            { key: 'overtimeHours', label: 'Overtime Hours' },
-            { key: 'overtime', label: 'Overtime' },
-            { key: 'providentFundEmployer', label: 'P.Fund (Employer)' },
-            { key: 'providentFund', label: 'P.Fund (Employee)' },
-            { key: 'socialSecurityPunjab', label: 'Social Security Punjab' },
-            { key: 'socialSecurityKpk', label: 'Social Security KPK' },
-            { key: 'eobiEmployer', label: 'EOBI Employer' },
-            { key: 'eobiEmployee', label: 'EOBI Employee' },
-            { key: 'arrears', label: 'Arrears' },
-            { key: 'gratuity', label: 'Gratuity' },
-            { key: 'loanAdjustment', label: 'Loan Deduction' },
-            { key: 'loanAdvForm', label: 'Advance Deduction' },
-            { key: 'lateAttendDeduction', label: 'Late Attendence Deduction' },
-            { key: 'costToCompany', label: 'Cost to Company' },
-            { key: 'netPayable', label: 'Gross Payable' },
-            { key: 'taxDeduction', label: 'Tax Deduction' },
-            { key: 'netPayableAfterTax', label: 'Net Payable' },
-            { key: 'totalEarnings', label: 'Total Earnings' },
-            { key: 'finalGrossSalary', label: 'Final Gross Salary' },
-            { key: 'monthlyFuelRate', label: 'Monthly Fuel Rate' },
-            { key: 'lastMonthGrossSalary', label: 'Last Month Gross Salary' },
-            { key: 'approved', label: 'Approved' },
-          ];
-
           const escape = (v: unknown) => {
             if (v === null || v === undefined) {
               return '';
@@ -377,16 +460,18 @@ export class PayrollProcessingComponent implements OnInit {
             return Number.isFinite(num) ? num.toFixed(2) : '';
           };
 
-          const headers = exportColumns.map((column) => column.label);
+          const headers = PAYROLL_EXCEL_COLUMNS.map((column) => column.label);
           const lines = [headers.join(',')];
           for (const r of rows) {
-            const line = exportColumns.map((column) => {
-              if (column.key === 'approved') {
-                return escape(r.approved ? 'Yes' : 'No');
-              }
-
+            const line = PAYROLL_EXCEL_COLUMNS.map((column) => {
               const value = r[column.key];
-              return typeof value === 'number' ? formatNumber(value) : escape(value);
+              if (column.kind === 'boolean') {
+                return escape(value ? 'Yes' : 'No');
+              }
+              if (column.kind === 'amount' || column.kind === 'number') {
+                return formatNumber(value);
+              }
+              return escape(value);
             }).join(',');
             lines.push(line);
           }
