@@ -90,4 +90,40 @@ describe('OvertimeListService', () => {
       [payload],
     );
   });
+
+  it('retries rate-limited overtime posts and surfaces API-level failures', (done) => {
+    const http = jasmine.createSpyObj<HttpClient>('HttpClient', ['get', 'post']);
+    http.post.and.returnValues(
+      of({ status: false, message: 'Too Many Attempts' }),
+      of({ status: true }),
+    );
+    TestBed.configureTestingModule({
+      providers: [
+        OvertimeListService,
+        { provide: HttpClient, useValue: http },
+      ],
+    });
+    const service = TestBed.inject(OvertimeListService);
+    const payload = [{
+      employee_code: 'EMP-001',
+      employee_name: 'Ayesha Khan',
+      overtime_date: '2026-10-01',
+      shift_id: '1',
+      working_hours: 8,
+      shift_hours: 8,
+      overtime_hours: 0,
+      overtime_rate: 0,
+      exceptional_ot: 0,
+      flag: '1' as const,
+    }];
+    spyOn(Math, 'random').and.returnValue(0);
+
+    service.postOvertimeEmployee(payload).subscribe({
+      next: () => {
+        expect(http.post).toHaveBeenCalledTimes(2);
+        done();
+      },
+      error: done.fail,
+    });
+  });
 });

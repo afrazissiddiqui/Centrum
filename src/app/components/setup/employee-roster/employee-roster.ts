@@ -1943,6 +1943,7 @@ export class EmployeeRosterComponent implements OnInit {
               pendingDates,
               formNumberSequence,
               leaveType,
+              false,
             ).pipe(
               switchMap((postResult) => {
                 const successfulDates = postResult.successfulDates;
@@ -1983,6 +1984,9 @@ export class EmployeeRosterComponent implements OnInit {
         const failedResults = results.filter((result) => result.postingError !== null);
         const profileFailures = results.filter((result) => result.profileError !== null);
         const successfulCodes = new Set(successfulResults.map(({ employee }) => employee.EmployeeCode));
+        if (successfulResults.length > 0) {
+          this.refreshRosterLeaveApplications();
+        }
         this.selectedUnpaidLeaveEmployees.update((selected) =>
           new Set(Array.from(selected).filter((employeeCode) => !successfulCodes.has(employeeCode))),
         );
@@ -2043,6 +2047,7 @@ export class EmployeeRosterComponent implements OnInit {
     dates: string[],
     formNumberSequence: UnannouncedLeaveFormNumberSequence = { value: Date.now() % 10_000 },
     knownLeaveType?: string,
+    refreshLeaveListAfterPost = true,
   ): Observable<UnannouncedLeavePostResult> {
     const dateRange = rosterUnannouncedLeaveDateRange(dates);
     const leaveType$ = knownLeaveType ? of(knownLeaveType) : this.ensureUnannouncedLeaveType();
@@ -2076,7 +2081,7 @@ export class EmployeeRosterComponent implements OnInit {
               }
               return next;
             });
-            if (successfulDates.length) {
+            if (successfulDates.length && refreshLeaveListAfterPost) {
               this.refreshRosterLeaveApplications();
             }
             return { results, successfulDates };
@@ -2546,7 +2551,9 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   private refreshRosterLeaveApplications(): void {
-    this.leaveApplicationService.fetchLeaveApplications().subscribe({
+    this.leaveApplicationService.fetchLeaveApplications().pipe(
+      retryRateLimitedRequest(),
+    ).subscribe({
       next: (applications) => this.leaveApplications.set(applications),
       error: (error: unknown) => {
         this.alertService.error(

@@ -23,6 +23,42 @@ export interface OvertimeEmployeePostPayload {
 
 const OVERTIME_RECORD_LIST_URL = apiUrl('overtime-record-list');
 const OVERTIME_EMPLOYEE_POST_URL = apiUrl('overtime-record-add');
+const OVERTIME_POST_RATE_LIMIT_RETRIES = 5;
+const OVERTIME_POST_RETRY_BASE_DELAY_MS = 1000;
+const OVERTIME_POST_RETRY_MAX_DELAY_MS = 30000;
+
+function isRateLimitedOvertimeError(error: unknown): boolean {
+  if (error instanceof HttpErrorResponse && error.status === 429) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /too many attempts|too many requests/i.test(message);
+}
+
+function overtimePostRetryDelay(error: unknown, retryCount: number): Observable<unknown> {
+  if (!isRateLimitedOvertimeError(error)) {
+    return throwError(() => error);
+  }
+
+  const backoffLimit = Math.min(
+    OVERTIME_POST_RETRY_BASE_DELAY_MS * 2 ** (retryCount - 1),
+    OVERTIME_POST_RETRY_MAX_DELAY_MS,
+  );
+  const jitteredBackoff = Math.floor(Math.random() * backoffLimit);
+  const retryAfter = error instanceof HttpErrorResponse
+    ? error.headers.get('Retry-After')
+    : null;
+  const retryAfterSeconds = retryAfter ? Number(retryAfter) : Number.NaN;
+  const retryAfterDate = retryAfter ? Date.parse(retryAfter) : Number.NaN;
+  const serverDelay = Number.isFinite(retryAfterSeconds)
+    ? Math.max(0, retryAfterSeconds * 1000)
+    : Number.isFinite(retryAfterDate)
+      ? Math.max(0, retryAfterDate - Date.now())
+      : 0;
+
+  return timer(Math.max(serverDelay, jitteredBackoff));
+}
 
 @Injectable({
   providedIn: 'root',
@@ -44,7 +80,24 @@ export class OvertimeListService {
   }
 
   postOvertimeEmployee(payload: OvertimeEmployeePostPayload[]): Observable<unknown> {
-    return this.http.post<unknown>(OVERTIME_EMPLOYEE_POST_URL, payload);
+    return this.http.post<unknown>(OVERTIME_EMPLOYEE_POST_URL, payload).pipe(
+      map((response) => {
+        if (response && typeof response === 'object' && !Array.isArray(response)) {
+          const result = response as Record<string, unknown>;
+          if (result['status'] === false || result['success'] === false) {
+            const message = result['message'] ?? result['error'];
+            throw new Error(typeof message === 'string' && message.trim()
+              ? message
+              : 'Overtime record could not be posted.');
+          }
+        }
+        return response;
+      }),
+      retry({
+        count: OVERTIME_POST_RATE_LIMIT_RETRIES,
+        delay: overtimePostRetryDelay,
+      }),
+    );
   }
 
   private mapResponse(response: unknown): OvertimeListRecord[] {

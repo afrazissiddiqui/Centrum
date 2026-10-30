@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { forkJoin, from, last, of, Subscription } from 'rxjs';
-import { catchError, finalize, map, mergeMap } from 'rxjs/operators';
+import { catchError, concatMap, finalize, map, mergeMap, toArray } from 'rxjs/operators';
 import { AttendanceManagementService } from '../../../../services/attendance-management.service';
 import { AlertService } from '../../../../services/alert.service';
 import {
@@ -320,7 +320,7 @@ export class AddOvertimeComponent implements OnInit {
     );
     const profileDetails$ = employeesMissingSalary.length
       ? this.applicationFormService
-          .fetchEmployeeProfileDetailsInBatches(employeesMissingSalary, employeesMissingSalary.length)
+          .fetchEmployeeProfileDetailsInBatches(employeesMissingSalary, 5)
           .pipe(last())
       : of([]);
     profileDetails$.subscribe({
@@ -361,50 +361,53 @@ export class AddOvertimeComponent implements OnInit {
     month: string,
     overtimeDate: string,
   ): void {
-    forkJoin(employeesToPost.map((employee) => {
-      const overtimeRate = this.overtimeRate(employee);
-      if (overtimeRate === null) {
-        return of({
-          employee,
-          success: false as const,
-          errorMessage: 'Gross salary is unavailable; overtime rate could not be calculated.',
-        });
-      }
+    from(employeesToPost).pipe(
+      concatMap((employee) => {
+        const overtimeRate = this.overtimeRate(employee);
+        if (overtimeRate === null) {
+          return of({
+            employee,
+            success: false as const,
+            errorMessage: 'Gross salary is unavailable; overtime rate could not be calculated.',
+          });
+        }
 
-      const workingMinutes = this.durationToMinutes(employee.workingHours);
-      const shiftMinutes = this.durationToMinutes(employee.shiftHours);
-      const overtimeMinutes = this.durationToMinutes(this.overtimeHours(employee));
-      const shiftId = this.shiftIdForMonth(employee, month);
-      if (workingMinutes === null || shiftMinutes === null || overtimeMinutes === null || !shiftId) {
-        return of({
-          employee,
-          success: false as const,
-          errorMessage: 'Monthly hours or shift assignment are unavailable; this employee was not posted.',
-        });
-      }
+        const workingMinutes = this.durationToMinutes(employee.workingHours);
+        const shiftMinutes = this.durationToMinutes(employee.shiftHours);
+        const overtimeMinutes = this.durationToMinutes(this.overtimeHours(employee));
+        const shiftId = this.shiftIdForMonth(employee, month);
+        if (workingMinutes === null || shiftMinutes === null || overtimeMinutes === null || !shiftId) {
+          return of({
+            employee,
+            success: false as const,
+            errorMessage: 'Monthly hours or shift assignment are unavailable; this employee was not posted.',
+          });
+        }
 
-      const payload = {
-        employee_code: employee.EmployeeCode,
-        employee_name: employee.EmployeeName,
-        overtime_date: overtimeDate,
-        shift_id: String(shiftId),
-        working_hours: workingMinutes / 60,
-        shift_hours: shiftMinutes / 60,
-        overtime_hours: overtimeMinutes / 60,
-        overtime_rate: overtimeRate,
-        exceptional_ot: 0,
-        flag: '1' as const,
-      };
-      return this.overtimeListService.postOvertimeEmployee([payload]).pipe(
-        map(() => ({ employee, payload, success: true as const })),
-        catchError((error: unknown) => of({
-          employee,
-          payload,
-          success: false as const,
-          errorMessage: formatApiErrorMessage(error, 'Post failed.'),
-        })),
-      );
-    })).subscribe((results) => {
+        const payload = {
+          employee_code: employee.EmployeeCode,
+          employee_name: employee.EmployeeName,
+          overtime_date: overtimeDate,
+          shift_id: String(shiftId),
+          working_hours: workingMinutes / 60,
+          shift_hours: shiftMinutes / 60,
+          overtime_hours: overtimeMinutes / 60,
+          overtime_rate: overtimeRate,
+          exceptional_ot: 0,
+          flag: '1' as const,
+        };
+        return this.overtimeListService.postOvertimeEmployee([payload]).pipe(
+          map(() => ({ employee, payload, success: true as const })),
+          catchError((error: unknown) => of({
+            employee,
+            payload,
+            success: false as const,
+            errorMessage: formatApiErrorMessage(error, 'Post failed.'),
+          })),
+        );
+      }),
+      toArray(),
+    ).subscribe((results) => {
       const successfulKeys = new Set(
         results.filter((result) => result.success).map((result) => this.employeeKey(result.employee)),
       );

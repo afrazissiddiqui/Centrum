@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { AttendanceManagementService } from '../../../../services/attendance-management.service';
 import { AlertService } from '../../../../services/alert.service';
 import {
@@ -422,6 +422,63 @@ describe('AddOvertimeComponent', () => {
     expect(fixture.componentInstance.filteredEmployees()).toHaveSize(0);
     expect(fixture.nativeElement.textContent).not.toContain('Ayesha Khan');
     expect(fixture.nativeElement.textContent).not.toContain('flag');
+  });
+
+  it('posts selected employees sequentially to avoid bursting the overtime API', () => {
+    const component = fixture.componentInstance;
+    const month = component.selectedMonth();
+    applicationFormService.fetchEmployeeRosterList.and.returnValue(of([
+      {
+        employee_id: 'EMP-004',
+        employee_name: 'Employee Four',
+        department: 'Finance',
+        designation: 'Analyst',
+        employment_status: 'Active',
+        shift_date: `${month}-01`,
+        shift: '7',
+        role: '',
+        hub: '',
+        note: null,
+      },
+      {
+        employee_id: 'EMP-005',
+        employee_name: 'Employee Five',
+        department: 'Finance',
+        designation: 'Analyst',
+        employment_status: 'Active',
+        shift_date: `${month}-01`,
+        shift: '7',
+        role: '',
+        hub: '',
+        note: null,
+      },
+    ]));
+    component.ngOnInit();
+    const [firstEmployee] = component.employees();
+    const employees = ['EMP-004', 'EMP-005'].map((employeeCode) => ({
+      ...firstEmployee,
+      EmployeeCode: employeeCode,
+      workingHours: '10h 30m',
+      shiftHours: '8h',
+      calculatedOvertimeHours: '2h 30m',
+    }));
+    component.employees.set(employees);
+    component.selectedEmployeeKeys.set(new Set(['EMP-004', 'EMP-005']));
+
+    const firstPost = new Subject<unknown>();
+    const secondPost = new Subject<unknown>();
+    overtimeListService.postOvertimeEmployee.and.returnValues(firstPost, secondPost);
+
+    component.postSelectedEmployees();
+
+    expect(overtimeListService.postOvertimeEmployee).toHaveBeenCalledTimes(1);
+    firstPost.next({ success: true });
+    firstPost.complete();
+    expect(overtimeListService.postOvertimeEmployee).toHaveBeenCalledTimes(2);
+    secondPost.next({ success: true });
+    secondPost.complete();
+
+    expect(component.employees().every((employee) => employee.flag === '1')).toBeTrue();
   });
 
   it('skips holiday roster markers and posts using the next assigned shift ID', () => {
