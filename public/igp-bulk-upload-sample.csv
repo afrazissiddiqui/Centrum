@@ -1,8 +1,0 @@
-HEADER INFORMATION
-Type,Business Partner,Department,Vehicle No,Branch,From Unit,Driver Name,Driver CNIC,Driver Phone,Weight
-Purchase Order,Gourmet Foods (Vendor),Procurement,JW-2434,FSD,Manufacturing,Ahmed Khan,42101-1234567-8,03001234567,500 Kg
-
-LINE ITEMS
-Item Code,Item Name,Qty,Category,Packing Condition,Product Quality,UOM,Batch Number,Remarks
-PM-0000026,"Used Wooden Pallet - 41"" X 41""",684,Finished,Loose,USED,Numbers,USED-PALLET-01,USED PALLETS
-INV-0000451,Invoice Paper Roll,50,Consumable,Boxed,Good,Rolls,ROLL-2024-001,New stock arrival

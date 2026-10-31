@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://alhafiz.vdc.services:8084/ahcp/public';
+const API_BASE_URL = 'Centrumstarter/api';
 
 
 /** Pioneer attendance API (proxied in local dev via proxy.conf.json). */
@@ -8,7 +8,7 @@ export const BIOMETRICS_API_KEY = 'ak_07dd2f9ab665fbad693682fa';
 function resolveBiometricsApiBaseUrl(): string {
   if (typeof window === 'undefined') 
   {
-    return 'http://pioneerattendance.com:3002/api';
+    return 'Demo';
   }
 
   // Same-origin path avoids browser CORS. Local dev: proxy.conf.json.
