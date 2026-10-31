@@ -9,6 +9,7 @@ const SESSION_USER_ID_KEY = 'sapqc_session_user_id';
 const SESSION_TOKEN_KEY = 'sapqc_session_token';
 const SESSION_USER_KEY = 'sapqc_session_user';
 const SESSION_AUTHORIZATION_KEY = 'sapqc_session_authorization_v2';
+const FRONTEND_ONLY_SESSION_KEY = 'sapqc_frontend_only_session';
 const LOGIN_API_URL = apiUrl('login');
 
 export interface LoginApiUser {
@@ -43,6 +44,7 @@ export class AuthService {
   /** Mirrors session flag so UI can react if needed later. */
   readonly isLoggedIn = signal(this.readSession());
   readonly sessionUserId = signal(this.readSessionUserId());
+  readonly isFrontendOnlySession = signal(this.readFrontendOnlySession());
 
   private readSession(): boolean {
     // Prefer localStorage so session persists across browser restarts (backend tokens valid 24h)
@@ -61,11 +63,26 @@ export class AuthService {
     }
   }
 
+  private readFrontendOnlySession(): boolean {
+    return (
+      localStorage.getItem(FRONTEND_ONLY_SESSION_KEY) === '1' ||
+      sessionStorage.getItem(FRONTEND_ONLY_SESSION_KEY) === '1'
+    );
+  }
+
   /** Call after successful sign-in. */
   login(userId?: string): void {
     const trimmed = userId?.trim() ?? '';
     try {
       localStorage.setItem(AUTH_SESSION_KEY, '1');
+      if (trimmed) {
+        localStorage.removeItem(FRONTEND_ONLY_SESSION_KEY);
+      } else {
+        localStorage.setItem(FRONTEND_ONLY_SESSION_KEY, '1');
+        localStorage.removeItem(SESSION_TOKEN_KEY);
+        localStorage.removeItem(SESSION_USER_KEY);
+        localStorage.removeItem(SESSION_AUTHORIZATION_KEY);
+      }
       if (trimmed) {
         localStorage.setItem(SESSION_USER_ID_KEY, trimmed);
       } else {
@@ -77,12 +94,21 @@ export class AuthService {
 
     sessionStorage.setItem(AUTH_SESSION_KEY, '1');
     if (trimmed) {
+      sessionStorage.removeItem(FRONTEND_ONLY_SESSION_KEY);
+    } else {
+      sessionStorage.setItem(FRONTEND_ONLY_SESSION_KEY, '1');
+      sessionStorage.removeItem(SESSION_TOKEN_KEY);
+      sessionStorage.removeItem(SESSION_USER_KEY);
+      sessionStorage.removeItem(SESSION_AUTHORIZATION_KEY);
+    }
+    if (trimmed) {
       sessionStorage.setItem(SESSION_USER_ID_KEY, trimmed);
       this.sessionUserId.set(trimmed);
     } else {
       sessionStorage.removeItem(SESSION_USER_ID_KEY);
       this.sessionUserId.set(null);
     }
+    this.isFrontendOnlySession.set(!trimmed);
     this.isLoggedIn.set(true);
   }
 
@@ -145,8 +171,11 @@ export class AuthService {
     sessionStorage.removeItem(SESSION_TOKEN_KEY);
     sessionStorage.removeItem(SESSION_USER_KEY);
     sessionStorage.removeItem(SESSION_AUTHORIZATION_KEY);
+    localStorage.removeItem(FRONTEND_ONLY_SESSION_KEY);
+    sessionStorage.removeItem(FRONTEND_ONLY_SESSION_KEY);
     this.isLoggedIn.set(false);
     this.sessionUserId.set(null);
+    this.isFrontendOnlySession.set(false);
     void this.router.navigateByUrl('/login');
   }
 }

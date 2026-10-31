@@ -160,28 +160,30 @@
               <table class="comp-grid comp-grid--fixed">
                 <thead>
                   <tr class="comp-group-row">
-                    <th class="tone-employee comp-section-end comp-section-end--employee">Employee Information</th>
+                    <th colspan="2" class="tone-employee comp-section-end comp-section-end--employee">Employee Information</th>
                   </tr>
                   <tr class="comp-col-row">
-                    <th class="comp-section-end comp-section-end--employee">Employee</th>
+                    <th>Employee Name</th>
+                    <th class="comp-section-end comp-section-end--employee">Designation</th>
                   </tr>
                 </thead>
               </table>
             </div>
             <div class="comp-pane-body">
               <table class="comp-grid comp-grid--fixed">
+                <colgroup><col class="comp-employee-name-col" /><col class="comp-designation-col" /></colgroup>
                 <tbody>
                   @for (i of skeletonRows(); track i; let odd = $odd) {
                     <tr class="comp-data-row" [class.comp-data-row--alt]="odd">
-                      <td class="comp-emp-cell comp-section-end comp-section-end--employee">
+                      <td class="comp-emp-cell">
                         <div class="comp-skeleton-emp">
                           <span class="comp-skeleton comp-skeleton--avatar" aria-hidden="true"></span>
                           <div class="comp-skeleton-emp__text">
                             <span class="comp-skeleton comp-skeleton--line comp-skeleton--line-lg" aria-hidden="true"></span>
-                            <span class="comp-skeleton comp-skeleton--line comp-skeleton--line-sm" aria-hidden="true"></span>
                           </div>
                         </div>
                       </td>
+                      <td class="comp-section-end comp-section-end--employee"><span class="comp-skeleton comp-skeleton--line comp-skeleton--line-sm" aria-hidden="true"></span></td>
                     </tr>
                   }
                 </tbody>
@@ -191,7 +193,7 @@
               <table class="comp-grid comp-grid--fixed">
                 <tfoot>
                   <tr class="comp-total-row">
-                    <td class="comp-section-end comp-section-end--employee"><span class="comp-skeleton comp-skeleton--line comp-skeleton--line-md" aria-hidden="true"></span></td>
+                    <td colspan="2" class="comp-section-end comp-section-end--employee"><span class="comp-skeleton comp-skeleton--line comp-skeleton--line-md" aria-hidden="true"></span></td>
                   </tr>
                 </tfoot>
               </table>
@@ -300,10 +302,6 @@
           </div>
         </div>
       </div>
-    } @else if (employeeSummaries().length === 0) {
-      <div class="comp-empty-cell">No employees found.</div>
-    } @else if (filteredEmployeeSummaries().length === 0) {
-      <div class="comp-empty-cell">No employees match your search.</div>
     } @else {
       <div class="comp-table-card">
           <div class="comp-table-layout">
@@ -312,10 +310,11 @@
               <table class="comp-grid comp-grid--fixed">
                 <thead>
                   <tr class="comp-group-row">
-                    <th class="tone-employee comp-section-end comp-section-end--employee">Employee Information</th>
+                    <th colspan="2" class="tone-employee comp-section-end comp-section-end--employee">Employee Information</th>
                   </tr>
                   <tr class="comp-col-row">
-                    <th class="comp-section-end comp-section-end--employee">Employee</th>
+                    <th>Employee Name</th>
+                    <th class="comp-section-end comp-section-end--employee">Designation</th>
                   </tr>
                 </thead>
               </table>
@@ -327,29 +326,28 @@
               (wheel)="onTableWheel($event)"
             >
               <table class="comp-grid comp-grid--fixed">
+                <colgroup><col class="comp-employee-name-col" /><col class="comp-designation-col" /></colgroup>
                 <tbody>
+                  @if (paginatedRows().length === 0) {
+                    <tr class="comp-data-row comp-no-employees">
+                      <td colspan="2" class="comp-section-end comp-section-end--employee">
+                        {{ employeeSummaries().length === 0 ? 'No employees found.' : 'No employees match your filters.' }}
+                      </td>
+                    </tr>
+                  }
                   @for (row of paginatedRows(); track row.apiId; let odd = $odd) {
                     <tr class="comp-data-row" [class.comp-data-row--alt]="odd">
-                      <td class="comp-emp-cell comp-section-end comp-section-end--employee">
+                      <td class="comp-emp-cell">
                         <div class="comp-emp-profile">
                           <span class="comp-emp-avatar" aria-hidden="true">{{ avatarInitials(row.personName) }}</span>
                           <div class="comp-emp-info">
                             <button type="button" class="comp-emp-name" (click)="openEmployeeProfile(row.apiId)">
                               {{ row.personName }}
                             </button>
-                            @if (row.designation) {
-                              <div class="comp-emp-meta">
-                                <span class="comp-emp-id-icon" title="Employee profile">🪪</span>
-                                <span class="comp-emp-designation">{{ row.designation }}</span>
-                              </div>
-                            }
-                          </div>
-                          <div class="comp-emp-actions">
-                            <button type="button" class="comp-emp-action-btn" title="Comment" aria-label="Comment">💬</button>
-                            <button type="button" class="comp-emp-action-btn" title="More actions" aria-label="More actions">⋯</button>
                           </div>
                         </div>
                       </td>
+                      <td class="comp-emp-designation comp-section-end comp-section-end--employee">{{ row.designation || '—' }}</td>
                     </tr>
                   }
                 </tbody>
@@ -359,7 +357,7 @@
               <table class="comp-grid comp-grid--fixed">
                 <tfoot>
                   <tr class="comp-total-row">
-                    <td class="comp-section-end comp-section-end--employee">Page Total</td>
+                    <td colspan="2" class="comp-section-end comp-section-end--employee">Page Total</td>
                   </tr>
                 </tfoot>
               </table>
@@ -415,6 +413,13 @@
                   }
                 </colgroup>
                 <tbody>
+                  @if (paginatedRows().length === 0) {
+                    <tr class="comp-data-row comp-no-employees">
+                      <td [attr.colspan]="payrollColumns.length">
+                        {{ employeeSummaries().length === 0 ? 'Payroll fields are shown above; no employees were found.' : 'No employees match your filters.' }}
+                      </td>
+                    </tr>
+                  }
                   @for (row of paginatedRows(); track row.apiId; let odd = $odd) {
                     <tr class="comp-data-row" [class.comp-data-row--alt]="odd">
                       @for (col of payrollColumns; track col.key) {

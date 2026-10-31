@@ -1,6 +1,22 @@
 import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
-import { countPayrollLeaveDays, payrollLeaveSearchEmployeeCode } from './payroll-leave.util';
+import {
+  computeUnpaidLeaveDeduction,
+  countPayrollLeaveDays,
+  payrollLeaveSearchEmployeeCode,
+} from './payroll-leave.util';
+
+describe('computeUnpaidLeaveDeduction', () => {
+  it('calculates absent amount using gross salary divided by 30 per absent day', () => {
+    expect(computeUnpaidLeaveDeduction(30000, 2)).toBe(2000);
+    expect(computeUnpaidLeaveDeduction(10000, 1)).toBe(333.33);
+  });
+
+  it('returns zero for invalid salary or absent days', () => {
+    expect(computeUnpaidLeaveDeduction(0, 1)).toBe(0);
+    expect(computeUnpaidLeaveDeduction(30000, 0)).toBe(0);
+  });
+});
 
 describe('payrollLeaveSearchEmployeeCode', () => {
   it('formats numeric employee codes for the leave search API', () => {

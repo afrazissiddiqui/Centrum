@@ -100,6 +100,7 @@ export function computeNetPayable(amounts: PayrollSetupAmounts): number {
 
 export interface GrossSalaryPayableAmounts {
   grossSalaryInBank: number;
+  childBenefits?: number;
   fuelAllowance: number;
   mobileAllowance: number;
   carAllowance: number;
@@ -117,6 +118,7 @@ export interface GrossSalaryPayableAmounts {
 export function computeGrossSalaryPayable(amounts: GrossSalaryPayableAmounts): number {
   const earnings =
     amounts.grossSalaryInBank +
+    (amounts.childBenefits ?? 0) +
     amounts.fuelAllowance +
     amounts.mobileAllowance +
     amounts.carAllowance +

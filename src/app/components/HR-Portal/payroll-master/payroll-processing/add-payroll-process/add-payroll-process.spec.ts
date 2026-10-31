@@ -187,6 +187,7 @@ describe('computeGrossSalaryPayable', () => {
     expect(
       computeGrossSalaryPayable({
         grossSalaryInBank: 100000,
+        childBenefits: 0,
         fuelAllowance: 5000,
         mobileAllowance: 2000,
         carAllowance: 3000,
@@ -206,6 +207,7 @@ describe('computeGrossSalaryPayable', () => {
   it('rounds to two decimals and does not return a negative payable', () => {
     const amounts = {
       grossSalaryInBank: 100.127,
+      childBenefits: 0,
       fuelAllowance: 0,
       mobileAllowance: 0,
       carAllowance: 0,
@@ -221,5 +223,26 @@ describe('computeGrossSalaryPayable', () => {
     };
     expect(computeGrossSalaryPayable(amounts)).toBe(100.13);
     expect(computeGrossSalaryPayable({ ...amounts, providentFund: 200 })).toBe(0);
+  });
+
+  it('includes child benefits in payable earnings', () => {
+    expect(
+      computeGrossSalaryPayable({
+        grossSalaryInBank: 1000,
+        childBenefits: 250,
+        fuelAllowance: 0,
+        mobileAllowance: 0,
+        carAllowance: 0,
+        otherAllowances: 0,
+        bonus: 0,
+        overtime: 0,
+        arrears: 0,
+        providentFund: 0,
+        eobiEmployee: 0,
+        loanDeduction: 0,
+        advanceDeduction: 0,
+        lateAttendanceDeduction: 0,
+      }),
+    ).toBe(1250);
   });
 });

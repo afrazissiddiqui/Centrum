@@ -51,6 +51,7 @@ import {
 import { canonicalAttendanceKey } from '../../../../../services/attendance-management.service';
 import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
 import {
+  computeUnpaidLeaveDeduction,
   countPayrollLeaveDays,
   PayrollLeaveDayCounts,
   payrollLeaveSearchEmployeeCode,
@@ -115,6 +116,7 @@ export interface PayrollProcessRow {
   grossSalary: number;
   grossSalaryInCash: number;
   grossSalaryInBank: number;
+  childBenefits: number;
   paymentMode: string;
   medicalAllowance: number;
   allowedLiters: number;
@@ -283,54 +285,22 @@ export class AddPayrollProcessComponent implements OnInit {
   readonly currencyCode = 'PKR';
 
   readonly columnGroups: PayrollColumnGroup[] = [
-    { id: 'salary', label: 'Salary', tone: 'salary' },
-    { id: 'allowances', label: 'Allowances', tone: 'allowances' },
-    { id: 'bonuses', label: 'Bonuses', tone: 'bonuses' },
-    { id: 'providentFund', label: 'Provident Fund', tone: 'providentFund' },
-    { id: 'socialSecurity', label: 'Social Security', tone: 'socialSecurity' },
-    { id: 'eobi', label: 'EOBI', tone: 'eobi' },
-    { id: 'other', label: 'End Of Service Benefits', tone: 'other' },
-    { id: 'loan', label: 'Adjustments', tone: 'loan' },
-    { id: 'final', label: 'Final Totals', tone: 'final' },
-    { id: 'approval', label: 'Approval', tone: 'approval' },
+    { id: 'salary', label: 'Payroll Details', tone: 'salary' },
   ];
 
   readonly payrollColumns: PayrollColumnDef[] = [
-    { key: 'basicSalary', label: 'Basic Salary', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'basicSalary', label: 'Salary', groupId: 'salary', type: 'readonly', minWidth: 152 },
     { key: 'grossSalary', label: 'Gross Salary', groupId: 'salary', type: 'readonly', minWidth: 152 },
-    { key: 'grossSalaryInCash', label: 'Gross Salary in Cash', groupId: 'salary', type: 'readonly', minWidth: 176 },
-    { key: 'grossSalaryInBank', label: 'Gross Salary in Bank', groupId: 'salary', type: 'readonly', minWidth: 176 },
-    { key: 'medicalAllowance', label: 'Medical', groupId: 'allowances', type: 'readonly', minWidth: 145 },
-    { key: 'allowedLiters', label: 'Petrol Liters', groupId: 'allowances', type: 'readonly', minWidth: 120 },
-    { key: 'fuelAllowance', label: 'Fuel', groupId: 'allowances', type: 'readonly', minWidth: 145 },
-    { key: 'mobileAllowance', label: 'Mobile', groupId: 'allowances', type: 'currency', minWidth: 145 },
-    { key: 'carAllowance', label: 'Car', groupId: 'allowances', type: 'currency', minWidth: 145 },
-    { key: 'otherAllowances', label: 'Other', groupId: 'allowances', type: 'currency', minWidth: 145 },
-    { key: 'bonus', label: 'Bonus', groupId: 'bonuses', type: 'currency', minWidth: 145 },
-    { key: 'overtimeHours', label: 'Overtime Hours (Month Total)', groupId: 'bonuses', type: 'currency', minWidth: 190 },
-    { key: 'overtime', label: 'Overtime', groupId: 'bonuses', type: 'readonly', minWidth: 145 },
-    { key: 'providentFundEmployer', label: 'P.Fund (Employer)', groupId: 'providentFund', type: 'readonly', minWidth: 152 },
-    { key: 'providentFund', label: 'P.Fund (Employee)', groupId: 'providentFund', type: 'readonly', minWidth: 152 },
-    { key: 'socialSecurityPunjab', label: 'Punjab', groupId: 'socialSecurity', type: 'readonly', minWidth: 145 },
-    { key: 'socialSecurityKpk', label: 'KPK', groupId: 'socialSecurity', type: 'readonly', minWidth: 145 },
-    { key: 'eobiEmployer', label: 'EOBI (Employer)', groupId: 'eobi', type: 'readonly', minWidth: 152 },
-    { key: 'eobiEmployee', label: 'EOBI (Employee)', groupId: 'eobi', type: 'readonly', minWidth: 152 },
-    { key: 'arrears', label: 'Arrears', groupId: 'other', type: 'currency', minWidth: 145 },
-    { key: 'gratuity', label: 'Gratuity', groupId: 'other', type: 'currency', minWidth: 145 },
-    { key: 'paidLeaveDays', label: 'Paid', groupId: 'loan', type: 'readonly', minWidth: 110 },
-    { key: 'unpaidLeaveDays', label: 'Unpaid', groupId: 'loan', type: 'readonly', minWidth: 110 },
-    { key: 'loanAdjustment', label: 'Loan Deduction', groupId: 'loan', type: 'currency', minWidth: 158 },
-    { key: 'loanAdvForm', label: 'Advance Deduction', groupId: 'loan', type: 'currency', minWidth: 152 },
-    { key: 'lateAttendDeduction', label: 'Leaves Deduction', groupId: 'loan', type: 'currency', minWidth: 182 },
-    // { key: 'costToCompany', label: 'Cost to Company', groupId: 'final', type: 'currency', minWidth: 168 },
-    { key: 'netPayable', label: 'Gross Payable', groupId: 'final', type: 'readonly', minWidth: 160 },
-    { key: 'taxDeduction', label: 'Tax Deduction', groupId: 'final', type: 'readonly', minWidth: 160 },
-    { key: 'netPayableAfterTax', label: 'Net Payable (TAX)', groupId: 'final', type: 'readonly', minWidth: 160 },
-    { key: 'netPayableManagement', label: 'Net Payable (Management)', groupId: 'final', type: 'readonly', minWidth: 240 },
-    // { key: 'totalEarnings', label: 'Total Earnings', groupId: 'final', type: 'readonly-pill', minWidth: 168 },
-    // { key: 'finalGrossSalary', label: 'Gross Salary', groupId: 'final', type: 'readonly', minWidth: 152 },
-    { key: 'approved', label: 'Approval', groupId: 'approval', type: 'approval', minWidth: 96 },
-    { key: 'paySlip', label: 'Pay Slip', groupId: 'approval', type: 'print', minWidth: 120 },
+    { key: 'unpaidLeaveDays', label: 'Absents', groupId: 'salary', type: 'readonly', minWidth: 110 },
+    { key: 'lateAttendDeduction', label: 'Absent Amount', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'netPayable', label: 'Payable Amount', groupId: 'salary', type: 'readonly', minWidth: 160 },
+    { key: 'loanAdvForm', label: 'Advance', groupId: 'salary', type: 'currency', minWidth: 145 },
+    { key: 'deductions', label: 'Deductions', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'netPayableAfterTax', label: 'Balance', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'childBenefits', label: 'Child Benefits', groupId: 'salary', type: 'currency', minWidth: 152 },
+    { key: 'netPayableManagement', label: 'Net Paid', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'totalEarnings', label: 'Total', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'paySlip', label: 'Pay Slip', groupId: 'salary', type: 'print', minWidth: 120 },
   ];
 
   readonly scrollMinWidth = computed(() =>
@@ -400,6 +370,7 @@ export class AddPayrollProcessComponent implements OnInit {
       grossSalary: 0,
       grossSalaryInCash: 0,
       grossSalaryInBank: 0,
+      childBenefits: 0,
       medicalAllowance: 0,
       allowedLiters: 0,
       fuelAllowance: 0,
@@ -428,6 +399,7 @@ export class AddPayrollProcessComponent implements OnInit {
       netPayableAfterTax: 0,
       netPayableManagement: 0,
       totalEarnings: 0,
+      deductions: 0,
       finalGrossSalary: 0,
     };
 
@@ -439,6 +411,7 @@ export class AddPayrollProcessComponent implements OnInit {
       totals.grossSalary += row.grossSalary;
       totals.grossSalaryInCash += row.grossSalaryInCash;
       totals.grossSalaryInBank += row.grossSalaryInBank;
+      totals.childBenefits += row.childBenefits;
       totals.medicalAllowance += row.medicalAllowance;
       totals.allowedLiters += row.allowedLiters;
       totals.fuelAllowance += row.fuelAllowance;
@@ -467,6 +440,7 @@ export class AddPayrollProcessComponent implements OnInit {
       totals.netPayableAfterTax += this.netPayableAfterTaxForRow(row);
       totals.netPayableManagement += this.netPayableManagementForRow(row);
       totals.totalEarnings += this.totalEarningsForRow(row);
+      totals.deductions += this.totalDeductionsForRow(row);
       totals.finalGrossSalary += row.grossSalary;
     }
 
@@ -685,6 +659,7 @@ export class AddPayrollProcessComponent implements OnInit {
   totalEarningsForRow(row: PayrollProcessRow): number {
     return (
       row.grossSalary +
+      row.childBenefits +
       row.fuelAllowance +
       row.mobileAllowance +
       row.carAllowance +
@@ -694,9 +669,21 @@ export class AddPayrollProcessComponent implements OnInit {
     );
   }
 
+  totalDeductionsForRow(row: PayrollProcessRow): number {
+    return (
+      row.providentFund +
+      row.eobiEmployee +
+      row.loanAdjustment +
+      row.loanAdvForm +
+      row.lateAttendDeduction +
+      row.taxDeduction
+    );
+  }
+
   grossPayableForRow(row: PayrollProcessRow): number {
     return computeGrossSalaryPayable({
       grossSalaryInBank: row.grossSalaryInBank,
+      childBenefits: row.childBenefits,
       fuelAllowance: row.fuelAllowance,
       mobileAllowance: row.mobileAllowance,
       carAllowance: row.carAllowance,
@@ -739,6 +726,9 @@ export class AddPayrollProcessComponent implements OnInit {
     }
     if (column.key === 'totalEarnings') {
       return this.totalEarningsForRow(row);
+    }
+    if (column.key === 'deductions') {
+      return this.totalDeductionsForRow(row);
     }
     if (column.key === 'grossSalary' || column.key === 'finalGrossSalary') {
       return row.grossSalary;
@@ -915,15 +905,7 @@ export class AddPayrollProcessComponent implements OnInit {
   }
 
   private buildPaySlipDocument(row: PayrollProcessRow): string {
-    const totalEarnings = this.totalEarningsForRow(row);
-    const grossPayable = this.grossPayableForRow(row);
-    const netPayable = this.netPayableAfterTaxForRow(row);
-    const paidLeaveDays = this.leaveDaysLoadFailed()
-      ? 'Unavailable'
-      : this.loadingLeaveDays()
-        ? 'Loading...'
-        : `${row.paidLeaveDays} days`;
-    const unpaidLeaveDays = this.leaveDaysLoadFailed()
+    const absents = this.leaveDaysLoadFailed()
       ? 'Unavailable'
       : this.loadingLeaveDays()
         ? 'Loading...'
@@ -941,37 +923,19 @@ export class AddPayrollProcessComponent implements OnInit {
         .replace(/'/g, '&#039;');
 
     const fields = [
-      ['Employee Code', row.employeeCode],
       ['Employee Name', row.personName],
       ['Designation', row.designation || '—'],
-      ['Department', row.department || '—'],
-      ['Month', monthLabel],
-      ['Year', this.selectedYear()],
-      ['Basic Salary', this.formatMoney(row.basicSalary)],
+      ['Salary', this.formatMoney(row.basicSalary)],
       ['Gross Salary', this.formatMoney(row.grossSalary)],
-      ['Gross Salary in Cash', this.formatMoney(row.grossSalaryInCash)],
-      ['Gross Salary in Bank', this.formatMoney(row.grossSalaryInBank)],
-      ['Fuel Allowance', this.formatMoney(row.fuelAllowance)],
-      ['Mobile Allowance', this.formatMoney(row.mobileAllowance)],
-      ['Car Allowance', this.formatMoney(row.carAllowance)],
-      ['Other Allowances', this.formatMoney(row.otherAllowances)],
-      ['Bonus', this.formatMoney(row.bonus)],
-      ['Overtime', this.formatMoney(row.overtime)],
-      ['Provident Fund', this.formatMoney(row.providentFund)],
-      ['Gratuity', this.formatMoney(row.gratuity)],
-      ['EOBI Employee', this.formatMoney(row.eobiEmployee)],
-      ['EOBI Employer', this.formatMoney(row.eobiEmployer)],
-      ['Arrears', this.formatMoney(row.arrears)],
-      ['Paid Leave Days', paidLeaveDays],
-      ['Unpaid Leave Days', unpaidLeaveDays],
-      ['Loan Deduction', this.formatMoney(row.loanAdjustment)],
-      ['Advance Deduction', this.formatMoney(row.loanAdvForm)],
-      ['Leaves Deduction', this.formatMoney(row.lateAttendDeduction)],
-      ['Tax Deduction', this.formatMoney(row.taxDeduction)],
-      ['Total Earnings', this.formatMoney(totalEarnings)],
-      ['Gross Payable', this.formatMoney(grossPayable)],
-      ['Net Payable', this.formatMoney(netPayable)],
-      ['Approved', row.approved ? 'Yes' : 'No'],
+      ['Absents', absents],
+      ['Absent Amount', this.formatMoney(row.lateAttendDeduction)],
+      ['Payable Amount', this.formatMoney(this.grossPayableForRow(row))],
+      ['Advance', this.formatMoney(row.loanAdvForm)],
+      ['Deductions', this.formatMoney(this.totalDeductionsForRow(row))],
+      ['Balance', this.formatMoney(this.netPayableAfterTaxForRow(row))],
+      ['Child Benefits', this.formatMoney(row.childBenefits)],
+      ['Net Paid', this.formatMoney(this.netPayableManagementForRow(row))],
+      ['Total', this.formatMoney(this.totalEarningsForRow(row))],
     ];
 
     return `<!doctype html>
@@ -990,9 +954,6 @@ export class AddPayrollProcessComponent implements OnInit {
             .field { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; }
             .field strong { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; margin-bottom: 5px; }
             .field span { font-size: 14px; font-weight: 600; color: #0f172a; }
-            .totals { margin-top: 22px; border-top: 2px solid #dfe7f1; padding-top: 18px; }
-            .total-line { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
-            .total-line strong { font-weight: 700; }
             @media print { body { margin: 0; } .sheet { box-shadow: none; border-color: #d1d9e3; } }
           </style>
         </head>
@@ -1013,11 +974,6 @@ export class AddPayrollProcessComponent implements OnInit {
                       </div>`,
                   )
                   .join('')}
-              </div>
-              <div class="totals">
-                <div class="total-line"><span>Total Earnings</span><strong>${escapeHtml(this.formatMoney(totalEarnings))}</strong></div>
-                <div class="total-line"><span>Gross Payable</span><strong>${escapeHtml(this.formatMoney(grossPayable))}</strong></div>
-                <div class="total-line"><span>Net Payable</span><strong>${escapeHtml(this.formatMoney(netPayable))}</strong></div>
               </div>
             </div>
           </div>
@@ -1056,6 +1012,7 @@ export class AddPayrollProcessComponent implements OnInit {
       'loanAdjustment',
       'loanAdvForm',
       'lateAttendDeduction',
+      'childBenefits',
       'costToCompany',
     ];
     const parsed = numericFields.includes(field)
@@ -1288,6 +1245,7 @@ export class AddPayrollProcessComponent implements OnInit {
         grossSalary: row.grossSalary,
         grossSalaryInCash: row.grossSalaryInCash,
         grossSalaryInBank: row.grossSalaryInBank,
+        childBenefits: row.childBenefits,
         paymentMode: row.paymentMode,
         medicalAllowance: row.medicalAllowance,
         allowedLiters: row.allowedLiters,
@@ -1602,6 +1560,7 @@ export class AddPayrollProcessComponent implements OnInit {
       grossSalary: 0,
       grossSalaryInCash: 0,
       grossSalaryInBank: 0,
+      childBenefits: 0,
       paymentMode: '',
       medicalAllowance: 0,
       allowedLiters: 0,
@@ -1686,6 +1645,7 @@ export class AddPayrollProcessComponent implements OnInit {
       grossSalary,
       grossSalaryInCash: grossSalaryBreakdown.grossSalaryInCash,
       grossSalaryInBank: grossSalaryBreakdown.grossSalaryInBank,
+      childBenefits: 0,
       paymentMode,
       medicalAllowance,
       allowedLiters,
@@ -1769,7 +1729,7 @@ export class AddPayrollProcessComponent implements OnInit {
       grossSalaryBreakdown.grossSalaryInBank,
       row.location,
     );
-    const leaveDeduction = Math.trunc(((grossSalary * 12) / 365) * row.unpaidLeaveDays);
+    const leaveDeduction = computeUnpaidLeaveDeduction(grossSalary, row.unpaidLeaveDays);
     const costToCompany =
       grossSalary +
       fuelAllowance +

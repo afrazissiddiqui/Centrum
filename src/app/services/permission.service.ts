@@ -27,6 +27,10 @@ export class PermissionService {
   readonly permissions = this.authorization.asReadonly();
 
   can(moduleSlug: string, action: string): boolean {
+    if (this.authService.isFrontendOnlySession()) {
+      return true;
+    }
+
     if (this.authService.getSessionUser()?.is_admin) {
       return true;
     }
@@ -35,6 +39,10 @@ export class PermissionService {
   }
 
   canAccess(requirement: AccessRequirement): boolean {
+    if (this.authService.isFrontendOnlySession()) {
+      return true;
+    }
+
     if (this.authService.getSessionUser()?.is_admin) {
       return true;
     }

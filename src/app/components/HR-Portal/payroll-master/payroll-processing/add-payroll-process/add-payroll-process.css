@@ -464,6 +464,24 @@
   table-layout: fixed;
 }
 
+.comp-grid--fixed th:first-child,
+.comp-grid--fixed td:first-child {
+  width: 160px;
+}
+
+.comp-grid--fixed th:nth-child(2),
+.comp-grid--fixed td:nth-child(2) {
+  width: 120px;
+}
+
+.comp-employee-name-col {
+  width: 160px;
+}
+
+.comp-designation-col {
+  width: 120px;
+}
+
 .comp-grid--scroll {
   table-layout: fixed;
   width: 100%;
@@ -647,6 +665,12 @@
   background: #fafbfd;
 }
 
+.comp-no-employees td {
+  color: #7a8794;
+  font-weight: 500;
+  text-align: center;
+}
+
 .comp-table-scroll .comp-data-row--alt td {
   background: #f7f9fc;
 }
@@ -704,7 +728,7 @@
 }
 
 .comp-emp-cell {
-  width: 280px;
+  width: 160px;
 }
 
 .comp-emp-designation {

@@ -6,42 +6,10 @@
       <p class="login-subtitle">SAP Web Portal</p>
     </div>
 
-    <form class="login-form" (ngSubmit)="submit()" autocomplete="on">
-      <label class="login-field">
-        <span class="login-label">Email</span>
-        <input
-          type="email"
-          name="userId"
-          [(ngModel)]="userId"
-          placeholder="Enter your email"
-          autocapitalize="none"
-          autocomplete="email"
-        />
-      </label>
+    <div class="login-form">
+      <button type="button" class="login-submit" (click)="submit()">Continue</button>
+    </div>
 
-      <label class="login-field">
-        <span class="login-label">Password</span>
-        <input
-          type="password"
-          name="password"
-          [(ngModel)]="password"
-          placeholder="Enter your password"
-          autocomplete="current-password"
-        />
-      </label>
-
-      <div class="login-row">
-        <label class="login-remember">
-          <input type="checkbox" [(ngModel)]="rememberMe" name="remember" />
-          <span>Remember me</span>
-        </label>
-      </div>
-
-      <button type="submit" class="login-submit" [disabled]="isSubmitting">
-        {{ isSubmitting ? 'Signing in...' : 'Sign in' }}
-      </button>
-    </form>
-
-    <p class="login-footnote">Sign in with your account credentials.</p>
+    <p class="login-footnote">Temporary frontend access. Account sign-in will be enabled later.</p>
   </div>
 </div>

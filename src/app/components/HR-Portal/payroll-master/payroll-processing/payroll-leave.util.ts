@@ -6,6 +6,13 @@ export interface PayrollLeaveDayCounts {
   unpaid: number;
 }
 
+export function computeUnpaidLeaveDeduction(grossSalary: number, absentDays: number): number {
+  if (!Number.isFinite(grossSalary) || !Number.isFinite(absentDays) || grossSalary <= 0 || absentDays <= 0) {
+    return 0;
+  }
+  return Math.round(((grossSalary / 30) * absentDays) * 100) / 100;
+}
+
 export function payrollLeaveSearchEmployeeCode(employeeCode: string): string {
   const normalized = canonicalAttendanceKey(employeeCode);
   return /^\d+$/.test(normalized) ? `emp-${normalized}` : employeeCode.trim().toLowerCase();
