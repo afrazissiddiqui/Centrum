@@ -22,6 +22,10 @@ import {
 import { ShellbarSearchService } from '../../../../services/shellbar-search.service';
 import { connectShellbarSearch } from '../../../../utils/shellbar-search-connect.util';
 import { PermissionService } from '../../../../services/permission.service';
+import {
+  GL_ACCOUNT_BRANCH_OPTIONS,
+  resolveBranchCode,
+} from '../../../setup/gl-account-determination/gl-account-branch.options';
 
 const LEAVE_APPLICATION_MODULE = 'leave_application_form';
 
@@ -61,10 +65,19 @@ type LeaveColumnKey = Exclude<
       z-index: 12;
       background: #f5f5f5;
     }
+    :host .branch-filter {
+      height: 32px;
+      padding: 0 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #f5f5f5;
+      color: #1d2d3e;
+    }
   `],
 })
 export class LeaveApplicationFormComponent implements OnInit {
   readonly leaveTableFilter = LEAVE_APPLICATION_TABLE_FILTER;
+  readonly branchOptions = GL_ACCOUNT_BRANCH_OPTIONS;
   private readonly destroyRef = inject(DestroyRef);
   private readonly shellbarSearch = inject(ShellbarSearchService);
 
@@ -125,6 +138,7 @@ export class LeaveApplicationFormComponent implements OnInit {
   activeSidebarItemId = 'leave-application-form';
   sidebarCollapsed = signal(false);
   searchText = '';
+  selectedBranch = '';
   sortColumn: LeaveColumnKey = 'FormNumber';
   sortDirection: 'asc' | 'desc' = 'asc';
   currentPage = 1;
@@ -146,6 +160,9 @@ export class LeaveApplicationFormComponent implements OnInit {
 
   get filteredList(): LeaveApplicationRecord[] {
     let list = this.tableFilter.filterItems([...this.leaveList], this.leaveTableFilter);
+    if (this.selectedBranch) {
+      list = list.filter((item) => resolveBranchCode(item.Location) === this.selectedBranch);
+    }
     if (this.searchText) {
       const search = this.searchText.trim().toLowerCase();
       list = list.filter((item) => {
@@ -208,7 +225,12 @@ export class LeaveApplicationFormComponent implements OnInit {
   }
 
   hasActiveListFilters(): boolean {
-    return this.tableFilter.hasActive(this.leaveTableFilter);
+    return this.tableFilter.hasActive(this.leaveTableFilter) || Boolean(this.selectedBranch);
+  }
+
+  onBranchChange(branch: string): void {
+    this.selectedBranch = branch;
+    this.currentPage = 1;
   }
 
   onTableFilterApplied(): void {
