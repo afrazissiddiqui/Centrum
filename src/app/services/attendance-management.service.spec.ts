@@ -140,7 +140,7 @@ describe('AttendanceManagementService calculated working hours', () => {
     firstPage.flush(JSON.stringify({
       data: [
         {
-          id: 23548,
+          id: 'attendance-1',
           card_no: '00000001',
           date: '2026-10-16',
           punch_in: '09:00:00',
@@ -158,7 +158,7 @@ describe('AttendanceManagementService calculated working hours', () => {
 
     expect(loaded).toBe(true);
     expect(service.slots()).toHaveLength(2);
-    expect(service.materializeSlots([service.slots()[0]])[0].Punches[0].RecordId).toBe(23548);
+    expect(service.materializeSlots([service.slots()[0]])[0].Punches[0].RecordId).toBe('attendance-1');
   });
 
   it('retries attendance list requests after HTTP 429 using Retry-After', async () => {
@@ -198,12 +198,12 @@ describe('AttendanceManagementService calculated working hours', () => {
     };
     let updated = false;
 
-    service.updateAttendanceRecord(23548, payload).subscribe(() => {
+    service.updateAttendanceRecord(payload.card_no, payload).subscribe(() => {
       updated = true;
     });
 
     const request = httpMock.expectOne(
-      'http://alhafiz.vdc.services:8084/ahcp/public/api/attendance-raw-punch-update/23548',
+      'http://alhafiz.vdc.services:8084/ahcp/public/api/attendance-raw-punch-update/00000003',
     );
     expect(request.request.method).toBe('PUT');
     expect(request.request.body).toEqual(payload);

@@ -712,25 +712,21 @@ export class AttendanceManagmentComponent implements OnInit {
   }
 
   canUpdateAttendance(record: AttendanceDailyRecord | null | undefined): boolean {
-    return !!record?.Punches.some((punch) => punch.RecordId !== undefined && punch.RecordId !== null);
+    return !!record?.CardNo ||
+      !!record?.Punches.some((punch) => punch.RecordId !== undefined && punch.RecordId !== null);
   }
 
   openAttendanceUpdate(record: AttendanceDailyRecord): void {
     const sourcePunch = record.Punches.find(
       (punch) => punch.RecordId !== undefined && punch.RecordId !== null,
     );
-    if (!sourcePunch || sourcePunch.RecordId === undefined || sourcePunch.RecordId === null) {
-      void this.alertService.warning('Cannot Update Attendance', 'The attendance record ID is missing.');
-      return;
-    }
-
-    const cardNo = record.CardNo || sourcePunch.EmployeeId;
+    const cardNo = record.CardNo || sourcePunch?.EmployeeId;
     if (!cardNo) {
       void this.alertService.warning('Cannot Update Attendance', 'The employee card number is missing.');
       return;
     }
 
-    this.attendanceUpdateRecordId = sourcePunch.RecordId;
+    this.attendanceUpdateRecordId = cardNo;
     const attendanceDateTime = toApiDateTimeValue(
       toDateTimeLocalValue(record.PunchOut || record.PunchIn || record.AttendanceDate),
     );
@@ -782,7 +778,6 @@ export class AttendanceManagmentComponent implements OnInit {
       ...this.attendanceUpdateForm,
       punch_in: combineDateAndTime(this.attendanceUpdateForm.attendance_date, this.attendanceUpdatePunchIn),
       punch_out: combineDateAndTime(this.attendanceUpdateForm.attendance_date, this.attendanceUpdatePunchOut),
-      hours_worked: this.attendanceUpdateForm.hours_worked,
     };
     this.updatingAttendance.set(true);
     this.attendanceService.updateAttendanceRecord(id, payload).subscribe({
