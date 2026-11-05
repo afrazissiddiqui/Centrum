@@ -8,6 +8,8 @@ import {
   computeNetPayable,
   computeOvertimeAmount,
   computeOvertimeRate,
+  computePayableAmount,
+  computeRatePerDay,
 } from '../../payroll-setup/payroll-setup.service';
 import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
 
@@ -23,6 +25,12 @@ describe('computeOvertimeRate', () => {
 
   it('calculates overtime pay from the hourly rate and overtime hours', () => {
     expect(computeOvertimeAmount(computeOvertimeRate(30000), 5)).toBe(721.15);
+  });
+});
+
+describe('computeRatePerDay', () => {
+  it('divides gross salary by 30', () => {
+    expect(computeRatePerDay(90000)).toBe(3000);
   });
 });
 
@@ -244,5 +252,15 @@ describe('computeGrossSalaryPayable', () => {
         lateAttendanceDeduction: 0,
       }),
     ).toBe(1250);
+  });
+});
+
+describe('computePayableAmount', () => {
+  it('subtracts the absent amount from gross salary', () => {
+    expect(computePayableAmount(80000, 5000)).toBe(75000);
+  });
+
+  it('does not return a negative payable amount', () => {
+    expect(computePayableAmount(5000, 8000)).toBe(0);
   });
 });

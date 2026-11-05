@@ -122,6 +122,7 @@ export interface ApplicationFormRemuneration {
   remainingLeaves: string;
   totalLeaves: string;
   medicalAllowances: string;
+  childBenefit?: string;
   fuelAllowances: string;
   mobileAllowances: string;
   carAllowances: string;
@@ -266,7 +267,7 @@ export interface EmployeeMasterDataRecord {
   selected: boolean;
 }
 
-const EMPLOYEE_PROFILE_ADD_URL = apiUrl('employee-profile-add');
+const EMPLOYEE_PROFILE_ADD_URL = publicApiUrl('employee-profile-add');
 const EMPLOYEE_PROFILE_LIST_URL = publicApiUrl('employee-profile-list');
 const EMPLOYEE_PROFILE_VIEW_URL = publicApiUrl('employee-profile-detail');
 const EMPLOYEE_PROFILE_UPDATE_URL = apiUrl('employee-profile-update');
@@ -531,6 +532,7 @@ const REMUNERATION_FIELD_KEYS: ReadonlyArray<[camel: string, snake: string]> = [
   ['remainingLeaves', 'remaining_leaves'],
   ['totalLeaves', 'total_leaves'],
   ['medicalAllowances', 'medical_allowances'],
+  ['childBenefit', 'child_benefit'],
   ['fuelAllowances', 'fuel_allowances'],
   ['mobileAllowances', 'mobile_allowances'],
   ['carAllowances', 'car_allowances'],
@@ -549,6 +551,7 @@ const REMUNERATION_EXTRA_KEYS: Readonly<Record<string, readonly string[]>> = {
     'is_overtime_applicable',
   ],
   medicalAllowances: ['medicalAllowance', 'medical_allowance', 'MedicalAllowances', 'MedicalAllowance'],
+  childBenefit: ['childBenefits', 'child_benefits', 'ChildBenefit', 'ChildBenefits'],
   fuelAllowances: ['fuelAllowance', 'fuel_allowance', 'FuelAllowances', 'FuelAllowance'],
   fuelLimit: ['FuelLimit', 'fuel_limit', 'petrolLimit', 'petrol_limit', 'fuelLiters', 'fuel_liters', 'allowedLiters', 'allowed_liters'],
   mobileAllowances: ['mobileAllowance', 'mobile_allowance', 'MobileAllowances', 'MobileAllowance'],
@@ -2302,6 +2305,7 @@ export class ApplicationFormService {
         remainingLeaves: asNumberString(pickRem('remainingLeaves', 'remaining_leaves')),
         totalLeaves: asNumberString(pickRem('totalLeaves', 'total_leaves')),
         medicalAllowances: asNumberString(pickRem('medicalAllowances', 'medical_allowances')),
+        childBenefit: asNumberString(pickRem('childBenefit', 'child_benefit')),
         fuelAllowances: asNumberString(pickRem('fuelAllowances', 'fuel_allowances')),
         mobileAllowances: asNumberString(pickRem('mobileAllowances', 'mobile_allowances')),
         carAllowances: asNumberString(pickRem('carAllowances', 'car_allowances')),

@@ -135,8 +135,16 @@ export function computeGrossSalaryPayable(amounts: GrossSalaryPayableAmounts): n
   return Math.max(0, roundPayrollAmount(earnings - deductions));
 }
 
+export function computePayableAmount(grossSalary: number, absentAmount: number): number {
+  return Math.max(0, roundPayrollAmount(grossSalary - absentAmount));
+}
+
 export function roundPayrollAmount(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+export function computeRatePerDay(grossSalary: number): number {
+  return grossSalary / 30;
 }
 
 /**

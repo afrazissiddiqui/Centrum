@@ -54,10 +54,11 @@ import {
   computeGratuity,
   computeGrossSalary,
   computeGrossSalaryBreakdown,
-  computeGrossSalaryPayable,
   computeMedicalAllowance,
   computeOvertimeAmount,
   computeOvertimeRate,
+  computePayableAmount,
+  computeRatePerDay,
   computeProvidentFund,
   computeYearsOfService,
 } from '../../payroll-setup/payroll-setup.service';
@@ -648,22 +649,7 @@ export class AddPayrollProcessComponent implements OnInit {
   }
 
   grossPayableForRow(row: PayrollProcessRow): number {
-    return computeGrossSalaryPayable({
-      grossSalaryInBank: row.grossSalaryInBank,
-      childBenefits: row.childBenefits,
-      fuelAllowance: row.fuelAllowance,
-      mobileAllowance: row.mobileAllowance,
-      carAllowance: row.carAllowance,
-      otherAllowances: row.otherAllowances,
-      bonus: row.bonus,
-      overtime: row.overtime,
-      arrears: row.arrears,
-      providentFund: row.providentFund,
-      eobiEmployee: row.eobiEmployee,
-      loanDeduction: row.loanAdjustment,
-      advanceDeduction: row.loanAdvForm,
-      lateAttendanceDeduction: this.absentAmountForRow(row),
-    });
+    return computePayableAmount(row.grossSalary, this.absentAmountForRow(row));
   }
 
   netPayableAfterTaxForRow(row: PayrollProcessRow): number {
@@ -720,16 +706,7 @@ export class AddPayrollProcessComponent implements OnInit {
   }
 
   private ratePerDayForRow(row: PayrollProcessRow): number {
-    const year = this.selectedYear();
-    const month = this.selectedMonth();
-    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-    let nonSundayDays = 0;
-    for (let day = 1; day <= daysInMonth; day += 1) {
-      if (new Date(Date.UTC(year, month - 1, day)).getUTCDay() !== 0) {
-        nonSundayDays += 1;
-      }
-    }
-    return row.grossSalary / nonSundayDays;
+    return computeRatePerDay(row.grossSalary);
   }
 
   private absentAmountForRow(row: PayrollProcessRow): number {

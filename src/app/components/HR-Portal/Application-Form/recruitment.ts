@@ -1,6 +1,7 @@
 import { Component, DestroyRef, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { ColumnResizeDirective } from '../../../column-resize';
 import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
@@ -62,6 +63,7 @@ export class RecruitmentComponent implements OnInit {
   readonly skeletonRows = [1, 2, 3, 4, 5, 6];
   private readonly destroyRef = inject(DestroyRef);
   private readonly shellbarSearch = inject(ShellbarSearchService);
+  private readonly router = inject(Router);
   readonly detailViewState$ = new BehaviorSubject<ApplicationDetailViewState>({
     open: false,
     loading: false,
@@ -444,7 +446,7 @@ export class RecruitmentComponent implements OnInit {
       return;
     }
 
-    this.alertService.error('Error', 'Under Construction');
+    void this.router.navigateByUrl('/recruitment/create');
   }
 
   onUpdate(_record: ApplicationFormRecord): void {

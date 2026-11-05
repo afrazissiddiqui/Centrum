@@ -34,6 +34,57 @@ describe('ApplicationFormService', () => {
     request.flush({ data: { id: 1 } });
   });
 
+  it('adds employee profiles through the public API with nested profile sections', () => {
+    const record = (service as any).mapApiItemToFullRecord({});
+    record.detail.personalInfo.personName = 'Ali Khan';
+    record.detail.loginDetails.employeeName = 'alikhan';
+    record.detail.loginDetails.password = 'Password@123';
+    record.detail.remuneration.basicSalary = '80000';
+    record.detail.education = [{
+      qualification: 'BS Computer Science',
+      institution: 'FAST NUCES',
+      institute: 'FAST NUCES',
+      passingYear: '2018',
+      fromDate: '2014-09-01',
+      toDate: '2018-07-01',
+      subject: 'Computer Science',
+      awardedQualification: '',
+      marksGrades: '3.4 CGPA',
+      notes: 'Honors',
+    }];
+    record.detail.pastExperience = [{
+      company: 'Tech Solutions',
+      designation: 'Associate Developer',
+      position: 'Associate Developer',
+      duration: '',
+      fromDate: '2019-01-01',
+      toDate: '2021-12-31',
+      duties: '',
+      remarks: 'Career Growth',
+      lastSalary: '50000',
+    }];
+    const payload = service.buildFlatEmployeeProfilePayload(record.detail, {
+      jobSpecificationId: 'JOB-101',
+    });
+
+    service.addEmployeeProfile(payload).subscribe();
+
+    const request = TestBed.inject(HttpTestingController).expectOne(
+      'http://116.203.172.106:8084/centrum_test/public/api/employee-profile-add',
+    );
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body.jobSpecificationId).toBe('JOB-101');
+    expect(request.request.body.personName).toBe('Ali Khan');
+    expect(request.request.body.loginDetail.loginEmployeeName).toBe('alikhan');
+    expect(request.request.body.loginDetail.password).toBe('Password@123');
+    expect(request.request.body.remuneration.basicSalary).toBe(80000);
+    expect(request.request.body.education[0].qualification).toBe('BS Computer Science');
+    expect(request.request.body.education[0].institution).toBe('FAST NUCES');
+    expect(request.request.body.pastExperience[0].company).toBe('Tech Solutions');
+    expect(request.request.body.pastExperience[0].designation).toBe('Associate Developer');
+    request.flush({ id: 1 });
+  });
+
   it('continues from the intended sequence when the list includes a later outlier cluster', () => {
     (service as any).applicationRecords.set([
       { EmployeeCode: 'Emp-00000254' },
@@ -97,6 +148,15 @@ describe('ApplicationFormService', () => {
 
     expect(record.detail.personalInfo.costCenter).toBe('CC-124');
     expect(record.detail.requisition.costCenter).toBe('CC-124');
+  });
+
+  it('maps child benefit values from nested remuneration data', () => {
+    const record = (service as any).mapApiItemToFullRecord({
+      employeeCode: 'Emp-00000001',
+      remuneration: { child_benefits: 250 },
+    });
+
+    expect(record.detail.remuneration.childBenefit).toBe('250');
   });
 
   it('uses branchLocation, not branchName, for the profile Branch dropdown', () => {

@@ -39,6 +39,7 @@
           <div class="view-profile-item"><span class="view-profile-label">Salary</span><span>{{ displaySalary() }}</span></div>
           <div class="view-profile-item"><span class="view-profile-label">Maximum Loan Capacity</span><span>{{ record.detail?.remuneration?.maximumLoanCapacity || '—' }}</span></div>
           <div class="view-profile-item"><span class="view-profile-label">Medical allowances</span><span>{{ record.detail?.remuneration?.medicalAllowances || '—' }}</span></div>
+          <div class="view-profile-item"><span class="view-profile-label">Child benifit</span><span>{{ record.detail?.remuneration?.childBenefit || '—' }}</span></div>
           <div class="view-profile-item"><span class="view-profile-label">Total leaves</span><span>{{ record.detail?.remuneration?.totalLeaves || '—' }}</span></div>
           <div class="view-profile-item"><span class="view-profile-label">Employment type</span><span>{{ field(record, r => r.EmploymentType) }}</span></div>
           <div class="view-profile-item"><span class="view-profile-label">Employment category</span><span>{{ field(record, r => r.EmploymentCategory) }}</span></div>
