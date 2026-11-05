@@ -139,6 +139,10 @@ export function computePayableAmount(grossSalary: number, absentAmount: number):
   return Math.max(0, roundPayrollAmount(grossSalary - absentAmount));
 }
 
+export function computeAdvanceBalance(advance: number, deduction: number): number {
+  return roundPayrollAmount(advance - deduction);
+}
+
 export function roundPayrollAmount(value: number): number {
   return Math.round(value * 100) / 100;
 }

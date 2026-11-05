@@ -4,6 +4,7 @@ import {
   computeGratuity,
   computeGrossSalaryPayable,
   computeGrossSalaryBreakdown,
+  computeAdvanceBalance,
   computeMedicalAllowance,
   computeNetPayable,
   computeOvertimeAmount,
@@ -12,6 +13,7 @@ import {
   computeRatePerDay,
 } from '../../payroll-setup/payroll-setup.service';
 import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
+import { selectPayrollEmployeesForSubmission } from '../payroll-employee-selection.util';
 
 describe('computeOvertimeRate', () => {
   it('calculates the hourly rate by dividing gross salary by 26 days and 8 hours', () => {
@@ -85,6 +87,28 @@ describe('sumSubmittedOvertimeHours', () => {
     ];
 
     expect(sumSubmittedOvertimeHours(records, ['EMP-001'], '2026-10')).toBe(4);
+  });
+});
+
+describe('selectPayrollEmployeesForSubmission', () => {
+  it('submits all employees when none are approved', () => {
+    const employees = [
+      { id: 1, approved: false },
+      { id: 2, approved: false },
+    ];
+
+    expect(selectPayrollEmployeesForSubmission(employees, (employee) => employee.approved))
+      .toEqual(employees);
+  });
+
+  it('submits only approved employees when at least one is approved', () => {
+    const employees = [
+      { id: 1, approved: true },
+      { id: 2, approved: false },
+    ];
+
+    expect(selectPayrollEmployeesForSubmission(employees, (employee) => employee.approved))
+      .toEqual([employees[0]]);
   });
 });
 
@@ -258,6 +282,13 @@ describe('computeGrossSalaryPayable', () => {
 describe('computePayableAmount', () => {
   it('subtracts the absent amount from gross salary', () => {
     expect(computePayableAmount(80000, 5000)).toBe(75000);
+  });
+
+  describe('computeAdvanceBalance', () => {
+    it('subtracts the entered deduction from the advance and allows a negative balance', () => {
+      expect(computeAdvanceBalance(10000, 2500)).toBe(7500);
+      expect(computeAdvanceBalance(1000, 1500)).toBe(-500);
+    });
   });
 
   it('does not return a negative payable amount', () => {

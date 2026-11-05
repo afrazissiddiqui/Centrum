@@ -77,53 +77,45 @@ const PAYROLL_DETAIL_COLUMNS: PayrollDetailColumn[] = [
   { key: 'gratuity', label: 'Gratuity', kind: 'amount' },
   { key: 'paidLeaveDays', label: 'Paid Leave Days', kind: 'number' },
   { key: 'unpaidLeaveDays', label: 'Unpaid Leave Days', kind: 'number' },
+  { key: 'extraWorkingDay', label: 'Extra working day', kind: 'number' },
+  { key: 'rateExtraDay', label: 'Rate (extra day)', kind: 'amount' },
+  { key: 'paymentForEwd', label: 'Payment for EWD', kind: 'amount' },
   { key: 'loanAdjustment', label: 'Loan Deduction', kind: 'amount' },
   { key: 'loanAdvForm', label: 'Advance Deduction', kind: 'amount' },
+  { key: 'deductions', label: 'Deductions', kind: 'amount' },
   { key: 'lateAttendDeduction', label: 'Leave Deduction', kind: 'amount' },
   { key: 'costToCompany', label: 'Cost to Company', kind: 'amount' },
   { key: 'taxDeduction', label: 'Tax Deduction', kind: 'amount' },
   { key: 'totalEarnings', label: 'Total Earnings', kind: 'amount' },
   { key: 'netPayable', label: 'Gross Payable', kind: 'amount' },
-  { key: 'netPayableAfterTax', label: 'Net Payable (Tax)', kind: 'amount' },
+  { key: 'netPayableAfterTax', label: 'Balance', kind: 'amount' },
   { key: 'netPayableManagement', label: 'Net Payable (Management)', kind: 'amount' },
   { key: 'finalGrossSalary', label: 'Final Gross Salary', kind: 'amount' },
   { key: 'approved', label: 'Approved', kind: 'boolean' },
 ];
 
-const PAYROLL_EXCEL_COLUMNS: PayrollDetailColumn[] = [
-  { key: 'employeeId', label: 'Employee ID', kind: 'text' },
+interface PayrollExcelColumn extends Omit<PayrollDetailColumn, 'key'> {
+  key: keyof PayrollProcessingDetailPayload | 'ratePerDay' | 'absent' | 'absentAmount';
+}
+
+const PAYROLL_EXCEL_COLUMNS: PayrollExcelColumn[] = [
   { key: 'personName', label: 'Employee Name', kind: 'text' },
-  { key: 'basicSalary', label: 'Basic Salary', kind: 'amount' },
+  { key: 'designation', label: 'Designation', kind: 'text' },
+  { key: 'grossSalary', label: 'Salary', kind: 'amount' },
   { key: 'grossSalary', label: 'Gross Salary', kind: 'amount' },
-  { key: 'grossSalaryInCash', label: 'Gross Salary in Cash', kind: 'amount' },
-  { key: 'grossSalaryInBank', label: 'Gross Salary in Bank', kind: 'amount' },
+  { key: 'netPayable', label: 'Payable Amount', kind: 'amount' },
+  { key: 'ratePerDay', label: 'Rate/Day', kind: 'amount' },
+  { key: 'absent', label: 'Absent', kind: 'number' },
+  { key: 'absentAmount', label: 'Absent Amount', kind: 'amount' },
+  { key: 'extraWorkingDay', label: 'Extra working day', kind: 'number' },
+  { key: 'rateExtraDay', label: 'Rate (extra day)', kind: 'amount' },
+  { key: 'paymentForEwd', label: 'Payment for EWD', kind: 'amount' },
+  { key: 'loanAdvForm', label: 'Advance', kind: 'amount' },
+  { key: 'deductions', label: 'Deductions', kind: 'amount' },
+  { key: 'netPayableAfterTax', label: 'Balance', kind: 'amount' },
   { key: 'childBenefits', label: 'Child Benefits', kind: 'amount' },
-  { key: 'medicalAllowance', label: 'Medical', kind: 'amount' },
-  { key: 'allowedLiters', label: 'Petrol Liters', kind: 'number' },
-  { key: 'fuelAllowance', label: 'Fuel', kind: 'amount' },
-  { key: 'mobileAllowance', label: 'Mobile', kind: 'amount' },
-  { key: 'carAllowance', label: 'Car', kind: 'amount' },
-  { key: 'otherAllowances', label: 'Other Allowances', kind: 'amount' },
-  { key: 'bonus', label: 'Bonus', kind: 'amount' },
-  { key: 'overtimeHours', label: 'Overtime Hours (Month Total)', kind: 'number' },
-  { key: 'overtime', label: 'Overtime', kind: 'amount' },
-  { key: 'providentFundEmployer', label: 'P.Fund (Employer)', kind: 'amount' },
-  { key: 'providentFund', label: 'P.Fund (Employee)', kind: 'amount' },
-  { key: 'socialSecurityPunjab', label: 'Punjab', kind: 'amount' },
-  { key: 'socialSecurityKpk', label: 'KPK', kind: 'amount' },
-  { key: 'eobiEmployer', label: 'EOBI (Employer)', kind: 'amount' },
-  { key: 'eobiEmployee', label: 'EOBI (Employee)', kind: 'amount' },
-  { key: 'arrears', label: 'Arrears', kind: 'amount' },
-  { key: 'gratuity', label: 'Gratuity', kind: 'amount' },
-  { key: 'paidLeaveDays', label: 'Paid', kind: 'number' },
-  { key: 'unpaidLeaveDays', label: 'Unpaid', kind: 'number' },
-  { key: 'loanAdjustment', label: 'Loan Deduction', kind: 'amount' },
-  { key: 'loanAdvForm', label: 'Advance Deduction', kind: 'amount' },
-  { key: 'lateAttendDeduction', label: 'Leaves Deduction', kind: 'amount' },
-  { key: 'netPayable', label: 'Gross Payable', kind: 'amount' },
-  { key: 'taxDeduction', label: 'Tax Deduction', kind: 'amount' },
-  { key: 'netPayableAfterTax', label: 'Net Payable (TAX)', kind: 'amount' },
-  { key: 'netPayableManagement', label: 'Net Payable (Management)', kind: 'amount' },
+  { key: 'netPayableManagement', label: 'Net Paid', kind: 'amount' },
+  { key: 'totalEarnings', label: 'Total', kind: 'amount' },
 ];
 
 @Component({
@@ -399,6 +391,210 @@ export class PayrollProcessingComponent implements OnInit {
       : String(value);
   }
 
+  isPostedPayroll(record: PayrollProcessingListRecord): boolean {
+    return record.Status.trim().toLowerCase() === 'posted';
+  }
+
+  printRecord(record: PayrollProcessingListRecord): void {
+    if (!this.permissionService.assertCan(PAYROLL_PROCESSING_MODULE, 'view')) {
+      return;
+    }
+
+    if (!this.isPostedPayroll(record)) {
+      void this.alertService.warning('Print', 'Only posted payroll processes can be printed.');
+      return;
+    }
+
+    if (!record.Id) {
+      void this.alertService.warning('Print', 'Unable to print this row: missing payroll process id.');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=1100,height=850');
+    if (!printWindow) {
+      void this.alertService.warning('Print', 'Allow pop-ups to open the payroll print view.');
+      return;
+    }
+
+    printWindow.document.write(
+      '<!doctype html><html><head><title>Payroll Print View</title></head><body>Loading posted payroll details…</body></html>',
+    );
+    printWindow.document.close();
+
+    this.payrollProcessingService.fetchPayrollProcessingDetail(record.Id).subscribe({
+      next: (detail) => {
+        if (printWindow.closed) {
+          return;
+        }
+
+        try {
+          printWindow.document.open();
+          printWindow.document.write(this.buildPayrollPrintDocument(detail));
+          printWindow.document.close();
+          printWindow.focus();
+          printWindow.print();
+        } catch {
+          printWindow.close();
+          void this.alertService.error('Print Failed', 'Failed to prepare the payroll print view.');
+        }
+      },
+      error: (error: unknown) => {
+        if (!printWindow.closed) {
+          printWindow.close();
+        }
+        void this.alertService.error(
+          'Load Failed',
+          formatApiErrorMessage(error, 'Failed to load posted payroll details for printing.'),
+        );
+      },
+    });
+  }
+
+  private buildPayrollPrintDocument(record: PayrollProcessingRecord): string {
+    const escapeHtml = (value: unknown): string =>
+      String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const header = record.Header;
+    const monthLabel = this.formatMonth(header.month) || String(header.month || '');
+    const headerFields: Array<[string, string]> = [
+      ['Payroll ID', String(record.Id)],
+      ['Period', `${monthLabel} ${header.year || ''}`.trim()],
+      ['Status', header.status],
+      ['Currency', header.currency],
+      ['Processed By', String(header.processedBy || '—')],
+      ['Processed Date', this.formatProcessedDate(header.processedDate) || '—'],
+      ['Monthly Fuel Rate Adjustment', this.formatMoney(header.fuelPriceAdjust || 0, header.currency)],
+      ['Minimum Wage Adjustment', this.formatMoney(header.minimumWageAdjust || 0, header.currency)],
+    ];
+
+    const detailGroups: Array<{ title: string; columns: PayrollDetailColumn[] }> = [
+      { title: 'Employee Information', columns: PAYROLL_DETAIL_COLUMNS.slice(0, 19) },
+      { title: 'Salary and Allowances', columns: PAYROLL_DETAIL_COLUMNS.slice(19, 35) },
+      { title: 'Contributions and Deductions', columns: PAYROLL_DETAIL_COLUMNS.slice(35, 52) },
+      { title: 'Payroll Summary', columns: PAYROLL_DETAIL_COLUMNS.slice(52) },
+    ];
+
+    const renderFields = (fields: Array<[string, string]>): string =>
+      fields.map(([label, value]) => `
+        <div class="field">
+          <span class="label">${escapeHtml(label)}</span>
+          <span class="value">${escapeHtml(value || '—')}</span>
+        </div>`).join('');
+
+    const renderEmployee = (employee: PayrollProcessingDetailPayload, index: number): string => {
+      const groups = detailGroups.map(({ title, columns }) => `
+        <section class="detail-group">
+          <h3>${escapeHtml(title)}</h3>
+          <div class="field-grid">
+            ${renderFields(columns.map((column) => [
+              column.label,
+              this.formatDetailValue(employee, column, header.currency),
+            ]))}
+          </div>
+        </section>`).join('');
+
+      return `
+        <article class="employee">
+          <div class="employee-heading">
+            <div>
+              <span class="eyebrow">Employee ${index + 1}</span>
+              <h2>${escapeHtml(employee.personName || employee.employeeCode || 'Payroll detail')}</h2>
+            </div>
+            <div class="employee-id">${escapeHtml(employee.employeeCode || employee.employeeId || '—')}</div>
+          </div>
+          ${groups}
+        </article>`;
+    };
+
+    const remarks = header.remarks
+      ? `<section class="remarks"><h2>Remarks</h2><p>${escapeHtml(header.remarks)}</p></section>`
+      : '';
+    const employees = record.Details.length
+      ? record.Details.map((employee, index) => renderEmployee(employee, index)).join('')
+      : '<p class="empty">No employee detail lines are available for this payroll.</p>';
+
+    return `<!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Posted Payroll ${escapeHtml(record.Id)} — ${escapeHtml(monthLabel)} ${escapeHtml(header.year)}</title>
+          <style>
+            :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; color: #172b4d; }
+            * { box-sizing: border-box; }
+            body { margin: 0; background: #eef2f7; }
+            .toolbar { position: sticky; top: 0; z-index: 1; display: flex; justify-content: flex-end; gap: 10px; padding: 14px max(24px, calc((100% - 1100px) / 2)); background: #fff; border-bottom: 1px solid #dce3ec; }
+            button { border: 0; border-radius: 6px; padding: 10px 18px; font-size: 14px; font-weight: 700; cursor: pointer; }
+            .print-button { background: #0a6ed1; color: #fff; }
+            .close-button { background: #edf2f7; color: #243b53; }
+            main { max-width: 1100px; margin: 28px auto; padding: 0 24px; }
+            .report-header { padding: 28px 32px; border-radius: 12px 12px 0 0; color: #fff; background: linear-gradient(120deg, #123b68, #0a6ed1); }
+            .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; opacity: .8; }
+            h1 { margin: 8px 0 4px; font-size: 28px; }
+            .subtitle { margin: 0; opacity: .88; }
+            .report-content { padding: 24px 32px; background: #fff; border: 1px solid #dce3ec; border-top: 0; }
+            .section-title { margin: 0 0 14px; font-size: 16px; }
+            .field-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+            .field { min-width: 0; padding: 10px 11px; border: 1px solid #e4eaf1; border-radius: 6px; background: #f8fafc; overflow-wrap: anywhere; }
+            .label { display: block; margin-bottom: 5px; color: #62748a; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+            .value { display: block; color: #172b4d; font-size: 11px; font-weight: 600; white-space: pre-wrap; }
+            .remarks { margin-top: 18px; padding: 14px; border-left: 3px solid #0a6ed1; background: #f5f8fc; }
+            .remarks h2 { margin: 0 0 6px; font-size: 13px; }
+            .remarks p { margin: 0; white-space: pre-wrap; }
+            .employee { margin-top: 26px; padding: 22px; background: #fff; border: 1px solid #dce3ec; border-radius: 10px; }
+            .employee-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #dce8f5; }
+            .employee-heading .eyebrow { color: #0a6ed1; opacity: 1; }
+            .employee-heading h2 { margin: 5px 0 0; font-size: 18px; }
+            .employee-id { color: #52657a; font-size: 12px; font-weight: 700; }
+            .detail-group { margin-top: 16px; }
+            .detail-group h3 { margin: 0 0 8px; padding-bottom: 6px; color: #26496b; border-bottom: 1px solid #e4eaf1; font-size: 12px; }
+            .empty { padding: 18px 0; color: #62748a; }
+            footer { padding: 16px 0 4px; color: #718096; font-size: 10px; text-align: right; }
+            @media (max-width: 750px) { .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } main { margin: 14px auto; padding: 0 12px; } .report-content { padding: 18px; } }
+            @page { size: A4 landscape; margin: 12mm; }
+            @media print {
+              body { background: #fff; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+              .toolbar { display: none; }
+              main { max-width: none; margin: 0; padding: 0; }
+              .report-header { border-radius: 0; }
+              .report-content { padding: 18px 0; border: 0; }
+              .employee { margin: 18px 0 0; padding: 14px 0; border: 0; border-top: 2px solid #dce3ec; border-radius: 0; break-inside: auto; }
+              .detail-group { break-inside: avoid; }
+              .field { padding: 7px; }
+              footer { position: fixed; bottom: 0; right: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="toolbar">
+            <button class="print-button" onclick="window.print()">Print payroll</button>
+            <button class="close-button" onclick="window.close()">Close</button>
+          </div>
+          <main>
+            <header class="report-header">
+              <span class="eyebrow">Payroll Processing · ${escapeHtml(header.status || 'Posted')}</span>
+              <h1>Payroll Register</h1>
+              <p class="subtitle">${escapeHtml(monthLabel)} ${escapeHtml(header.year)} · Payroll #${escapeHtml(record.Id)}</p>
+            </header>
+            <div class="report-content">
+              <section>
+                <h2 class="section-title">Payroll Summary</h2>
+                <div class="field-grid">${renderFields(headerFields)}</div>
+                ${remarks}
+              </section>
+              ${employees}
+              <footer>Generated ${escapeHtml(new Date().toLocaleString())}</footer>
+            </div>
+          </main>
+        </body>
+      </html>`;
+  }
+
   viewRecord(record: PayrollProcessingListRecord): void {
     if (!this.permissionService.assertCan(PAYROLL_PROCESSING_MODULE, 'view')) {
       return;
@@ -466,7 +662,14 @@ export class PayrollProcessingComponent implements OnInit {
           const lines = [headers.join(',')];
           for (const r of rows) {
             const line = PAYROLL_EXCEL_COLUMNS.map((column) => {
-              const value = r[column.key];
+              const value =
+                column.key === 'ratePerDay'
+                  ? (Number(r.grossSalary) || 0) / 30
+                  : column.key === 'absent'
+                    ? r.paidLeaveDays + r.unpaidLeaveDays
+                    : column.key === 'absentAmount'
+                      ? r.lateAttendDeduction
+                      : r[column.key];
               if (column.kind === 'boolean') {
                 return escape(value ? 'Yes' : 'No');
               }

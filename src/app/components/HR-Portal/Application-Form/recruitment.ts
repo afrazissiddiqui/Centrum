@@ -449,12 +449,21 @@ export class RecruitmentComponent implements OnInit {
     void this.router.navigateByUrl('/recruitment/create');
   }
 
-  onUpdate(_record: ApplicationFormRecord): void {
+  onUpdate(record: ApplicationFormRecord): void {
     if (!this.permissionService.assertCan(APPLICATION_FORM_MODULE, 'update')) {
       return;
     }
 
-    this.alertService.error('Error', 'Under Construction');
+    const profileId = record.apiId?.trim();
+    if (!profileId) {
+      this.alertService.error(
+        'Update Failed',
+        'Cannot update this employee profile because its profile ID is unavailable.',
+      );
+      return;
+    }
+
+    void this.router.navigate(['/recruitment/edit', profileId]);
   }
 
   onDelete(_record: ApplicationFormRecord): void {

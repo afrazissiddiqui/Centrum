@@ -94,34 +94,6 @@
       </div>
 
       <div class="comp-plan-field">
-        <label class="comp-plan-field__label" for="pp-fuel-price-adjust">Monthly Fuel Rate</label>
-        <input
-          id="pp-fuel-price-adjust"
-          type="number"
-          min="0"
-          step="0.01"
-          class="comp-plan-field__input"
-          placeholder="PKR per liter"
-          [ngModel]="fuelPriceAdjust()"
-          (ngModelChange)="onFuelPriceAdjustChange($event)"
-        />
-      </div>
-
-      <div class="comp-plan-field">
-        <label class="comp-plan-field__label" for="pp-minimum-wage-adjust">Minimum Wage</label>
-        <input
-          id="pp-minimum-wage-adjust"
-          type="number"
-          min="0"
-          step="0.01"
-          class="comp-plan-field__input"
-          placeholder="Enter minimum wage"
-          [ngModel]="minimumWageAdjust()"
-          (ngModelChange)="onMinimumWageAdjustChange($event)"
-        />
-      </div>
-
-      <div class="comp-plan-field">
         <label class="comp-plan-field__label" for="pp-prepared-by-id">Employee Name</label>
         <input
           id="pp-prepared-by-id"
@@ -439,13 +411,13 @@
                                   </div>
                                 } @else {
                                   <div class="comp-input-wrap">
-                                  @if (col.key !== 'overtimeHours' && col.key !== 'absent') {
+                                  @if (col.key !== 'overtimeHours' && col.key !== 'absent' && col.key !== 'extraWorkingDay') {
                                     <span class="comp-input-prefix">{{ currencyCode }}</span>
                                   }
                                   <input
                                       type="number"
                                       min="0"
-                                      [step]="col.key === 'absent' ? '1' : '0.01'"
+                                      [step]="col.key === 'absent' || col.key === 'extraWorkingDay' ? '1' : '0.01'"
                                       class="comp-input"
                                       [ngModel]="getColumnValue(row, col)"
                                       (ngModelChange)="updateRowField(row.apiId, $any(col.key), $event)"

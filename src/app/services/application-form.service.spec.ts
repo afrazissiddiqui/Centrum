@@ -229,7 +229,9 @@ describe('ApplicationFormService', () => {
     service.updateEmployeeProfile(7, payload).subscribe();
 
     const httpMock = TestBed.inject(HttpTestingController);
-    const request = httpMock.expectOne((req) => req.url.endsWith('/employee-profile-update/7'));
+    const request = httpMock.expectOne(
+      'http://116.203.172.106:8084/centrum_test/public/api/employee-profile-update/7',
+    );
 
     expect(request.request.body.maximumLoanCapacity).toBe('5000');
     expect(request.request.body.remuneration.maximumLoanCapacity).toBe('5000');
@@ -332,7 +334,9 @@ describe('ApplicationFormService', () => {
     service.updateEmployeeProfile(7, { costCenter: null, flag: '1' } as any).subscribe();
 
     const httpMock = TestBed.inject(HttpTestingController);
-    const request = httpMock.expectOne((req) => req.url.endsWith('/employee-profile-update/7'));
+    const request = httpMock.expectOne(
+      'http://116.203.172.106:8084/centrum_test/public/api/employee-profile-update/7',
+    );
 
     expect(request.request.body.costCenter).toBeNull();
     expect(request.request.body.remuneration.costCenter).toBeNull();

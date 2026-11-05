@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map, tap } from 'rxjs';
-import { apiUrl, publicApiUrl } from '../config/api.config';
+import { publicApiUrl } from '../config/api.config';
 
 export interface PayrollProcessingHeaderPayload {
   month: number;
@@ -62,9 +62,13 @@ export interface PayrollProcessingDetailPayload {
   arrears: number;
   loanAdjustment: number;
   loanAdvForm: number;
+  deductions: number;
   lateAttendDeduction: number;
   paidLeaveDays: number;
   unpaidLeaveDays: number;
+  extraWorkingDay: number;
+  rateExtraDay: number;
+  paymentForEwd: number;
   costToCompany: number;
   taxDeduction: number;
   totalEarnings: number;
@@ -86,32 +90,35 @@ export interface PayrollProcessingSubmitPayload {
     processedDate: string;
   };
   details: Array<{
-    employeeId: string;
-    employeeCode: string;
-    personName: string;
-    basicSalary: number;
-    grossSalary: number;
-    medicalAllowance: number;
-    allowedLiters: number;
-    monthlyFuelRate: number;
-    fuelAllowance: number;
-    mobileAllowance: number;
-    carAllowance: number;
-    otherAllowances: number;
-    bonus: number;
-    lastMonthGrossSalary: number;
-    overtimeHours: number;
-    overtime: number;
-    providentFund: number;
-    gratuity: number;
-    eobiEmployee: number;
-    eobiEmployer: number;
-    arrears: number;
-    loanAdjustment: number;
-    loanAdvForm: number;
-    totalEarnings: number;
-    netPayable: number;
-    approved: boolean;
+    employeeId: string | null;
+    employeeCode: string | null;
+    personName: string | null;
+    basicSalary: number | null;
+    grossSalary: number | null;
+    medicalAllowance: number | null;
+    allowedLiters: number | null;
+    monthlyFuelRate: number | null;
+    fuelAllowance: number | null;
+    mobileAllowance: number | null;
+    carAllowance: number | null;
+    otherAllowances: number | null;
+    bonus: number | null;
+    lastMonthGrossSalary: number | null;
+    overtimeHours: number | null;
+    overtime: number | null;
+    providentFund: number | null;
+    gratuity: number | null;
+    eobiEmployee: number | null;
+    eobiEmployer: number | null;
+    arrears: number | null;
+    loanAdjustment: number | null;
+    loanAdvForm: number | null;
+    extraWorkingDay: number | null;
+    rateExtraDay: number | null;
+    paymentForEwd: number | null;
+    totalEarnings: number | null;
+    netPayable: number | null;
+    approved: boolean | null;
   }>;
 }
 
@@ -134,8 +141,8 @@ export interface PayrollProcessingRecord {
 }
 
 const PAYROLL_PROCESSING_LIST_URL = publicApiUrl('payroll-processing-list');
-const PAYROLL_PROCESSING_ADD_URL = apiUrl('payroll-processing-add');
-const PAYROLL_PROCESSING_DETAIL_URL = apiUrl('payroll-processing-detail');
+const PAYROLL_PROCESSING_ADD_URL = publicApiUrl('payroll-processing-add');
+const PAYROLL_PROCESSING_DETAIL_URL = publicApiUrl('payroll-processing-detail');
 
 @Injectable({
   providedIn: 'root',
@@ -266,9 +273,13 @@ export class PayrollProcessingService {
       arrears: this.pickAmount(item, ['arrears', 'Arrears']),
       loanAdjustment: this.pickAmount(item, ['loanAdjustment', 'loan_adjustment', 'LoanAdjustment', 'loanInstallment', 'loan_installment']),
       loanAdvForm: this.pickAmount(item, ['loanAdvForm', 'loan_adv_form', 'LoanAdvForm', 'otherDeductions', 'other_deductions']),
+      deductions: this.pickAmount(item, ['deductions', 'deduction', 'Deductions', 'Deduction']),
       lateAttendDeduction: this.pickAmount(item, ['lateAttendDeduction', 'late_attend_deduction', 'LateAttendDeduction']),
       paidLeaveDays: this.pickAmount(item, ['paidLeaveDays', 'paid_leave_days', 'PaidLeaveDays']),
       unpaidLeaveDays: this.pickAmount(item, ['unpaidLeaveDays', 'unpaid_leave_days', 'UnpaidLeaveDays']),
+      extraWorkingDay: this.pickAmount(item, ['extraWorkingDay', 'extra_working_day', 'ExtraWorkingDay']),
+      rateExtraDay: this.pickAmount(item, ['rateExtraDay', 'rate_extra_day', 'RateExtraDay']),
+      paymentForEwd: this.pickAmount(item, ['paymentForEwd', 'payment_for_ewd', 'PaymentForEwd']),
       costToCompany: this.pickAmount(item, ['costToCompany', 'cost_to_company', 'CostToCompany']),
       taxDeduction: this.pickAmount(item, ['taxDeduction', 'tax_deduction', 'TaxDeduction']),
       totalEarnings: this.pickAmount(item, ['totalEarnings', 'total_earnings', 'TotalEarnings']),

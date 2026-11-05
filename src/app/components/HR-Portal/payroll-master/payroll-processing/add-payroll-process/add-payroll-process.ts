@@ -48,6 +48,7 @@ import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
 import {
   PayrollSetupService,
   computeBasicSalary,
+  computeAdvanceBalance,
   computeEobiEmployeeContribution,
   computeEobiEmployerContribution,
   computeFuelAllowance,
@@ -82,6 +83,7 @@ import {
   computeSocialSecurityKpk,
   computeSocialSecurityPunjab,
 } from '../payroll-social-security.util';
+import { selectPayrollEmployeesForSubmission } from '../payroll-employee-selection.util';
 
 export interface PayrollProcessRow {
   apiId: string;
@@ -129,7 +131,10 @@ export interface PayrollProcessRow {
   arrears: number;
   loanAdjustment: number;
   loanAdvForm: number;
+  deductions: number;
   absent: number;
+  extraWorkingDay: number;
+  rateExtraDay: number;
   costToCompany: number;
   taxDeduction: number;
   approved: boolean;
@@ -271,8 +276,11 @@ export class AddPayrollProcessComponent implements OnInit {
     { key: 'ratePerDay', label: 'Rate/Day', groupId: 'salary', type: 'readonly', minWidth: 130 },
     { key: 'absent', label: 'Absent', groupId: 'salary', type: 'currency', minWidth: 110 },
     { key: 'absentAmount', label: 'Absent Amount', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'extraWorkingDay', label: 'Extra working day', groupId: 'salary', type: 'currency', minWidth: 160 },
+    { key: 'rateExtraDay', label: 'Rate (extra day)', groupId: 'salary', type: 'currency', minWidth: 150 },
+    { key: 'paymentForEwd', label: 'Payment for EWD', groupId: 'salary', type: 'readonly', minWidth: 160 },
     { key: 'loanAdvForm', label: 'Advance', groupId: 'salary', type: 'currency', minWidth: 145 },
-    { key: 'deductions', label: 'Deductions', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'deductions', label: 'Deductions', groupId: 'salary', type: 'currency', minWidth: 152 },
     { key: 'netPayableAfterTax', label: 'Balance', groupId: 'salary', type: 'readonly', minWidth: 152 },
     { key: 'childBenefits', label: 'Child Benefits', groupId: 'salary', type: 'currency', minWidth: 152 },
     { key: 'netPayableManagement', label: 'Net Paid', groupId: 'salary', type: 'readonly', minWidth: 152 },
@@ -368,14 +376,15 @@ export class AddPayrollProcessComponent implements OnInit {
       loanAdjustment: 0,
       loanAdvForm: 0,
       absent: 0,
+      extraWorkingDay: 0,
+      paymentForEwd: 0,
       absentAmount: 0,
       costToCompany: 0,
       taxDeduction: 0,
       netPayable: 0,
       netPayableAfterTax: 0,
-      netPayableManagement: 0,
-      totalEarnings: 0,
       deductions: 0,
+      totalEarnings: 0,
       finalGrossSalary: 0,
     };
 
@@ -408,12 +417,13 @@ export class AddPayrollProcessComponent implements OnInit {
       totals.loanAdjustment += row.loanAdjustment;
       totals.loanAdvForm += row.loanAdvForm;
       totals.absent += row.absent;
+      totals.extraWorkingDay += row.extraWorkingDay;
+      totals.paymentForEwd += this.paymentForEwdForRow(row);
       totals.absentAmount += this.absentAmountForRow(row);
       totals.costToCompany += row.costToCompany;
       totals.taxDeduction += row.taxDeduction;
       totals.netPayable += this.grossPayableForRow(row);
       totals.netPayableAfterTax += this.netPayableAfterTaxForRow(row);
-      totals.netPayableManagement += this.netPayableManagementForRow(row);
       totals.totalEarnings += this.totalEarningsForRow(row);
       totals.deductions += this.totalDeductionsForRow(row);
       totals.finalGrossSalary += row.grossSalary;
@@ -638,14 +648,11 @@ export class AddPayrollProcessComponent implements OnInit {
   }
 
   totalDeductionsForRow(row: PayrollProcessRow): number {
-    return (
-      row.providentFund +
-      row.eobiEmployee +
-      row.loanAdjustment +
-      row.loanAdvForm +
-      this.absentAmountForRow(row) +
-      row.taxDeduction
-    );
+    return row.deductions;
+  }
+
+  paymentForEwdForRow(row: PayrollProcessRow): number {
+    return Math.round(row.extraWorkingDay * row.rateExtraDay * 100) / 100;
   }
 
   grossPayableForRow(row: PayrollProcessRow): number {
@@ -653,11 +660,7 @@ export class AddPayrollProcessComponent implements OnInit {
   }
 
   netPayableAfterTaxForRow(row: PayrollProcessRow): number {
-    return Math.max(0, this.grossPayableForRow(row) - row.taxDeduction);
-  }
-
-  netPayableManagementForRow(row: PayrollProcessRow): number {
-    return this.netPayableAfterTaxForRow(row) + row.grossSalaryInCash;
+    return computeAdvanceBalance(row.loanAdvForm, row.deductions);
   }
 
   earningsRatioForRow(row: PayrollProcessRow): number {
@@ -677,11 +680,14 @@ export class AddPayrollProcessComponent implements OnInit {
     if (column.key === 'absentAmount') {
       return this.absentAmountForRow(row);
     }
+    if (column.key === 'paymentForEwd') {
+      return this.paymentForEwdForRow(row);
+    }
     if (column.key === 'netPayableAfterTax') {
       return this.netPayableAfterTaxForRow(row);
     }
     if (column.key === 'netPayableManagement') {
-      return this.netPayableManagementForRow(row);
+      return '';
     }
     if (column.key === 'totalEarnings') {
       return this.totalEarningsForRow(row);
@@ -731,7 +737,7 @@ export class AddPayrollProcessComponent implements OnInit {
 
   formatColumnDisplay(row: PayrollProcessRow, column: PayrollColumnDef): string {
     const value = this.getColumnValue(row, column);
-    if (column.key === 'absent') {
+    if (column.key === 'absent' || column.key === 'extraWorkingDay') {
       return typeof value === 'number' ? value.toLocaleString('en-PK', { maximumFractionDigits: 2 }) : String(value);
     }
     if (column.key === 'overtimeHours' || column.key === 'allowedLiters') {
@@ -768,12 +774,19 @@ export class AddPayrollProcessComponent implements OnInit {
     if (
       column.key === 'approved' ||
       column.key === 'paySlip' ||
-      column.key === 'ratePerDay'
+      column.key === 'ratePerDay' ||
+      column.key === 'netPayableManagement'
     ) {
       return null;
     }
     if (column.key === 'absent') {
       return this.groupTotals().absent;
+    }
+    if (column.key === 'extraWorkingDay') {
+      return this.groupTotals().extraWorkingDay;
+    }
+    if (column.key === 'paymentForEwd') {
+      return this.groupTotals().paymentForEwd;
     }
     if (column.key === 'absentAmount') {
       return this.groupTotals().absentAmount;
@@ -783,9 +796,6 @@ export class AddPayrollProcessComponent implements OnInit {
     }
     if (column.key === 'netPayableAfterTax') {
       return this.groupTotals().netPayableAfterTax;
-    }
-    if (column.key === 'netPayableManagement') {
-      return this.groupTotals().netPayableManagement;
     }
     if (column.key === 'totalEarnings') {
       return this.groupTotals().totalEarnings;
@@ -805,7 +815,12 @@ export class AddPayrollProcessComponent implements OnInit {
     if (total === null) {
       return '';
     }
-    if (column.key === 'allowedLiters' || column.key === 'overtimeHours' || column.key === 'absent') {
+    if (
+      column.key === 'allowedLiters' ||
+      column.key === 'overtimeHours' ||
+      column.key === 'absent' ||
+      column.key === 'extraWorkingDay'
+    ) {
       return total.toLocaleString('en-PK', { maximumFractionDigits: 2 });
     }
     return this.formatMoney(total);
@@ -896,11 +911,14 @@ export class AddPayrollProcessComponent implements OnInit {
       ['Rate/Day', this.formatMoney(this.ratePerDayForRow(row))],
       ['Absent', row.absent],
       ['Absent Amount', this.formatMoney(this.absentAmountForRow(row))],
+      ['Extra working day', row.extraWorkingDay],
+      ['Rate (extra day)', this.formatMoney(row.rateExtraDay)],
+      ['Payment for EWD', this.formatMoney(this.paymentForEwdForRow(row))],
       ['Advance', this.formatMoney(row.loanAdvForm)],
       ['Deductions', this.formatMoney(this.totalDeductionsForRow(row))],
       ['Balance', this.formatMoney(this.netPayableAfterTaxForRow(row))],
       ['Child Benefits', this.formatMoney(row.childBenefits)],
-      ['Net Paid', this.formatMoney(this.netPayableManagementForRow(row))],
+      ['Net Paid', ''],
       ['Total', this.formatMoney(this.totalEarningsForRow(row))],
     ];
 
@@ -977,7 +995,10 @@ export class AddPayrollProcessComponent implements OnInit {
       'arrears',
       'loanAdjustment',
       'loanAdvForm',
+      'deductions',
       'absent',
+      'extraWorkingDay',
+      'rateExtraDay',
       'childBenefits',
       'costToCompany',
     ];
@@ -1036,24 +1057,21 @@ export class AddPayrollProcessComponent implements OnInit {
       return;
     }
 
-    const employeeSummaries = this.filteredEmployeeSummaries();
+    const employeeSummaries = this.employeeSummaries();
     if (employeeSummaries.length === 0) {
       void this.alertService.validation('No employees available to save.');
       return;
     }
 
-    const approvedSummaries = employeeSummaries.filter((summary) =>
-      this.approvalForEmployee(this.resolveEmployeeKey(summary)),
+    const summariesToSubmit = selectPayrollEmployeesForSubmission(
+      employeeSummaries,
+      (summary) => this.approvalForEmployee(this.resolveEmployeeKey(summary)),
     );
-    if (approvedSummaries.length === 0) {
-      void this.alertService.validation('Select at least one approved employee before saving.');
-      return;
-    }
 
     const cachedRows = this.rowCache();
     const rowsByEmployee = new Map<string, PayrollProcessRow>();
     const summariesToLoad: ApplicationFormRecord[] = [];
-    for (const summary of approvedSummaries) {
+    for (const summary of summariesToSubmit) {
       const employeeKey = this.resolveEmployeeKey(summary);
       const cachedRow = cachedRows.get(employeeKey);
       if (summary.detail) {
@@ -1068,7 +1086,7 @@ export class AddPayrollProcessComponent implements OnInit {
 
     this.saving.set(true);
     if (summariesToLoad.length === 0) {
-      this.submitAvailableApprovedRows(approvedSummaries, rowsByEmployee);
+      this.submitAvailableRows(summariesToSubmit, rowsByEmployee);
       return;
     }
 
@@ -1100,40 +1118,34 @@ export class AddPayrollProcessComponent implements OnInit {
           this.payrollDetailsLoaded.add(employeeKey);
         }
         this.rowCache.update((cache) => new Map([...cache, ...rowsByEmployee]));
-        this.submitAvailableApprovedRows(approvedSummaries, rowsByEmployee, missedEmployees);
+        this.submitAvailableRows(summariesToSubmit, rowsByEmployee, missedEmployees);
       });
   }
 
-  private submitAvailableApprovedRows(
-    approvedSummaries: ApplicationFormRecord[],
+  private submitAvailableRows(
+    summariesToSubmit: ApplicationFormRecord[],
     rowsByEmployee: Map<string, PayrollProcessRow>,
     missedEmployees: string[] = [],
   ): void {
-    const loadedRows = approvedSummaries
+    const loadedRows = summariesToSubmit
       .map((summary) => rowsByEmployee.get(this.resolveEmployeeKey(summary)))
       .filter((row): row is PayrollProcessRow => !!row);
-    const rowsMissingBranch = loadedRows.filter((row) => !row.location.trim());
-    const missedEmployeeNames = [
-      ...missedEmployees,
-      ...rowsMissingBranch.map((row) => row.personName || row.employeeCode),
-    ];
-    const approvedRows = loadedRows.filter((row) => !!row.location.trim());
-    if (approvedRows.length === 0) {
+    if (loadedRows.length === 0) {
       this.saving.set(false);
       void this.alertService.errorAndWait(
         'Payroll Not Saved',
-        `Reason: No selected employees have complete payroll details and a branch. Missing details for: ${missedEmployeeNames.slice(0, 3).join(', ') || 'selected employees'}.`,
+        `Reason: Employee payroll details could not be loaded. Missing details for: ${missedEmployees.slice(0, 3).join(', ') || 'employees'}.`,
       );
       return;
     }
-    this.submitApprovedPayrollRows(approvedRows, missedEmployeeNames);
+    this.submitPayrollRows(loadedRows, missedEmployees);
   }
 
-  private submitApprovedPayrollRows(
-    approvedRows: PayrollProcessRow[],
+  private submitPayrollRows(
+    rowsToSubmit: PayrollProcessRow[],
     missedEmployees: string[] = [],
   ): void {
-    const payload = this.buildPayload(approvedRows);
+    const payload = this.buildPayload(rowsToSubmit);
 
     this.payrollProcessingService
       .addPayrollProcessing(payload)
@@ -1147,13 +1159,13 @@ export class AddPayrollProcessComponent implements OnInit {
             void this.alertService
               .warningAndWait(
                 'Payroll Partially Saved',
-                `Saved ${approvedRows.length} employee(s); skipped ${missedEmployees.length} (${missedNames}${additionalMessage}). Reason: required employee details or branch information was unavailable.`,
+                `Saved ${rowsToSubmit.length} employee(s); skipped ${missedEmployees.length} (${missedNames}${additionalMessage}). Reason: required employee details or branch information was unavailable.`,
               )
               .then(() => this.back());
           } else {
             void this.alertService.success(
               'Success',
-              `Payroll process saved for ${approvedRows.length} approved employee(s).`,
+              `Payroll process saved for ${rowsToSubmit.length} employee(s).`,
             );
             this.back();
           }
@@ -1174,6 +1186,12 @@ export class AddPayrollProcessComponent implements OnInit {
       this.monthOptions.find((option) => option.value === this.selectedMonth())?.label ??
       String(this.selectedMonth());
     const remarks = this.remarks().trim() || `${monthLabel} Payroll`;
+    const nullableText = (value: string | null | undefined): string | null =>
+      value?.trim() ? value : null;
+    const nullableAmount = (value: number | null | undefined): number | null =>
+      value !== null && value !== undefined && Number.isFinite(value) ? value : null;
+    const nullableFlag = (value: boolean | null | undefined): boolean | null =>
+      typeof value === 'boolean' ? value : null;
 
     return {
       header: {
@@ -1186,32 +1204,35 @@ export class AddPayrollProcessComponent implements OnInit {
         processedDate: this.formatProcessedDate(new Date()),
       },
       details: rows.map((row) => ({
-        employeeId: row.apiId,
-        employeeCode: row.employeeCode,
-        personName: row.personName,
-        basicSalary: row.basicSalary,
-        grossSalary: row.grossSalary,
-        medicalAllowance: row.medicalAllowance,
-        allowedLiters: row.allowedLiters,
-        monthlyFuelRate: row.monthlyFuelRate,
-        fuelAllowance: row.fuelAllowance,
-        mobileAllowance: row.mobileAllowance,
-        carAllowance: row.carAllowance,
-        otherAllowances: row.otherAllowances,
-        bonus: row.bonus,
-        lastMonthGrossSalary: row.lastMonthGrossSalary,
-        overtimeHours: row.overtimeHours,
-        overtime: row.overtime,
-        providentFund: row.providentFund,
-        gratuity: row.gratuity,
-        eobiEmployee: row.eobiEmployee,
-        eobiEmployer: row.eobiEmployer,
-        arrears: row.arrears,
-        loanAdjustment: row.loanAdjustment,
-        loanAdvForm: row.loanAdvForm,
-        totalEarnings: this.totalEarningsForRow(row),
-        netPayable: this.grossPayableForRow(row),
-        approved: row.approved,
+        employeeId: nullableText(row.apiId),
+        employeeCode: nullableText(row.employeeCode),
+        personName: nullableText(row.personName),
+        basicSalary: nullableAmount(row.basicSalary),
+        grossSalary: nullableAmount(row.grossSalary),
+        medicalAllowance: nullableAmount(row.medicalAllowance),
+        allowedLiters: nullableAmount(row.allowedLiters),
+        monthlyFuelRate: nullableAmount(row.monthlyFuelRate),
+        fuelAllowance: nullableAmount(row.fuelAllowance),
+        mobileAllowance: nullableAmount(row.mobileAllowance),
+        carAllowance: nullableAmount(row.carAllowance),
+        otherAllowances: nullableAmount(row.otherAllowances),
+        bonus: nullableAmount(row.bonus),
+        lastMonthGrossSalary: nullableAmount(row.lastMonthGrossSalary),
+        overtimeHours: nullableAmount(row.overtimeHours),
+        overtime: nullableAmount(row.overtime),
+        providentFund: nullableAmount(row.providentFund),
+        gratuity: nullableAmount(row.gratuity),
+        eobiEmployee: nullableAmount(row.eobiEmployee),
+        eobiEmployer: nullableAmount(row.eobiEmployer),
+        arrears: nullableAmount(row.arrears),
+        loanAdjustment: nullableAmount(row.loanAdjustment),
+        loanAdvForm: nullableAmount(row.loanAdvForm),
+        extraWorkingDay: nullableAmount(row.extraWorkingDay),
+        rateExtraDay: nullableAmount(row.rateExtraDay),
+        paymentForEwd: nullableAmount(this.paymentForEwdForRow(row)),
+        totalEarnings: nullableAmount(this.totalEarningsForRow(row)),
+        netPayable: nullableAmount(this.grossPayableForRow(row)),
+        approved: nullableFlag(row.approved),
       })),
     };
   }
@@ -1421,7 +1442,10 @@ export class AddPayrollProcessComponent implements OnInit {
       arrears: 0,
       loanAdjustment: 0,
       loanAdvForm: 0,
+      deductions: 0,
       absent: 0,
+      extraWorkingDay: 0,
+      rateExtraDay: 0,
       costToCompany: 0,
       taxDeduction: 0,
       approved: this.approvalForEmployee(this.resolveEmployeeKey(record)),
@@ -1508,7 +1532,10 @@ export class AddPayrollProcessComponent implements OnInit {
       arrears: 0,
       loanAdjustment: this.resolvePayrollLoanAdjustment(employeeCode, employeeName),
       loanAdvForm: this.resolvePayrollAdvanceDeduction(employeeCode, employeeName),
+      deductions: 0,
       absent: this.parseAmount(remuneration?.totalLeaves ?? 0),
+      extraWorkingDay: 0,
+      rateExtraDay: 0,
       costToCompany: 0,
       taxDeduction: 0,
       approved: this.approvalForEmployee(record.apiId ?? record.EmployeeCode),

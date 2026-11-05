@@ -467,7 +467,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
   }
 
   protected shouldShowValidation(field: string): boolean {
-    return this.validationSubmitted() || !!this.touched()[field];
+    return !this.editingApiId() && (this.validationSubmitted() || !!this.touched()[field]);
   }
 
   protected onIntegerOnlyChange(value: string, target: { set: (next: string) => void }): void {
@@ -1599,7 +1599,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
 
     this.validationSubmitted.set(true);
     this.touchAllMandatory();
-    if (!this.validateForm()) {
+    if (!this.editingApiId() && !this.validateForm()) {
       this.alertService.warning('Validation', 'Please fill all mandatory fields highlighted in red.');
       this.cdr.markForCheck();
       return;

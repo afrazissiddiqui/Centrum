@@ -106,6 +106,20 @@ describe('CreateJobRequisitionComponent validation', () => {
     expect((component as unknown as { isRequiredMissing: (field: string) => boolean }).isRequiredMissing('accountNo')).toBeFalse();
   });
 
+  it('does not show mandatory-field validation when updating an employee profile', () => {
+    const editableComponent = component as unknown as {
+      editingApiId: { set: (value: string) => void };
+      validationSubmitted: { set: (value: boolean) => void };
+      shouldShowValidation: (field: string) => boolean;
+      isRequiredMissing: (field: string) => boolean;
+    };
+    editableComponent.editingApiId.set('7');
+    editableComponent.validationSubmitted.set(true);
+
+    expect(editableComponent.shouldShowValidation('personName')).toBeFalse();
+    expect(editableComponent.isRequiredMissing('personName')).toBeFalse();
+  });
+
   it('refreshes the Unannounced Leave field from this year\'s leave applications', () => {
     const applications = [{
       EmployeeId: 'EMP-1001',

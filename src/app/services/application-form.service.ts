@@ -270,7 +270,7 @@ export interface EmployeeMasterDataRecord {
 const EMPLOYEE_PROFILE_ADD_URL = publicApiUrl('employee-profile-add');
 const EMPLOYEE_PROFILE_LIST_URL = publicApiUrl('employee-profile-list');
 const EMPLOYEE_PROFILE_VIEW_URL = publicApiUrl('employee-profile-detail');
-const EMPLOYEE_PROFILE_UPDATE_URL = apiUrl('employee-profile-update');
+const EMPLOYEE_PROFILE_UPDATE_URL = publicApiUrl('employee-profile-update');
 const EMPLOYEE_PROFILE_DELETE_URL = apiUrl('employee-profile-delete');
 
 const LEGACY_EMPLOYEE_CODE_OVERRIDES = new Map<string, string>([
