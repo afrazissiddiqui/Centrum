@@ -76,8 +76,43 @@ export interface PayrollProcessingDetailPayload {
 }
 
 export interface PayrollProcessingSubmitPayload {
-  header: PayrollProcessingHeaderPayload;
-  details: PayrollProcessingDetailPayload[];
+  header: {
+    month: number;
+    year: number;
+    remarks: string;
+    currency: string;
+    status: string;
+    processedBy: number;
+    processedDate: string;
+  };
+  details: Array<{
+    employeeId: string;
+    employeeCode: string;
+    personName: string;
+    basicSalary: number;
+    grossSalary: number;
+    medicalAllowance: number;
+    allowedLiters: number;
+    monthlyFuelRate: number;
+    fuelAllowance: number;
+    mobileAllowance: number;
+    carAllowance: number;
+    otherAllowances: number;
+    bonus: number;
+    lastMonthGrossSalary: number;
+    overtimeHours: number;
+    overtime: number;
+    providentFund: number;
+    gratuity: number;
+    eobiEmployee: number;
+    eobiEmployer: number;
+    arrears: number;
+    loanAdjustment: number;
+    loanAdvForm: number;
+    totalEarnings: number;
+    netPayable: number;
+    approved: boolean;
+  }>;
 }
 
 export interface PayrollProcessingListRecord {
