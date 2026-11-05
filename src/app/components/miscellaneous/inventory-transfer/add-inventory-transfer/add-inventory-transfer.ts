@@ -148,6 +148,17 @@ export class AddInventoryTransfer implements OnInit {
       .map((value) => value.trim().toLowerCase())
       .filter(Boolean);
 
+    const catalog = this.warehouseService.getCatalog();
+    for (const candidate of warehouseCandidates) {
+      const warehouse = catalog.find((option) => option.warehouseCode.trim().toLowerCase() === candidate);
+      if (warehouse?.bplId !== undefined) {
+        const branch = this.branchOptions().find((option) => Number(option.code) === warehouse.bplId);
+        if (branch) {
+          return branch.code;
+        }
+      }
+    }
+
     const branch = this.branchOptions().find((option) => {
       const keyword = option.name.toLowerCase();
       return warehouseCandidates.some((warehouse) => warehouse.includes(keyword));
@@ -162,11 +173,6 @@ export class AddInventoryTransfer implements OnInit {
   private applyBranchWarehouses(branchCode: string): void {
     const warehouseCodes = this.resolveBranchWarehouseCodes(branchCode);
     if (warehouseCodes.length === 0) {
-      this.headerForm.update((state) => ({
-        ...state,
-        fromWarehouse: '',
-        toWarehouse: '',
-      }));
       return;
     }
 
@@ -182,6 +188,11 @@ export class AddInventoryTransfer implements OnInit {
 
   private resolveBranchWarehouseCodes(branchCode: string): string[] {
     const catalog = this.warehouseService.getCatalog();
+    const bplWarehouses = catalog.filter((warehouse) => warehouse.bplId === Number(branchCode));
+    if (bplWarehouses.length > 0) {
+      return bplWarehouses.slice(0, 2).map((warehouse) => warehouse.warehouseCode);
+    }
+
     const branch = this.branchOptions().find((option) => option.code === branchCode);
     if (!branch) {
       return [];

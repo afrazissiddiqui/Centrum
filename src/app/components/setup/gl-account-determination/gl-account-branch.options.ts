@@ -29,7 +29,7 @@ const LEGACY_BRANCH_CODES: Record<string, string> = {
 
 export function glAccountBranchCode(name: string): string {
   const normalizedName = normalizeBranchName(name);
-  const legacyCode = LEGACY_BRANCH_CODES[normalizedName];
+  const legacyCode = resolveLegacyBranchCode(normalizedName);
   if (legacyCode) {
     return legacyCode;
   }
@@ -44,7 +44,7 @@ export function glAccountBranchLabel(codeOrName: string): string {
   if (!trimmed) {
     return '';
   }
-  const legacyCode = LEGACY_BRANCH_CODES[normalizeBranchName(trimmed)];
+  const legacyCode = resolveLegacyBranchCode(normalizeBranchName(trimmed));
   if (legacyCode) {
     return GL_ACCOUNT_BRANCH_OPTIONS.find((option) => option.code === legacyCode)?.name ?? trimmed;
   }
@@ -60,13 +60,30 @@ function normalizeBranchName(value: string): string {
   return value.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
 }
 
+function resolveLegacyBranchCode(normalizedName: string): string | undefined {
+  const exactCode = LEGACY_BRANCH_CODES[normalizedName];
+  if (exactCode) {
+    return exactCode;
+  }
+  if (normalizedName.includes('peshawar') || normalizedName.includes('psh')) {
+    return '1';
+  }
+  if (normalizedName.includes('faisalabad') || normalizedName.includes('fsd')) {
+    return '3';
+  }
+  if (normalizedName.includes('head office') || normalizedName === 'ho' || normalizedName.startsWith('ho ')) {
+    return '2';
+  }
+  return undefined;
+}
+
 /** Resolves a branch display name or legacy label to the API branch code. */
 export function resolveBranchCode(codeOrName: string): string {
   const trimmed = codeOrName.trim();
   if (!trimmed) {
     return '';
   }
-  const legacyCode = LEGACY_BRANCH_CODES[normalizeBranchName(trimmed)];
+  const legacyCode = resolveLegacyBranchCode(normalizeBranchName(trimmed));
   if (legacyCode) {
     return legacyCode;
   }

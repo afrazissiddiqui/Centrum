@@ -133,7 +133,7 @@ describe('ReceiptFromProductionService', () => {
     req.flush(response);
   });
 
-  it('maps receipt branch ids to friendly labels', () => {
+  it('maps receipt branch ids to current branch labels', () => {
     const response = {
       data: [
         { DocEntry: '1', DocNum: 'R-1', branch: '1', items: [] },
@@ -143,7 +143,7 @@ describe('ReceiptFromProductionService', () => {
     };
 
     service.list().subscribe((rows) => {
-      expect(rows.map((row) => row.branch)).toEqual(['Peshawar', 'HeadOffice', 'Faisalabad']);
+      expect(rows.map((row) => row.branch)).toEqual(['DHA', 'Johar Town', 'MB']);
     });
 
     const req = httpMock.expectOne((request) => request.url.includes('receipt_from_production'));

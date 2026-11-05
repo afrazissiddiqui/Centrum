@@ -22,7 +22,10 @@ import {
 } from '../../../services/purchase-request.service';
 import { ApplicationFormService } from '../../../services/application-form.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
-import { GL_ACCOUNT_BRANCH_OPTIONS } from '../gl-account-determination/gl-account-branch.options';
+import {
+  GL_ACCOUNT_BRANCH_OPTIONS,
+  resolveBranchCode,
+} from '../gl-account-determination/gl-account-branch.options';
 
 interface PurchaseRequestHeader {
   requestDate: string;
@@ -576,23 +579,8 @@ export class PurchaseRequestComponent implements OnInit, OnDestroy {
   }
 
   private parseBranchValue(value: string): number | null {
-    const trimmed = value.trim().toLowerCase();
-    switch (trimmed) {
-      case 'ahcp_peshawar':
-      case 'peshawar':
-      case '1':
-        return 1;
-      case 'ahcp_ho':
-      case 'ho':
-      case '2':
-        return 2;
-      case 'ahcp_faisalabad':
-      case 'faisalabad':
-      case '3':
-        return 3;
-      default:
-        return null;
-    }
+    const code = resolveBranchCode(value);
+    return GL_ACCOUNT_BRANCH_OPTIONS.some((branch) => branch.code === code) ? Number(code) : null;
   }
 
   private resolveEmployeeCode(): string {

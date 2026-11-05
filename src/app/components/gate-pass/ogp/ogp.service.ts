@@ -335,7 +335,7 @@ export class OgpService {
       }
 
       if (rawValue === '0') {
-        return 'Peshawar';
+        return 'DHA';
       }
 
       fallback ||= rawValue;

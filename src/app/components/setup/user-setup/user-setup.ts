@@ -17,7 +17,10 @@ import {
   UserAuthorizationModule,
 } from '../../../utils/user-authorization.util';
 import { displayDateOnly } from '../../../utils/date-format.util';
-import { GL_ACCOUNT_BRANCH_OPTIONS } from '../gl-account-determination/gl-account-branch.options';
+import {
+  GL_ACCOUNT_BRANCH_OPTIONS,
+  resolveBranchCode,
+} from '../gl-account-determination/gl-account-branch.options';
 
 type UserFormMode = 'add' | 'edit';
 
@@ -342,37 +345,14 @@ export class UserSetupComponent implements OnInit {
   }
 
   private formatBranchValue(value: unknown): string {
-    const branchMap: Record<string, { label: string; code: string }> = {
-      '1': { label: 'Peshawar', code: '1' },
-      '2': { label: 'HO', code: '2' },
-      '3': { label: 'Faisalabad', code: '3' },
-      peshawar: { label: 'Peshawar', code: '1' },
-      ho: { label: 'HO', code: '2' },
-      faisalabad: { label: 'Faisalabad', code: '3' },
-      ahcp_peshawar: { label: 'Peshawar', code: '1' },
-      ahcp_ho: { label: 'HO', code: '2' },
-      ahcp_faisalabad: { label: 'Faisalabad', code: '3' },
-      'ahcp peshawar': { label: 'Peshawar', code: '1' },
-      'ahcp ho': { label: 'HO', code: '2' },
-      'ahcp faisalabad': { label: 'Faisalabad', code: '3' },
-    };
-
     const formatEntry = (entry: unknown): string => {
-      if (typeof entry === 'number') {
-        const normalized = branchMap[String(entry)] ?? branchMap[String(entry).trim().toLowerCase()];
-        return normalized ? `${normalized.label} (${normalized.code})` : String(entry);
+      const raw = String(entry);
+      const code = resolveBranchCode(raw);
+      const branch = GL_ACCOUNT_BRANCH_OPTIONS.find((option) => option.code === code);
+      if (branch) {
+        return `${branch.name} (${branch.code})`;
       }
-
-      if (typeof entry === 'string') {
-        const trimmed = entry.trim();
-        const normalized = branchMap[trimmed.toLowerCase()] ?? branchMap[trimmed];
-        if (normalized) {
-          return `${normalized.label} (${normalized.code})`;
-        }
-        return trimmed;
-      }
-
-      return String(entry);
+      return raw;
     };
 
     if (Array.isArray(value)) {
@@ -865,24 +845,13 @@ export class UserSetupComponent implements OnInit {
   }
 
   private normalizeBranchValue(value: string | number | null | undefined): number | null {
-    if (typeof value === 'number') {
-      return Number.isInteger(value) ? value : null;
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      return null;
     }
 
-    if (typeof value === 'string') {
-      const trimmed = value.trim().toLowerCase();
-      const branchMap: Record<string, number> = {
-        peshawar: 1,
-        ho: 2,
-        faisalabad: 3,
-        '1': 1,
-        '2': 2,
-        '3': 3,
-      };
-      return branchMap[trimmed] ?? null;
-    }
-
-    return null;
+    const code = resolveBranchCode(String(value));
+    const branch = GL_ACCOUNT_BRANCH_OPTIONS.find((option) => option.code === code);
+    return branch ? Number(branch.code) : null;
   }
 
   private normalizeBranchSelection(value: unknown): number[] {

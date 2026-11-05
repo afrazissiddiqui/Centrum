@@ -117,6 +117,11 @@ export class WarehouseSearchSelectComponent implements OnInit, OnChanges, OnDest
       return rows;
     }
 
+    const bplWarehouses = rows.filter((warehouse) => warehouse.bplId === Number(branchCode));
+    if (bplWarehouses.length > 0) {
+      return bplWarehouses;
+    }
+
     const matchingWarehouses = rows.filter((warehouse) => {
       const label = `${warehouse.warehouseCode} ${warehouse.warehouseName}`.toLowerCase();
       return label.includes(branch.name.toLowerCase());

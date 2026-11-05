@@ -895,7 +895,7 @@
 
         <div class="cjr-personal-col">
           <div class="cjr-row">
-            <label>Advance % Allowed:</label>
+            <label>Advance :</label>
             <input type="text" inputmode="decimal" [ngModel]="advancePercentAllowed()"
               (ngModelChange)="onAdvancePercentAllowedChange($event)" (keydown)="onDecimalKeyDown($event)"
               (blur)="touch('advancePercentAllowed')" placeholder="e.g. 10 for 10% of gross salary" />
@@ -906,12 +906,6 @@
             <input type="text" inputmode="decimal" [ngModel]="maximumLoanCapacity()"
               (ngModelChange)="onNumericOnlyChange($event, maximumLoanCapacity)" (keydown)="onDecimalKeyDown($event)"
               (blur)="touch('maximumLoanCapacity')" />
-          </div>
-
-          <div class="cjr-row">
-            <label>Maximum Advance Capacity:</label>
-            <input type="text" inputmode="decimal" [ngModel]="maximumAdvanceCapacity()" readonly
-              placeholder="Auto-calculated from advance % × gross salary" tabindex="-1" />
           </div>
 
           <div class="cjr-row">

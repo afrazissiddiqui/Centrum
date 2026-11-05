@@ -286,7 +286,7 @@ export class AddPayrollProcessComponent implements OnInit {
     { key: 'netPayableAfterTax', label: 'Balance', groupId: 'salary', type: 'readonly', minWidth: 152 },
     { key: 'childBenefits', label: 'Child Benefits', groupId: 'salary', type: 'currency', minWidth: 152 },
     { key: 'netPayableManagement', label: 'Net Paid', groupId: 'salary', type: 'readonly', minWidth: 152 },
-    { key: 'totalEarnings', label: 'Total', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'totalEarnings', label: 'Counting', groupId: 'salary', type: 'readonly', minWidth: 152 },
     { key: 'paySlip', label: 'Pay Slip', groupId: 'salary', type: 'print', minWidth: 120 },
   ];
 

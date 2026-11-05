@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, map, tap } from 'rxjs';
 import { apiUrl } from '../config/api.config';
 import { UserAuthorizationModule, authorizationToApiPayload } from '../utils/user-authorization.util';
+import { GL_ACCOUNT_BRANCH_OPTIONS, resolveBranchCode } from '../components/setup/gl-account-determination/gl-account-branch.options';
 
 export type { UserAuthorizationModule };
 
@@ -125,24 +126,9 @@ export class UserSetupService {
   }
 
   private normalizeBranchValue(value: number | string): number | null {
-    if (typeof value === 'number' && Number.isInteger(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string') {
-      const trimmed = value.trim().toLowerCase();
-      const branchMap: Record<string, number> = {
-        peshawar: 1,
-        ho: 2,
-        faisalabad: 3,
-        '1': 1,
-        '2': 2,
-        '3': 3,
-      };
-      return branchMap[trimmed] ?? null;
-    }
-
-    return null;
+    const code = resolveBranchCode(String(value));
+    const branch = GL_ACCOUNT_BRANCH_OPTIONS.find((option) => option.code === code);
+    return branch ? Number(branch.code) : null;
   }
 
   private serializePayload(payload: UserSetupPayload): Record<string, unknown> {

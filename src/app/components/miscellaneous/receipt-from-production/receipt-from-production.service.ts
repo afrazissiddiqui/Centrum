@@ -6,6 +6,7 @@ import {
   ReceiptFromProductionHeader,
   ReceiptFromProductionLine,
 } from './receipt-from-production.model';
+import { resolveBranchCode } from '../../../components/setup/gl-account-determination/gl-account-branch.options';
 import { resolveBranchNameFromBplId } from '../../../utils/branch-name.util';
 
 function normalizeBranchName(value: string | number | undefined | null): string {
@@ -53,28 +54,7 @@ function normalizeProductionTime(value: string | undefined | null): string {
 }
 
 function normalizeBranchCode(value: string | number | undefined | null): string {
-  const trimmed = `${value ?? ''}`.trim();
-  if (!trimmed) {
-    return '';
-  }
-
-  const directMatch = trimmed.match(/^\d$/);
-  if (directMatch) {
-    return trimmed;
-  }
-
-  const normalized = trimmed.toLowerCase();
-  if (normalized.includes('peshawar') || normalized.includes('psh')) {
-    return '1';
-  }
-  if (normalized.includes('ho') || normalized.includes('head office') || normalized.includes('headoffice')) {
-    return '2';
-  }
-  if (normalized.includes('faisalabad') || normalized.includes('fsd')) {
-    return '3';
-  }
-
-  return trimmed;
+  return resolveBranchCode(String(value ?? ''));
 }
 
 function mapReceiptBranchLabel(value: string): string {
