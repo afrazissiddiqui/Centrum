@@ -1567,7 +1567,7 @@ export class AddPayrollProcessComponent implements OnInit {
       deductions: this.parseAmount(remuneration?.maximumLoanCapacity ?? 0),
       absent: this.parseAmount(remuneration?.totalLeaves ?? 0),
       extraWorkingDay: this.parseAmount(remuneration?.overTimeApplicable ?? 0),
-      rateExtraDay: 0,
+      rateExtraDay: this.parseAmount(remuneration?.eobiApplicable ?? 0),
       costToCompany: 0,
       taxDeduction: 0,
       approved: this.approvalForEmployee(record.apiId ?? record.EmployeeCode),

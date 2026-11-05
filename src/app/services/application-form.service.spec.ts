@@ -87,6 +87,25 @@ describe('ApplicationFormService', () => {
     request.flush({ id: 1 });
   });
 
+  it('saves the numeric overtime rate as allowancesApplicable', () => {
+    const record = (service as any).mapApiItemToFullRecord({});
+    record.detail.remuneration.eobiApplicable = '125.5';
+    const payload = service.buildFlatEmployeeProfilePayload(record.detail);
+    const serializedPayload = (service as any).serializeEmployeeProfilePayload(payload);
+
+    expect(payload.allowancesApplicable).toBe(125.5);
+    expect(serializedPayload.allowancesApplicable).toBe(125.5);
+    expect(serializedPayload.remuneration.allowancesApplicable).toBe(125.5);
+  });
+
+  it('loads numeric allowancesApplicable as the overtime rate', () => {
+    const record = (service as any).mapApiItemToFullRecord({
+      remuneration: { allowancesApplicable: 0, eobiApplicable: false },
+    });
+
+    expect(record.detail.remuneration.eobiApplicable).toBe('0');
+  });
+
   it('continues from the intended sequence when the list includes a later outlier cluster', () => {
     (service as any).applicationRecords.set([
       { EmployeeCode: 'Emp-00000254' },

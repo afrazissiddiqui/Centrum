@@ -270,7 +270,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
   protected readonly otherAllowances = signal('');
   protected readonly allowancesApplicable = signal<'Yes' | 'No' | ''>('Yes');
   protected readonly cashSalaryPercentage = signal('');
-  protected readonly eobiApplicable = signal<'Yes' | 'No' | ''>('Yes');
+  protected readonly overtimeRate = signal('0');
   protected readonly providentApplicable = signal<'Yes' | 'No' | ''>('No');
   protected readonly socialSecurityApplicable = signal<'Yes' | 'No' | ''>('No');
   protected readonly fuelLimit = signal('');
@@ -616,6 +616,10 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  protected onOvertimeRateChange(value: string | number | null): void {
+    this.onNumericOnlyChange(String(value ?? ''), this.overtimeRate);
+  }
+
   protected onOverTimeApplicableChange(value: string | number | null): void {
     const text = String(value ?? '').trim();
     const numeric = Number(text);
@@ -723,7 +727,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
       otherAllowances: this.areAllowancesEnabled() ? this.otherAllowances() : '',
       allowancesApplicable: this.allowancesApplicable(),
       cashSalaryPercentage: cashPercentage,
-      eobiApplicable: this.eobiApplicable(),
+      eobiApplicable: this.overtimeRate(),
       providentApplicable: this.providentApplicable(),
       socialSecurityApplicable: this.socialSecurityApplicable(),
       fuelLimit: this.fuelLimit(),
@@ -2079,7 +2083,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
       this.carAllowances.set('');
       this.otherAllowances.set('');
     }
-    this.eobiApplicable.set((remuneration.eobiApplicable as 'Yes' | 'No' | '') || 'Yes');
+    this.overtimeRate.set(remuneration.eobiApplicable || '0');
     const pv = this.yesNoFromApiLocal(remuneration.providentApplicable) || 'No';
     this.providentApplicable.set(pv);
     this.socialSecurityApplicable.set(

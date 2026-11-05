@@ -915,13 +915,10 @@
           </div>
 
           <div class="cjr-row">
-            <label>EOBI Applicable:</label>
-            <select [ngModel]="eobiApplicable()" (ngModelChange)="eobiApplicable.set($event)"
-              (blur)="touch('eobiApplicable')">
-              <option value="">No Selection</option>
-              <option value="Yes">Yes</option>
-              <option value="No">No</option>
-            </select>
+            <label>Overtime Rate:</label>
+            <input type="number" min="0" step="any" [ngModel]="overtimeRate()"
+              (ngModelChange)="onOvertimeRateChange($event)" (keydown)="onDecimalKeyDown($event)"
+              (blur)="touch('overtimeRate')" />
           </div>
 
           <div class="cjr-row">

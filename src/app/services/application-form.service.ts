@@ -414,7 +414,7 @@ export interface EmployeeProfileAddPayload {
   maximumLoanCapacity: number | string | null;
   maximumAdvanceCapacity: number | string | null;
   overTimeApplicable: number | string;
-  allowancesApplicable: boolean;
+  allowancesApplicable: number | string;
   eobiApplicable: boolean;
   providentApplicable: boolean;
   socialSecurityApplicable: boolean;
@@ -894,6 +894,9 @@ export class ApplicationFormService {
       return defaultValue;
     };
 
+    const eobiValue = toApiNumber(remuneration.eobiApplicable);
+    const eobiIsApplicable = typeof eobiValue === 'number' && eobiValue > 0;
+
     const toLoginStatusNumber = (): number => {
       const raw = String(login.status ?? '').trim();
       const parsed = Number.parseInt(raw, 10);
@@ -975,8 +978,8 @@ export class ApplicationFormService {
       maximumLoanCapacity: maximumLoanCapacity.trim() || null,
       maximumAdvanceCapacity: toNullableApiNumber(remuneration.maximumAdvanceCapacity),
       overTimeApplicable: toApiNumber(remuneration.overTimeApplicable),
-      allowancesApplicable: toApiFlag(remuneration.allowancesApplicable),
-      eobiApplicable: toApiFlag(remuneration.eobiApplicable),
+      allowancesApplicable: eobiValue,
+      eobiApplicable: eobiIsApplicable,
       providentApplicable: toApiFlag(remuneration.providentApplicable),
       socialSecurityApplicable: toApiFlag(remuneration.socialSecurityApplicable),
       fuelLimit: this.parseFuelLimitForApi(remuneration.fuelLimit),
@@ -2304,14 +2307,17 @@ export class ApplicationFormService {
           ),
         ),
         otherAllowances: asNumberString(pickRem('otherAllowances', 'other_allowances')),
-        allowancesApplicable: this.yesNoFromApi(
-          pickRem('allowancesApplicable', 'allowances_applicable'),
-        ) || 'Yes',
+        allowancesApplicable:
+          this.yesNoFromApi(pickRem('eobiApplicable', 'eobi_applicable')) ||
+          this.yesNoFromApi(pickRem('allowancesApplicable', 'allowances_applicable')) ||
+          'Yes',
         cashSalaryPercentage:
           pickRem('cashSalaryPercentage', 'cash_salary_percentage') ||
           pickRem('percentageOfSalaryInCash', 'percentage_of_salary_in_cash'),
-        eobiApplicable:
-          this.yesNoFromApi(pickRem('eobiApplicable', 'eobi_applicable')) || 'Yes',
+        eobiApplicable: this.readEobiNumericValue(
+          pickRem('allowancesApplicable', 'allowances_applicable'),
+          pickRem('eobiApplicable', 'eobi_applicable'),
+        ),
         socialSecurityApplicable: this.yesNoFromApi(
           pickRem('socialSecurityApplicable', 'social_security_applicable'),
         ),
@@ -2800,6 +2806,28 @@ export class ApplicationFormService {
       return 'No';
     }
     return normalized;
+  }
+
+  private readEobiNumericValue(value: unknown, legacyValue: unknown): string {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+
+    const normalized = value === undefined || value === null ? '' : String(value).trim();
+    if (normalized && Number.isFinite(Number(normalized))) {
+      return normalized;
+    }
+
+    const legacyFlag = this.yesNoFromApi(legacyValue);
+    if (legacyFlag === 'Yes') {
+      return '1';
+    }
+    if (legacyFlag === 'No') {
+      return '0';
+    }
+
+    const oldValueFlag = this.yesNoFromApi(value);
+    return oldValueFlag === 'Yes' ? '1' : oldValueFlag === 'No' ? '0' : '';
   }
 
 }
