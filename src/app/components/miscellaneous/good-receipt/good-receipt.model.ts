@@ -42,7 +42,7 @@ export function createEmptyGoodReceiptHeader(): GoodReceiptHeader {
   const today = todayDateString();
   return {
     branchId: '2',
-    branchName: 'AHCP_HO',
+    branchName: 'Johar Town',
     remarks: '',
     postingDate: today,
     documentDate: today,

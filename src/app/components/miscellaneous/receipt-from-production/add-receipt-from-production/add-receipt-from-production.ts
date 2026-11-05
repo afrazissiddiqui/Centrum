@@ -13,6 +13,7 @@ import { PageToolbarComponent } from '../../../page-toolbar/page-toolbar';
 import { ReceiptFromProductionHeader, ReceiptFromProductionLine, createEmptyReceiptFromProductionHeader, createEmptyReceiptFromProductionLine } from '../receipt-from-production.model';
 import { buildCreateReceiptFromProductionPayload, ProductionOrderRecord, ReceiptFromProductionService } from '../receipt-from-production.service';
 import { formatApiErrorMessage, formatSapApiFailureMessage } from '../../../../utils/api-error.util';
+import { GL_ACCOUNT_BRANCH_OPTIONS } from '../../../setup/gl-account-determination/gl-account-branch.options';
 
 @Component({
   selector: 'app-add-receipt-from-production',
@@ -69,11 +70,7 @@ export class AddReceiptFromProduction implements OnInit {
   readonly headerForm = signal<ReceiptFromProductionHeader>(createEmptyReceiptFromProductionHeader());
   readonly contentLines = signal<ReceiptFromProductionLine[]>([createEmptyReceiptFromProductionLine()]);
 
-  readonly branchOptions = signal([
-    { code: '1', name: 'AHCP_Peshawar' },
-    { code: '2', name: 'AHCP_HO' },
-    { code: '3', name: 'AHCP_Faisalabad' },
-  ]);
+  readonly branchOptions = signal(GL_ACCOUNT_BRANCH_OPTIONS);
 
   ngOnInit(): void {
     this.warehouseService.ensureLoaded().subscribe({
@@ -107,13 +104,6 @@ export class AddReceiptFromProduction implements OnInit {
   }
 
   private branchWarehouseForRow(row: ReceiptFromProductionLine): string | null {
-    const branchId = (this.headerForm().branchId ?? '').trim();
-    if (branchId === '1') {
-      return 'PSH-WH03';
-    }
-    if (branchId === '3') {
-      return 'FSD-WH03';
-    }
     const warehouse = (row.warehouse ?? '').trim();
     return warehouse ? this.normalizeWarehouse(warehouse) : null;
   }
@@ -356,14 +346,6 @@ export class AddReceiptFromProduction implements OnInit {
       return 'PSH-WH06';
     }
     if (normalizedWarehouse.startsWith('FSD')) {
-      return 'FSD-WH06';
-    }
-
-    const normalizedBranch = (order.branch || this.headerForm().branchId || '').trim();
-    if (normalizedBranch === '1') {
-      return 'PSH-WH06';
-    }
-    if (normalizedBranch === '3') {
       return 'FSD-WH06';
     }
 

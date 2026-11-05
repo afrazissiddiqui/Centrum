@@ -12,6 +12,7 @@ import { OitmItem } from '../../../../constants/oitm-items';
 import { OitmItemPickerDialogComponent } from '../../oitm-item-picker-dialog';
 import { WarehouseSearchSelectComponent } from '../../warehouse-search-select';
 import { resolveBranchNameFromBplId } from '../../../../utils/branch-name.util';
+import { GL_ACCOUNT_BRANCH_OPTIONS, resolveBranchCode } from '../../../setup/gl-account-determination/gl-account-branch.options';
 import { GatePassBusinessPartner, GatePassBusinessPartnerService } from '../../../gate-pass/gate-pass-business-partner.service';
 import {
   DeliveryHeader,
@@ -79,11 +80,7 @@ export class AddDelivery {
   readonly batchSelectionDialogOpen = signal(false);
   readonly activeBatchSelectionLineIndex = signal<number | null>(null);
 
-  readonly branchOptions = signal([
-    { code: '1', name: 'AHCP_Peshawar' },
-    { code: '2', name: 'AHCP_HO' },
-    { code: '3', name: 'AHCP_Faisalabad' },
-  ]);
+  readonly branchOptions = signal(GL_ACCOUNT_BRANCH_OPTIONS);
 
   readonly taxCodeOptions = signal<TaxCode[]>([]);
 
@@ -224,39 +221,8 @@ export class AddDelivery {
       return null;
     }
 
-    const normalized = raw.toLowerCase();
-    const branchMap: Record<string, { code: string; name: string }> = {
-      '1': { code: '1', name: 'AHCP_Peshawar' },
-      '2': { code: '2', name: 'AHCP_HO' },
-      '3': { code: '3', name: 'AHCP_Faisalabad' },
-      psh: { code: '1', name: 'AHCP_Peshawar' },
-      peshawar: { code: '1', name: 'AHCP_Peshawar' },
-      ho: { code: '2', name: 'AHCP_HO' },
-      'head office': { code: '2', name: 'AHCP_HO' },
-      fsd: { code: '3', name: 'AHCP_Faisalabad' },
-      faisalabad: { code: '3', name: 'AHCP_Faisalabad' },
-    };
-
-    if (branchMap[normalized]) {
-      return branchMap[normalized];
-    }
-
-    const prefix = normalized.split(/[-_\s]/, 1)[0];
-    if (prefix && branchMap[prefix]) {
-      return branchMap[prefix];
-    }
-
-    if (normalized.includes('psh')) {
-      return branchMap['psh'];
-    }
-    if (normalized.includes('fsd') || normalized.includes('faisalabad')) {
-      return branchMap['fsd'];
-    }
-    if (normalized.includes('ho') || normalized.includes('head office')) {
-      return branchMap['ho'];
-    }
-
-    return null;
+    const code = resolveBranchCode(raw);
+    return GL_ACCOUNT_BRANCH_OPTIONS.find((branch) => branch.code === code) ?? null;
   }
 
   batchOptionsForLine(line: DeliveryLine): DeliveryBatchSelection[] {

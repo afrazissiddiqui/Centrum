@@ -51,7 +51,7 @@ export function createEmptyGoodIssueHeader(): GoodIssueHeader {
   const today = todayDateString();
   return {
     branchId: '1',
-    branchName: 'AHCP_HO',
+    branchName: 'DHA',
     issuedFrom: '',
     issuedTo: '',
     taxDate: today,

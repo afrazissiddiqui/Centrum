@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Observable, Subscription, finalize } from 'rxjs';
 import { GatePassModule, OpenBaseDocument, OpenBaseDocumentsService } from '../open-base-documents.service';
 import { resolveGatePassLocation, resolveGatePassLocationFromBplId } from '../gate-pass-location.options';
+import { resolveBranchCode } from '../../setup/gl-account-determination/gl-account-branch.options';
 import { displayDateSlash } from '../../../utils/date-format.util';
 import { AuthService } from '../../../services/auth.service';
 import { UserSetupService } from '../../../services/user-setup.service';
@@ -276,37 +277,14 @@ export class BaseDocumentModalComponent implements OnChanges, OnDestroy {
   }
 
   private addBranchCode(value: string, codes: Set<string>): void {
-    const normalized = value.trim().toLowerCase();
-    if (!normalized) {
-      return;
-    }
-
-    if (['1', 'peshawar', 'psh', 'ahcp_peshawar'].includes(normalized)) {
-      codes.add('1');
-      return;
-    }
-
-    if (['2', 'ho', 'head office', 'head-office', 'headoffice', 'h.o', 'h.o.'].includes(normalized)) {
-      codes.add('2');
-      return;
-    }
-
-    if (['3', 'faisalabad', 'fsd', 'ahcp_faisalabad'].includes(normalized)) {
-      codes.add('3');
+    const branchCode = resolveBranchCode(value);
+    if (branchCode && resolveGatePassLocationFromBplId(branchCode)) {
+      codes.add(branchCode);
     }
   }
 
   private branchCodeToLocation(branchCode: string): string | null {
-    switch (branchCode) {
-      case '1':
-        return 'PSH';
-      case '2':
-        return 'Head Office';
-      case '3':
-        return 'FSD';
-      default:
-        return null;
-    }
+    return resolveGatePassLocationFromBplId(branchCode) || null;
   }
 
   private documentMatchesAllowedLocations(doc: OpenBaseDocument, allowedLocations: string[]): boolean {

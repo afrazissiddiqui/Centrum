@@ -3,25 +3,25 @@ import { filterRecordsBySessionBranches, getAllowedBranches } from './branch-fil
 
 describe('branch filter utilities', () => {
   it('treats non-admin flags like 0 or "0" as non-admin users for branch filtering', () => {
-    const allowedBranches = getAllowedBranches({ is_admin: '0' as unknown as boolean, branch: 'FSD' } as any);
+    const allowedBranches = getAllowedBranches({ is_admin: '0' as unknown as boolean, branch: 'MB' } as any);
 
-    expect([...allowedBranches]).toEqual(['ahcp_faisalabad']);
+    expect([...allowedBranches]).toEqual(['mb']);
   });
 
   it('treats false-like strings as non-admin users for branch filtering', () => {
-    const allowedBranches = getAllowedBranches({ is_admin: 'false', branch: 'Psh' } as any);
+    const allowedBranches = getAllowedBranches({ is_admin: 'false', branch: 'DHA' } as any);
 
-    expect([...allowedBranches]).toEqual(['ahcp_peshawar']);
+    expect([...allowedBranches]).toEqual(['dha']);
   });
 
-  it('filters out records from other branches when the user is tagged with Faisalabad', () => {
+  it('filters out records from other branches when the user is tagged with MB', () => {
     const filtered = filterRecordsBySessionBranches(
-      [{ branch: 'FSD' }, { branch: 'PSH' }],
+      [{ branch: '3' }, { branch: '1' }, { branch: '5' }],
       (record) => record.branch,
-      { is_admin: 0 as unknown as boolean, branch: 'Faisalabad' },
+      { is_admin: 0 as unknown as boolean, branch: 'MB' },
     );
 
-    expect(filtered).toEqual([{ branch: 'FSD' }]);
+    expect(filtered).toEqual([{ branch: '3' }]);
   });
 
   it('keeps a leave record stored with a zero-padded location branch ID', () => {

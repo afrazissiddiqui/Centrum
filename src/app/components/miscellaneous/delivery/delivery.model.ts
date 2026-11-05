@@ -78,7 +78,7 @@ export function createEmptyDeliveryHeader(): DeliveryHeader {
   const today = todayDateString();
   return {
     branchId: '1',
-    branchName: 'AHCP_HO',
+    branchName: 'DHA',
     customer: '',
     customerName: '',
     contactPerson: '',

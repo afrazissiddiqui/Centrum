@@ -4,13 +4,38 @@ export type GlAccountBranchOption = {
 };
 
 export const GL_ACCOUNT_BRANCH_OPTIONS: GlAccountBranchOption[] = [
-  { code: '1', name: 'AHCP_Peshawar' },
-  { code: '2', name: 'AHCP_HO' },
-  { code: '3', name: 'AHCP_Faisalabad' },
+  { code: '1', name: 'DHA' },
+  { code: '2', name: 'Johar Town' },
+  { code: '3', name: 'MB' },
+  { code: '4', name: 'SAM' },
+  { code: '5', name: 'RUDA' },
 ];
 
+const LEGACY_BRANCH_CODES: Record<string, string> = {
+  'ahcp peshawar': '1',
+  peshawar: '1',
+  psh: '1',
+  'psh branch': '1',
+  'ahcp ho': '2',
+  ho: '2',
+  'head office': '2',
+  headoffice: '2',
+  'lahore ho': '2',
+  'ahcp faisalabad': '3',
+  faisalabad: '3',
+  fsd: '3',
+  'faisalabad branch': '3',
+};
+
 export function glAccountBranchCode(name: string): string {
-  const match = GL_ACCOUNT_BRANCH_OPTIONS.find((option) => option.name === name);
+  const normalizedName = normalizeBranchName(name);
+  const legacyCode = LEGACY_BRANCH_CODES[normalizedName];
+  if (legacyCode) {
+    return legacyCode;
+  }
+  const match = GL_ACCOUNT_BRANCH_OPTIONS.find(
+    (option) => normalizeBranchName(option.name) === normalizedName,
+  );
   return match?.code ?? name;
 }
 
@@ -19,17 +44,21 @@ export function glAccountBranchLabel(codeOrName: string): string {
   if (!trimmed) {
     return '';
   }
+  const legacyCode = LEGACY_BRANCH_CODES[normalizeBranchName(trimmed)];
+  if (legacyCode) {
+    return GL_ACCOUNT_BRANCH_OPTIONS.find((option) => option.code === legacyCode)?.name ?? trimmed;
+  }
   const match = GL_ACCOUNT_BRANCH_OPTIONS.find(
-    (option) => option.code === trimmed || option.name === trimmed,
+    (option) =>
+      option.code === trimmed ||
+      normalizeBranchName(option.name) === normalizeBranchName(trimmed),
   );
   return match?.name ?? trimmed;
 }
 
-const LEGACY_BRANCH_ALIASES: Record<string, string> = {
-  'AHCP_ Peshawar': '1',
-  'AHCP_ HO': '2',
-  'AHCP_ Faisalabad': '3',
-};
+function normalizeBranchName(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+}
 
 /** Resolves a branch display name or legacy label to the API branch code. */
 export function resolveBranchCode(codeOrName: string): string {
@@ -37,8 +66,9 @@ export function resolveBranchCode(codeOrName: string): string {
   if (!trimmed) {
     return '';
   }
-  if (LEGACY_BRANCH_ALIASES[trimmed]) {
-    return LEGACY_BRANCH_ALIASES[trimmed];
+  const legacyCode = LEGACY_BRANCH_CODES[normalizeBranchName(trimmed)];
+  if (legacyCode) {
+    return legacyCode;
   }
   const byCode = GL_ACCOUNT_BRANCH_OPTIONS.find((option) => option.code === trimmed);
   if (byCode) {
@@ -53,12 +83,11 @@ export function resolveBranchCode(codeOrName: string): string {
       return byNormalizedCode.code;
     }
   }
-  const normalizedName = trimmed.replace(/\s+/g, '_').replace(/^AHCP_\s*/i, 'AHCP_');
   const byName = GL_ACCOUNT_BRANCH_OPTIONS.find(
-    (option) => option.name === trimmed || option.name === normalizedName,
+    (option) => normalizeBranchName(option.name) === normalizeBranchName(trimmed),
   );
   if (byName) {
     return byName.code;
   }
-  return glAccountBranchCode(normalizedName);
+  return glAccountBranchCode(trimmed);
 }

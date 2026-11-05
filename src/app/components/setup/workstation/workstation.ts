@@ -9,6 +9,7 @@ import {
   WorkstationService,
 } from '../../../services/workstation.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
+import { GL_ACCOUNT_BRANCH_OPTIONS } from '../gl-account-determination/gl-account-branch.options';
 
 type WorkstationFormMode = 'add' | 'edit';
 
@@ -36,6 +37,7 @@ export class WorkstationComponent implements OnInit {
   readonly formOutGraceMinutes = signal<string | number>('0');
   readonly formShift = signal('');
   readonly formDescription = signal('');
+  readonly branchOptions = GL_ACCOUNT_BRANCH_OPTIONS;
   readonly formWorkingHours = computed(() =>
     this.calculateWorkingHours(this.formOfficeInTime(), this.formOfficeOutTime()),
   );

@@ -24,12 +24,13 @@ import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
 import { GatePassDepartmentService } from '../../gate-pass/gate-pass-department.service';
 import { WorkstationRecord, WorkstationService } from '../../../services/workstation.service';
 import { PayrollMasterLayoutService } from '../../HR-Portal/payroll-master/payroll-master-layout.service';
+import { GL_ACCOUNT_BRANCH_OPTIONS } from '../gl-account-determination/gl-account-branch.options';
 
 type ShiftCode = string;
 export type MonthHalf = 'First Half' | 'Second Half' | 'Whole Month';
 const UNANNOUNCED_LEAVE_TYPE = 'Unannounced Leave';
 const UNANNOUNCED_LEAVE_DESCRIPTION = 'Unannounced-Leave For (S.A.Y)';
-const ROSTER_BRANCH_OPTIONS = ['AHCP_Peshawar', 'AHCP_HO', 'AHCP_Faisalabad'];
+const ROSTER_BRANCH_OPTIONS = GL_ACCOUNT_BRANCH_OPTIONS.map((branch) => branch.name);
 
 interface RosterDay {
   date: number;

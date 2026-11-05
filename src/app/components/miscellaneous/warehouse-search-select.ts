@@ -14,6 +14,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { WarehouseOption, WarehouseService } from '../../services/warehouse.service';
+import { GL_ACCOUNT_BRANCH_OPTIONS } from '../setup/gl-account-determination/gl-account-branch.options';
 
 @Component({
   selector: 'app-warehouse-search-select',
@@ -111,16 +112,15 @@ export class WarehouseSearchSelectComponent implements OnInit, OnChanges, OnDest
       return rows;
     }
 
-    const keywords: Record<string, string[]> = {
-      '1': ['peshawar', 'psh'],
-      '2': ['ho', 'head office', 'headoffice', 'head-office'],
-      '3': ['faisalabad', 'fsd'],
-    };
+    const branch = GL_ACCOUNT_BRANCH_OPTIONS.find((option) => option.code === branchCode);
+    if (!branch) {
+      return rows;
+    }
 
-    const branchKeywords = keywords[branchCode] ?? [];
-    return rows.filter((warehouse) => {
+    const matchingWarehouses = rows.filter((warehouse) => {
       const label = `${warehouse.warehouseCode} ${warehouse.warehouseName}`.toLowerCase();
-      return branchKeywords.some((keyword) => label.includes(keyword));
+      return label.includes(branch.name.toLowerCase());
     });
+    return matchingWarehouses.length > 0 ? matchingWarehouses : rows;
   }
 }

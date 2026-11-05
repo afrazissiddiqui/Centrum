@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { resolveBranchNameFromBplId } from '../../../utils/branch-name.util';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { apiUrl } from '../../../config/api.config';
@@ -311,24 +312,7 @@ export class DeliveryService {
   }
 
   private resolveDeliveryBranch(value: string): string {
-    const branchId = value.trim();
-    if (!branchId) {
-      return '';
-    }
-
-    const branchMap: Record<string, string> = {
-      '1': 'AHCP_Peshawar',
-      '2': 'AHCP_HO',
-      '3': 'AHCP_Faisalabad',
-      AHCP_Peshawar: 'AHCP_Peshawar',
-      AHCP_HO: 'AHCP_HO',
-      AHCP_Faisalabad: 'AHCP_Faisalabad',
-      Peshawar: 'AHCP_Peshawar',
-      HO: 'AHCP_HO',
-      Faisalabad: 'AHCP_Faisalabad',
-    };
-
-    return branchMap[branchId] ?? branchId;
+    return resolveBranchNameFromBplId(value);
   }
 
   private normalizeDeliveryStatus(value: string): string {

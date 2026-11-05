@@ -1036,7 +1036,7 @@ export class OpenBaseDocumentsService {
       freight: this.pickString(sources, ['freight', 'Freight', 'freightAmount', 'freight_amount']),
       weightMachineName: this.pickString(sources, ['weightMachineName', 'weight_machine_name', 'WeightMachineName']),
       weight: this.pickString(sources, ['weight', 'Weight']),
-      // BPLId is branch: 1=Peshawar, 2=HO, 3=Faisalabad → Location dropdown.
+      // BPLId maps to the shared branch/location dropdown.
       location: (() => {
         const rawLocation = this.pickString(sources, [
           'BPLId',

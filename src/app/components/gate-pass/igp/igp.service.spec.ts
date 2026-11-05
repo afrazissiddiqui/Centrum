@@ -57,7 +57,7 @@ describe('IgpService', () => {
     service.fetchInwardGatePasses().subscribe({
       next: (records) => {
         expect(records[0].type).toBe('Purchase Order');
-        expect(records[0].location).toBe('AHCP_Peshawar');
+        expect(records[0].location).toBe('DHA');
         done();
       },
       error: done.fail,
@@ -68,7 +68,7 @@ describe('IgpService', () => {
       {
         referenceNo: 'IGP-600',
         DocType: 'Purchase Order',
-        BPLNAME: 'AHCP_Peshawar',
+        BPLNAME: 'DHA',
       },
     ]);
   });

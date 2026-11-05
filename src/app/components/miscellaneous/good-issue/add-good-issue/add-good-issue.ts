@@ -20,6 +20,7 @@ import {
 } from '../good-issue.model';
 import { GoodIssueService, buildCreateGoodIssuePayload, InventoryAccountOption } from '../good-issue.service';
 import { formatApiErrorMessage, formatSapApiFailureMessage } from '../../../../utils/api-error.util';
+import { GL_ACCOUNT_BRANCH_OPTIONS } from '../../../setup/gl-account-determination/gl-account-branch.options';
 
 const ISSUE_REASON_ACCOUNT_CODES: Record<string, string> = {
   'Toll to Own Conversion of Goods': 'A02022000100030',
@@ -57,11 +58,7 @@ export class AddGoodIssue implements OnInit {
     this.editingId() ? 'Edit Good Issue' : 'Add Good Issue',
   );
 
-  readonly branchOptions = signal([
-    { code: '1', name: 'AHCP_Peshawar' },
-    { code: '2', name: 'AHCP_HO' },
-    { code: '3', name: 'AHCP_Faisalabad' },
-  ]);
+  readonly branchOptions = signal(GL_ACCOUNT_BRANCH_OPTIONS);
 
   readonly headerForm = signal<GoodIssueHeader>(createEmptyGoodIssueHeader());
   readonly contentLines = signal<GoodIssueLine[]>([createEmptyGoodIssueLine()]);

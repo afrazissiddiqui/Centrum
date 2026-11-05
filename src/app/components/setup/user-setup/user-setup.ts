@@ -17,6 +17,7 @@ import {
   UserAuthorizationModule,
 } from '../../../utils/user-authorization.util';
 import { displayDateOnly } from '../../../utils/date-format.util';
+import { GL_ACCOUNT_BRANCH_OPTIONS } from '../gl-account-determination/gl-account-branch.options';
 
 type UserFormMode = 'add' | 'edit';
 
@@ -32,11 +33,10 @@ export class UserSetupComponent implements OnInit {
   private readonly applicationFormService = inject(ApplicationFormService);
   private readonly alertService = inject(AlertService);
   private readonly editableFallbackColumns = ['name', 'email', 'password', 'employee_code'];
-  readonly branchOptions = [
-    { value: '1', label: 'Peshawar' },
-    { value: '2', label: 'HO' },
-    { value: '3', label: 'Faisalabad' },
-  ];
+  readonly branchOptions = GL_ACCOUNT_BRANCH_OPTIONS.map((branch) => ({
+    value: branch.code,
+    label: branch.name,
+  }));
 
   readonly loading = signal(false);
   readonly saving = signal(false);

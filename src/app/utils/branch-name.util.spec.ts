@@ -2,40 +2,33 @@ import { describe, expect, it } from 'vitest';
 import { formatBranchNameForDisplay, resolveBranchNameFromBplId } from './branch-name.util';
 
 describe('resolveBranchNameFromBplId', () => {
-  it('maps BPLID 1 to AHCP_Peshawar', () => {
-    expect(resolveBranchNameFromBplId('1')).toBe('AHCP_Peshawar');
+  it('maps BPLID values to their new branch names', () => {
+    expect(resolveBranchNameFromBplId('1')).toBe('DHA');
+    expect(resolveBranchNameFromBplId('2')).toBe('Johar Town');
+    expect(resolveBranchNameFromBplId('3')).toBe('MB');
+    expect(resolveBranchNameFromBplId('4')).toBe('SAM');
+    expect(resolveBranchNameFromBplId('5')).toBe('RUDA');
   });
 
-  it('maps BPLID 2 to AHCP_HO', () => {
-    expect(resolveBranchNameFromBplId('2')).toBe('AHCP_HO');
+  it('maps zero-padded ids and case-insensitive branch names', () => {
+    expect(resolveBranchNameFromBplId('02')).toBe('Johar Town');
+    expect(resolveBranchNameFromBplId('johar_town')).toBe('Johar Town');
   });
 
-  it('maps zero-padded branch IDs to the same branch', () => {
-    expect(resolveBranchNameFromBplId('02')).toBe('AHCP_HO');
-  });
-
-  it('maps BPLID 3 to AHCP_Faisalabad', () => {
-    expect(resolveBranchNameFromBplId('3')).toBe('AHCP_Faisalabad');
-  });
-
-  it('maps PSH to AHCP_Peshawar', () => {
-    expect(resolveBranchNameFromBplId('PSH')).toBe('AHCP_Peshawar');
-  });
-
-  it('maps HO to AHCP_HO', () => {
-    expect(resolveBranchNameFromBplId('HO')).toBe('AHCP_HO');
-  });
-
-  it('maps FSD to AHCP_Faisalabad', () => {
-    expect(resolveBranchNameFromBplId('FSD')).toBe('AHCP_Faisalabad');
+  it('normalizes legacy branch labels to the current branch names', () => {
+    expect(resolveBranchNameFromBplId('AHCP_Peshawar')).toBe('DHA');
+    expect(resolveBranchNameFromBplId('AHCP_HO')).toBe('Johar Town');
+    expect(resolveBranchNameFromBplId('AHCP_Faisalabad')).toBe('MB');
   });
 });
 
 describe('formatBranchNameForDisplay', () => {
   it('maps branch IDs to display labels', () => {
-    expect(formatBranchNameForDisplay('1')).toBe('AHCP Peshawar');
-    expect(formatBranchNameForDisplay('2')).toBe('AHCP_HO');
-    expect(formatBranchNameForDisplay('3')).toBe('AHCP_Faisalabad');
+    expect(formatBranchNameForDisplay('1')).toBe('DHA');
+    expect(formatBranchNameForDisplay('2')).toBe('Johar Town');
+    expect(formatBranchNameForDisplay('3')).toBe('MB');
+    expect(formatBranchNameForDisplay('4')).toBe('SAM');
+    expect(formatBranchNameForDisplay('5')).toBe('RUDA');
   });
 
   it('preserves unknown branch labels', () => {

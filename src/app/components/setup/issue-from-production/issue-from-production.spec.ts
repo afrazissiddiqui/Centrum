@@ -25,11 +25,11 @@ describe('IssueFromProductionComponent', () => {
     component = fixture.componentInstance;
   });
 
-  it('defaults the warehouse for every selected item from the chosen branch', () => {
+  it('uses the production order warehouse without assuming old branch warehouse mappings', () => {
     component.headerForm.set({
       ...component.headerForm(),
       branchId: '3',
-      branchName: 'AHCP_Faisalabad',
+      branchName: 'MB',
     });
     component.selectedProductionOrder.set({
       docEntry: '17',
@@ -68,7 +68,7 @@ describe('IssueFromProductionComponent', () => {
 
     component.applySelectedProductionOrderItems();
 
-    expect(component.contentLines().map((line) => line.warehouse)).toEqual(['FSD-WH03', 'FSD-WH03']);
+    expect(component.contentLines().map((line) => line.warehouse)).toEqual(['WH01', 'WH01']);
   });
 
   it('keeps the production order line number from the item instead of falling back to 1', () => {

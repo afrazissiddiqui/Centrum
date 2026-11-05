@@ -2,22 +2,26 @@ import { resolveGatePassLocation, resolveGatePassLocationFromBplId } from './gat
 
 describe('gate-pass location resolver', () => {
   it('resolves numeric BPL ids to known dropdown values', () => {
-    expect(resolveGatePassLocation('1')).toBe('PSH');
-    expect(resolveGatePassLocation('2')).toBe('Head Office');
-    expect(resolveGatePassLocation('3')).toBe('FSD');
+    expect(resolveGatePassLocation('1')).toBe('DHA');
+    expect(resolveGatePassLocation('2')).toBe('Johar Town');
+    expect(resolveGatePassLocation('3')).toBe('MB');
+    expect(resolveGatePassLocation('4')).toBe('SAM');
+    expect(resolveGatePassLocation('5')).toBe('RUDA');
   });
 
-  it('still resolves known location aliases', () => {
-    expect(resolveGatePassLocation('PSH')).toBe('PSH');
-    expect(resolveGatePassLocation('Head Office')).toBe('Head Office');
-    expect(resolveGatePassLocation('faisalabad')).toBe('FSD');
-    expect(resolveGatePassLocation('AHCP_Peshawar')).toBe('PSH');
-    expect(resolveGatePassLocation('AHCP_Faisalabad')).toBe('FSD');
+  it('resolves branch labels independent of case and separators', () => {
+    expect(resolveGatePassLocation('johar_town')).toBe('Johar Town');
+    expect(resolveGatePassLocation('mb')).toBe('MB');
+    expect(resolveGatePassLocation('PSH')).toBe('DHA');
+    expect(resolveGatePassLocation('Head Office')).toBe('Johar Town');
+    expect(resolveGatePassLocation('FSD')).toBe('MB');
   });
 
   it('resolves BPL ids to branch labels', () => {
-    expect(resolveGatePassLocationFromBplId('1')).toBe('PSH');
-    expect(resolveGatePassLocationFromBplId(2)).toBe('Head Office');
-    expect(resolveGatePassLocationFromBplId('3')).toBe('FSD');
+    expect(resolveGatePassLocationFromBplId('1')).toBe('DHA');
+    expect(resolveGatePassLocationFromBplId(2)).toBe('Johar Town');
+    expect(resolveGatePassLocationFromBplId('3')).toBe('MB');
+    expect(resolveGatePassLocationFromBplId('4')).toBe('SAM');
+    expect(resolveGatePassLocationFromBplId('5')).toBe('RUDA');
   });
 });

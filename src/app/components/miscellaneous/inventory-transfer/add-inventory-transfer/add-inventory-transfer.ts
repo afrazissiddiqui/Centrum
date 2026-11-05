@@ -23,6 +23,10 @@ import {
 } from '../inventory-transfer.service';
 import { formatApiErrorMessage, formatSapApiFailureMessage } from '../../../../utils/api-error.util';
 import { resolveBranchNameFromBplId } from '../../../../utils/branch-name.util';
+import {
+  GL_ACCOUNT_BRANCH_OPTIONS,
+  resolveBranchCode as resolveConfiguredBranchCode,
+} from '../../../setup/gl-account-determination/gl-account-branch.options';
 
 export function resolveInventoryTransferBranchName(value: string | number | undefined | null): string {
   return resolveBranchNameFromBplId(value);
@@ -62,11 +66,7 @@ export class AddInventoryTransfer implements OnInit {
     this.editingId() ? 'Edit Inventory Transfer' : 'Add Inventory Transfer',
   );
 
-  readonly branchOptions = signal([
-    { code: '1', name: 'AHCP_Peshawar' },
-    { code: '2', name: 'AHCP_HO' },
-    { code: '3', name: 'AHCP_Faisalabad' },
-  ]);
+  readonly branchOptions = signal(GL_ACCOUNT_BRANCH_OPTIONS);
   readonly selectedBranchCode = signal('1');
   readonly inventoryTransferUomMap = signal<Record<string, string>>({});
 
@@ -140,34 +140,7 @@ export class AddInventoryTransfer implements OnInit {
 
 
   private resolveBranchCode(value: string): string {
-    const normalized = value.trim().toLowerCase();
-    if (!normalized) {
-      return '';
-    }
-
-    const directMatch = this.branchOptions().find((option) => option.code === normalized);
-    if (directMatch) {
-      return directMatch.code;
-    }
-
-    const branchNameMatch = this.branchOptions().find((option) =>
-      option.name.toLowerCase() === normalized || option.name.toLowerCase().includes(normalized),
-    );
-    if (branchNameMatch) {
-      return branchNameMatch.code;
-    }
-
-    if (normalized.includes('peshawar') || normalized.includes('psh')) {
-      return '1';
-    }
-    if (normalized.includes('ho') || normalized.includes('head office') || normalized.includes('headoffice')) {
-      return '2';
-    }
-    if (normalized.includes('faisalabad') || normalized.includes('fsd')) {
-      return '3';
-    }
-
-    return '';
+    return resolveConfiguredBranchCode(value);
   }
 
   private resolveBranchCodeFromWarehouse(fromWarehouse: string, toWarehouse: string): string {
@@ -175,16 +148,12 @@ export class AddInventoryTransfer implements OnInit {
       .map((value) => value.trim().toLowerCase())
       .filter(Boolean);
 
-    for (const warehouse of warehouseCandidates) {
-      if (warehouse.includes('peshawar') || warehouse.includes('psh')) {
-        return '1';
-      }
-      if (warehouse.includes('ho') || warehouse.includes('head office') || warehouse.includes('headoffice')) {
-        return '2';
-      }
-      if (warehouse.includes('faisalabad') || warehouse.includes('fsd')) {
-        return '3';
-      }
+    const branch = this.branchOptions().find((option) => {
+      const keyword = option.name.toLowerCase();
+      return warehouseCandidates.some((warehouse) => warehouse.includes(keyword));
+    });
+    if (branch) {
+      return branch.code;
     }
 
     return '';
@@ -193,6 +162,11 @@ export class AddInventoryTransfer implements OnInit {
   private applyBranchWarehouses(branchCode: string): void {
     const warehouseCodes = this.resolveBranchWarehouseCodes(branchCode);
     if (warehouseCodes.length === 0) {
+      this.headerForm.update((state) => ({
+        ...state,
+        fromWarehouse: '',
+        toWarehouse: '',
+      }));
       return;
     }
 
@@ -208,29 +182,21 @@ export class AddInventoryTransfer implements OnInit {
 
   private resolveBranchWarehouseCodes(branchCode: string): string[] {
     const catalog = this.warehouseService.getCatalog();
-    const branchPatterns: Record<string, string[]> = {
-      '1': ['peshawar', 'psh', 'ahcp peshawar', 'psh-wh'],
-      '2': ['ho', 'head office', 'headoffice', 'head-office', 'general warehouse ho'],
-      '3': ['faisalabad', 'fsd', 'ahcp faisalabad', 'fsd-wh'],
-    };
+    const branch = this.branchOptions().find((option) => option.code === branchCode);
+    if (!branch) {
+      return [];
+    }
 
-    const branchKeywords = branchPatterns[branchCode] ?? [];
+    const branchKeyword = branch.name.toLowerCase();
     const matchedWarehouses = catalog.filter((warehouse) => {
       const label = `${warehouse.warehouseCode} ${warehouse.warehouseName}`.toLowerCase();
-      return branchKeywords.some((keyword) => label.includes(keyword));
+      return label.includes(branchKeyword);
     });
 
     if (matchedWarehouses.length > 0) {
       return matchedWarehouses.slice(0, 2).map((warehouse) => warehouse.warehouseCode);
     }
-
-    const fallbackCodes: Record<string, string[]> = {
-      '1': ['PSH-WH01', 'PSH-WH02'],
-      '2': ['01', '02'],
-      '3': ['FSD-WH01', 'FSD-WH02'],
-    };
-
-    return fallbackCodes[branchCode] ?? [];
+    return [];
   }
 
   private resolveBranchFromWarehouseSelection(
@@ -243,7 +209,7 @@ export class AddInventoryTransfer implements OnInit {
 
     for (const candidate of candidates) {
       const resolved = resolveInventoryTransferBranchName(candidate);
-      if (resolved) {
+      if (this.branchOptions().some((branch) => branch.name === resolved)) {
         return resolved;
       }
     }

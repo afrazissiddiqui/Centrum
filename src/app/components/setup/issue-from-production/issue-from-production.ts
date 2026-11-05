@@ -5,6 +5,8 @@ import { Router } from '@angular/router';
 import { finalize } from 'rxjs';
 import { AlertService } from '../../../services/alert.service';
 import { formatApiErrorMessage, formatSapApiFailureMessage } from '../../../utils/api-error.util';
+import { resolveBranchNameFromBplId } from '../../../utils/branch-name.util';
+import { GL_ACCOUNT_BRANCH_OPTIONS, resolveBranchCode } from '../gl-account-determination/gl-account-branch.options';
 import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
 import { ReceiptFromProductionService } from '../../miscellaneous/receipt-from-production/receipt-from-production.service';
 import { WarehouseOption, WarehouseService } from '../../../services/warehouse.service';
@@ -115,11 +117,7 @@ export class IssueFromProductionComponent implements OnInit {
   readonly activeBatchSelectionLineIndex = signal<number | null>(null);
   readonly productionOrderSearchText = signal('');
 
-  readonly branchOptions = signal([
-    { code: '1', name: 'AHCP_Peshawar' },
-    { code: '2', name: 'AHCP_HO' },
-    { code: '3', name: 'AHCP_Faisalabad' },
-  ]);
+  readonly branchOptions = signal(GL_ACCOUNT_BRANCH_OPTIONS);
   readonly warehouseOptions = signal<WarehouseOption[]>([]);
   readonly productionMachineOptions = computed(() =>
     this.oitmItemsService
@@ -1027,52 +1025,15 @@ export class IssueFromProductionComponent implements OnInit {
   }
 
   private normalizeBranchId(branch: string | undefined): string {
-    const normalizedBranch = (branch ?? '').trim().toLowerCase();
-
-    if (normalizedBranch === '1' || normalizedBranch === 'peshawar' || normalizedBranch === 'ahcp_peshawar') {
-      return '1';
-    }
-
-    if (normalizedBranch === '2' || normalizedBranch === 'ho' || normalizedBranch === 'ahcp_ho') {
-      return '2';
-    }
-
-    if (normalizedBranch === '3' || normalizedBranch === 'faisalabad' || normalizedBranch === 'ahcp_faisalabad') {
-      return '3';
-    }
-
-    return '';
+    const code = resolveBranchCode(branch ?? '');
+    return GL_ACCOUNT_BRANCH_OPTIONS.some((option) => option.code === code) ? code : '';
   }
 
   getBranchDisplayName(branchId: string | undefined): string {
-    const normalizedBranchId = this.normalizeBranchId(branchId);
-
-    if (normalizedBranchId === '1') {
-      return 'AHCP_Peshawar';
-    }
-
-    if (normalizedBranchId === '2') {
-      return 'AHCP_HO';
-    }
-
-    if (normalizedBranchId === '3') {
-      return 'AHCP_Faisalabad';
-    }
-
-    return branchId?.trim() || '';
+    return resolveBranchNameFromBplId(branchId);
   }
 
-  private resolveDefaultWarehouseForBranch(branchId: string): string {
-    const normalizedBranchId = this.normalizeBranchId(branchId);
-
-    if (normalizedBranchId === '3') {
-      return 'FSD-WH03';
-    }
-
-    if (normalizedBranchId === '1') {
-      return 'PSH-WH03';
-    }
-
+  private resolveDefaultWarehouseForBranch(_branchId: string): string {
     return '';
   }
 

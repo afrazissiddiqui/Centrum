@@ -18,6 +18,7 @@ import {
   createEmptyGoodReceiptLine,
   updateGoodReceiptLine,
 } from '../good-receipt.model';
+import { GL_ACCOUNT_BRANCH_OPTIONS } from '../../../setup/gl-account-determination/gl-account-branch.options';
 
 const RECEIPT_REASON_ACCOUNT_CODES: Record<string, string> = {
   'Toll to Own Conversion of Goods': 'A02022000100030',
@@ -48,11 +49,7 @@ export class AddGoodReceipt implements OnInit {
   readonly itemPickerRowIndex = signal<number | null>(null);
   readonly submittedBy = signal(this.authService.getSessionUser()?.name ?? '');
 
-  readonly branchOptions = signal([
-    { code: '1', name: 'AHCP_Peshawar' },
-    { code: '2', name: 'AHCP_HO' },
-    { code: '3', name: 'AHCP_Faisalabad' },
-  ]);
+  readonly branchOptions = signal(GL_ACCOUNT_BRANCH_OPTIONS);
   readonly warehouseOptions = signal<WarehouseOption[]>([]);
 
   readonly pageTitle = computed(() => 'Good Receipt');

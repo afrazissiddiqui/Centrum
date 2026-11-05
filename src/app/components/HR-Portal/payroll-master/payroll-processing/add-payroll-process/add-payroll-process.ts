@@ -56,6 +56,7 @@ import {
   computeGrossSalary,
   computeGrossSalaryBreakdown,
   computeMedicalAllowance,
+  computeNetPaid,
   computeOvertimeAmount,
   computeOvertimeRate,
   computePayableAmount,
@@ -90,6 +91,7 @@ export interface PayrollProcessRow {
   employeeCode: string;
   personName: string;
   username: string;
+  costCenter: string;
   designation: string;
   department: string;
   employeeCategory: string;
@@ -383,6 +385,7 @@ export class AddPayrollProcessComponent implements OnInit {
       taxDeduction: 0,
       netPayable: 0,
       netPayableAfterTax: 0,
+      netPayableManagement: 0,
       deductions: 0,
       totalEarnings: 0,
       finalGrossSalary: 0,
@@ -424,6 +427,7 @@ export class AddPayrollProcessComponent implements OnInit {
       totals.taxDeduction += row.taxDeduction;
       totals.netPayable += this.grossPayableForRow(row);
       totals.netPayableAfterTax += this.netPayableAfterTaxForRow(row);
+      totals.netPayableManagement += this.netPaidForRow(row);
       totals.totalEarnings += this.totalEarningsForRow(row);
       totals.deductions += this.totalDeductionsForRow(row);
       totals.finalGrossSalary += row.grossSalary;
@@ -663,6 +667,15 @@ export class AddPayrollProcessComponent implements OnInit {
     return computeAdvanceBalance(row.loanAdvForm, row.deductions);
   }
 
+  netPaidForRow(row: PayrollProcessRow): number {
+    return computeNetPaid(
+      this.grossPayableForRow(row),
+      this.totalDeductionsForRow(row),
+      this.paymentForEwdForRow(row),
+      row.childBenefits,
+    );
+  }
+
   earningsRatioForRow(row: PayrollProcessRow): number {
     if (row.basicSalary <= 0) {
       return 0;
@@ -687,7 +700,7 @@ export class AddPayrollProcessComponent implements OnInit {
       return this.netPayableAfterTaxForRow(row);
     }
     if (column.key === 'netPayableManagement') {
-      return '';
+      return this.netPaidForRow(row);
     }
     if (column.key === 'totalEarnings') {
       return this.totalEarningsForRow(row);
@@ -774,8 +787,7 @@ export class AddPayrollProcessComponent implements OnInit {
     if (
       column.key === 'approved' ||
       column.key === 'paySlip' ||
-      column.key === 'ratePerDay' ||
-      column.key === 'netPayableManagement'
+      column.key === 'ratePerDay'
     ) {
       return null;
     }
@@ -796,6 +808,9 @@ export class AddPayrollProcessComponent implements OnInit {
     }
     if (column.key === 'netPayableAfterTax') {
       return this.groupTotals().netPayableAfterTax;
+    }
+    if (column.key === 'netPayableManagement') {
+      return this.groupTotals().netPayableManagement;
     }
     if (column.key === 'totalEarnings') {
       return this.groupTotals().totalEarnings;
@@ -918,7 +933,7 @@ export class AddPayrollProcessComponent implements OnInit {
       ['Deductions', this.formatMoney(this.totalDeductionsForRow(row))],
       ['Balance', this.formatMoney(this.netPayableAfterTaxForRow(row))],
       ['Child Benefits', this.formatMoney(row.childBenefits)],
-      ['Net Paid', ''],
+      ['Net Paid', this.formatMoney(this.netPaidForRow(row))],
       ['Total', this.formatMoney(this.totalEarningsForRow(row))],
     ];
 
@@ -1185,63 +1200,42 @@ export class AddPayrollProcessComponent implements OnInit {
     const monthLabel =
       this.monthOptions.find((option) => option.value === this.selectedMonth())?.label ??
       String(this.selectedMonth());
-    const remarks = this.remarks().trim() || `${monthLabel} Payroll`;
-    const nullableText = (value: string | null | undefined): string | null =>
-      value?.trim() ? value : null;
-    const nullableAmount = (value: number | null | undefined): number | null =>
-      value !== null && value !== undefined && Number.isFinite(value) ? value : null;
-    const nullableFlag = (value: boolean | null | undefined): boolean | null =>
-      typeof value === 'boolean' ? value : null;
+    const remarks = this.remarks().trim() || `${monthLabel} ${this.selectedYear()} Monthly Payroll`;
 
     return {
       header: {
-        month: this.selectedMonth(),
-        year: this.selectedYear(),
+        document_name: 'Payroll_Processing',
+        payrollMonth: this.getSelectedPayrollMonth(),
+        status: 'Pending',
         remarks,
-        currency: this.currencyCode,
-        status: 'Draft',
-        processedBy: this.authService.getSessionUser()?.id ?? 1,
-        processedDate: this.formatProcessedDate(new Date()),
       },
       details: rows.map((row) => ({
-        employeeId: nullableText(row.apiId),
-        employeeCode: nullableText(row.employeeCode),
-        personName: nullableText(row.personName),
-        basicSalary: nullableAmount(row.basicSalary),
-        grossSalary: nullableAmount(row.grossSalary),
-        medicalAllowance: nullableAmount(row.medicalAllowance),
-        allowedLiters: nullableAmount(row.allowedLiters),
-        monthlyFuelRate: nullableAmount(row.monthlyFuelRate),
-        fuelAllowance: nullableAmount(row.fuelAllowance),
-        mobileAllowance: nullableAmount(row.mobileAllowance),
-        carAllowance: nullableAmount(row.carAllowance),
-        otherAllowances: nullableAmount(row.otherAllowances),
-        bonus: nullableAmount(row.bonus),
-        lastMonthGrossSalary: nullableAmount(row.lastMonthGrossSalary),
-        overtimeHours: nullableAmount(row.overtimeHours),
-        overtime: nullableAmount(row.overtime),
-        providentFund: nullableAmount(row.providentFund),
-        gratuity: nullableAmount(row.gratuity),
-        eobiEmployee: nullableAmount(row.eobiEmployee),
-        eobiEmployer: nullableAmount(row.eobiEmployer),
-        arrears: nullableAmount(row.arrears),
-        loanAdjustment: nullableAmount(row.loanAdjustment),
-        loanAdvForm: nullableAmount(row.loanAdvForm),
-        extraWorkingDay: nullableAmount(row.extraWorkingDay),
-        rateExtraDay: nullableAmount(row.rateExtraDay),
-        paymentForEwd: nullableAmount(this.paymentForEwdForRow(row)),
-        totalEarnings: nullableAmount(this.totalEarningsForRow(row)),
-        netPayable: nullableAmount(this.grossPayableForRow(row)),
-        approved: nullableFlag(row.approved),
+        employeeCode: row.employeeCode,
+        employeeName: row.personName,
+        costCenter: row.costCenter,
+        branchLocation: row.location,
+        grossSalaryInCash: row.grossSalaryInCash,
+        grossSalaryInBank: row.grossSalaryInBank,
+        fuelAllowance: row.fuelAllowance,
+        mobileAllowance: row.mobileAllowance,
+        carAllowance: row.carAllowance,
+        otherAllowances: row.otherAllowances,
+        bonus: row.bonus,
+        overtime: row.overtime,
+        providentFund: row.providentFund,
+        providentFundEmployer: row.providentFundEmployer,
+        socialSecurityPunjab: row.socialSecurityPunjab,
+        socialSecurityKpk: row.socialSecurityKpk,
+        gratuity: row.gratuity,
+        eobiEmployee: row.eobiEmployee,
+        eobiEmployer: row.eobiEmployer,
+        arrears: row.arrears,
+        loanAdjustment: row.loanAdjustment,
+        loanAdvForm: row.loanAdvForm,
+        lateAttendDeduction: this.absentAmountForRow(row),
+        taxDeduction: row.taxDeduction,
       })),
     };
-  }
-
-  private formatProcessedDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
   }
 
   private loadEmployees(): void {
@@ -1401,6 +1395,7 @@ export class AddPayrollProcessComponent implements OnInit {
       employeeCode: record.EmployeeCode,
       personName: record.EmployeeName,
       username: record.EmployeeCode,
+      costCenter: '',
       designation: record.Designation,
       department: record.Department,
       employeeCategory: record.EmploymentCategory,
@@ -1487,6 +1482,7 @@ export class AddPayrollProcessComponent implements OnInit {
       employeeCode,
       personName: employeeName,
       username: detail?.loginDetails.userId || employeeCode,
+      costCenter: detail?.personalInfo.costCenter || detail?.requisition.costCenter || '',
       designation: record.Designation || detail?.personalInfo.designation || '',
       department: record.Department,
       employeeCategory: record.EmploymentCategory,

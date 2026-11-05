@@ -500,26 +500,7 @@ export class AddTerminationComponent implements OnInit, AfterViewInit, OnDestroy
       return '';
     }
 
-    const normalized = trimmed.toLowerCase();
-    if (normalized === '1' || normalized.includes('peshawar')) {
-      return 'Peshawar';
-    }
-    if (normalized === '2' || normalized.includes('ho')) {
-      return 'HO';
-    }
-    if (normalized === '3' || normalized.includes('faisalabad') || normalized.includes('fiasalabad')) {
-      return 'Faisalabad';
-    }
-
-    const viaSharedLabel = glAccountBranchLabel(trimmed);
-    if (viaSharedLabel) {
-      const fallback = viaSharedLabel.replace(/^ahcp[_\s-]+/i, '').trim();
-      if (fallback) {
-        return fallback;
-      }
-    }
-
-    return trimmed;
+    return glAccountBranchLabel(trimmed);
   }
 
   private calculateYearOfService(joiningDate: string): string {

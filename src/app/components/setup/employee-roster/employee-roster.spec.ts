@@ -140,26 +140,28 @@ describe('unannouncedLeaveDatesNotCoveredByApplications', () => {
 });
 
 describe('rosterBranchName', () => {
-  it('normalizes branch codes and legacy head office labels', () => {
-    expect(rosterBranchName('1')).toBe('AHCP_Peshawar');
-    expect(rosterBranchName('2')).toBe('AHCP_HO');
-    expect(rosterBranchName('Lahore HO')).toBe('AHCP_HO');
-    expect(rosterBranchName('AHCP_Faisalabad')).toBe('AHCP_Faisalabad');
+  it('normalizes branch codes and labels', () => {
+    expect(rosterBranchName('1')).toBe('DHA');
+    expect(rosterBranchName('2')).toBe('Johar Town');
+    expect(rosterBranchName('johar_town')).toBe('Johar Town');
+    expect(rosterBranchName('MB')).toBe('MB');
+    expect(rosterBranchName('4')).toBe('SAM');
+    expect(rosterBranchName('5')).toBe('RUDA');
   });
 });
 
 describe('matchesRosterBranch', () => {
   it('matches employees by branch and allows all branches', () => {
-    expect(matchesRosterBranch('1', 'AHCP_Peshawar')).toBe(true);
-    expect(matchesRosterBranch('AHCP_Faisalabad', 'AHCP_Peshawar')).toBe(false);
+    expect(matchesRosterBranch('1', 'DHA')).toBe(true);
+    expect(matchesRosterBranch('MB', 'DHA')).toBe(false);
     expect(matchesRosterBranch('2', 'All Branches')).toBe(true);
   });
 
-  it('matches zero-padded branch IDs and alternate branch labels', () => {
-    expect(matchesRosterBranch('01', 'AHCP_Peshawar')).toBe(true);
-    expect(matchesRosterBranch('02', 'AHCP_HO')).toBe(true);
-    expect(matchesRosterBranch('03', 'AHCP_Faisalabad')).toBe(true);
-    expect(matchesRosterBranch('Lahore HO', 'AHCP_HO')).toBe(true);
+  it('matches zero-padded branch IDs and alternate branch label separators', () => {
+    expect(matchesRosterBranch('01', 'DHA')).toBe(true);
+    expect(matchesRosterBranch('02', 'Johar Town')).toBe(true);
+    expect(matchesRosterBranch('03', 'MB')).toBe(true);
+    expect(matchesRosterBranch('Johar_Town', 'Johar Town')).toBe(true);
   });
 });
 
@@ -281,7 +283,7 @@ describe('filterUnassignedEmployees', () => {
       Department: 'Finance',
       Designation: 'Officer',
       detail: {
-        requisition: { location: 'AHCP_Faisalabad' },
+        requisition: { location: 'MB' },
         loginDetails: { legacyCode: '00002222' },
       },
     },
@@ -308,11 +310,11 @@ describe('filterUnassignedEmployees', () => {
   });
 
   it('filters by branch using the employee profile branch code or requisition location', () => {
-    expect(filterUnassignedEmployees(employees, '', '', 'AHCP_Peshawar').map((employee) => employee.EmployeeCode))
+    expect(filterUnassignedEmployees(employees, '', '', 'DHA').map((employee) => employee.EmployeeCode))
       .toEqual(['E001']);
-    expect(filterUnassignedEmployees(employees, '', '', 'AHCP_Faisalabad').map((employee) => employee.EmployeeCode))
+    expect(filterUnassignedEmployees(employees, '', '', 'MB').map((employee) => employee.EmployeeCode))
       .toEqual(['E002']);
-    expect(filterUnassignedEmployees(employees, '', '', 'AHCP_HO')).toEqual([]);
+    expect(filterUnassignedEmployees(employees, '', '', 'Johar Town')).toEqual([]);
     expect(filterUnassignedEmployees(employees, '', '', 'All Branches').length).toBe(3);
   });
 });

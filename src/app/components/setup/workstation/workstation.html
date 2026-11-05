@@ -30,9 +30,9 @@
               name="workstation-name"
             >
               <option value="">Select workstation</option>
-              <option value="AHCP_Peshawar">AHCP_Peshawar</option>
-              <option value="AHCP_HO">AHCP_HO</option>
-              <option value="AHCP_Faisalabad">AHCP_Faisalabad</option>
+              @for (branch of branchOptions; track branch.code) {
+                <option [value]="branch.name">{{ branch.name }}</option>
+              }
             </select>
           </label>
 

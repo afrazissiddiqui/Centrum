@@ -81,44 +81,36 @@ export interface PayrollProcessingDetailPayload {
 
 export interface PayrollProcessingSubmitPayload {
   header: {
-    month: number;
-    year: number;
-    remarks: string;
-    currency: string;
+    document_name: string;
+    payrollMonth: string;
     status: string;
-    processedBy: number;
-    processedDate: string;
+    remarks: string;
   };
   details: Array<{
-    employeeId: string | null;
-    employeeCode: string | null;
-    personName: string | null;
-    basicSalary: number | null;
-    grossSalary: number | null;
-    medicalAllowance: number | null;
-    allowedLiters: number | null;
-    monthlyFuelRate: number | null;
-    fuelAllowance: number | null;
-    mobileAllowance: number | null;
-    carAllowance: number | null;
-    otherAllowances: number | null;
-    bonus: number | null;
-    lastMonthGrossSalary: number | null;
-    overtimeHours: number | null;
-    overtime: number | null;
-    providentFund: number | null;
-    gratuity: number | null;
-    eobiEmployee: number | null;
-    eobiEmployer: number | null;
-    arrears: number | null;
-    loanAdjustment: number | null;
-    loanAdvForm: number | null;
-    extraWorkingDay: number | null;
-    rateExtraDay: number | null;
-    paymentForEwd: number | null;
-    totalEarnings: number | null;
-    netPayable: number | null;
-    approved: boolean | null;
+    employeeCode: string;
+    employeeName: string;
+    costCenter: string;
+    branchLocation: string;
+    grossSalaryInCash: number;
+    grossSalaryInBank: number;
+    fuelAllowance: number;
+    mobileAllowance: number;
+    carAllowance: number;
+    otherAllowances: number;
+    bonus: number;
+    overtime: number;
+    providentFund: number;
+    providentFundEmployer: number;
+    socialSecurityPunjab: number;
+    socialSecurityKpk: number;
+    gratuity: number;
+    eobiEmployee: number;
+    eobiEmployer: number;
+    arrears: number;
+    loanAdjustment: number;
+    loanAdvForm: number;
+    lateAttendDeduction: number;
+    taxDeduction: number;
   }>;
 }
 

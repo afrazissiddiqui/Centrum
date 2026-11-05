@@ -22,6 +22,7 @@ import {
 } from '../../../services/purchase-request.service';
 import { ApplicationFormService } from '../../../services/application-form.service';
 import { formatApiErrorMessage } from '../../../utils/api-error.util';
+import { GL_ACCOUNT_BRANCH_OPTIONS } from '../gl-account-determination/gl-account-branch.options';
 
 interface PurchaseRequestHeader {
   requestDate: string;
@@ -125,9 +126,11 @@ export class PurchaseRequestComponent implements OnInit, OnDestroy {
     }
 
     const branchKeywords: Record<number, string[]> = {
-      1: ['peshawar', 'psh'],
-      2: ['head office', 'headoffice', 'head-office', 'ho'],
-      3: ['faisalabad', 'fsd'],
+      1: ['dha'],
+      2: ['johar town'],
+      3: ['mb'],
+      4: ['sam'],
+      5: ['ruda'],
     };
     const keywords = branchKeywords[branch] ?? [];
 
@@ -141,11 +144,9 @@ export class PurchaseRequestComponent implements OnInit, OnDestroy {
   readonly inventoryAccountOptions = signal<InventoryAccountOption[]>([]);
   readonly inventoryAccountOptionsLoading = signal(false);
   readonly activeGlAccountSuggestionIndex = signal<number | null>(null);
-  readonly branchOptions = signal([
-    { label: 'AHCP_Peshawar', value: 'AHCP_Peshawar' },
-    { label: 'AHCP_HO', value: 'AHCP_HO' },
-    { label: 'AHCP_Faisalabad', value: 'AHCP_Faisalabad' },
-  ]);
+  readonly branchOptions = signal(
+    GL_ACCOUNT_BRANCH_OPTIONS.map((branch) => ({ label: branch.name, value: branch.code })),
+  );
   readonly requestTypeOptions = signal([
     { label: 'Item', value: 'Item' },
     { label: 'Service', value: 'Service' },

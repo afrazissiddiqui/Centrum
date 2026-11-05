@@ -139,6 +139,15 @@ export function computePayableAmount(grossSalary: number, absentAmount: number):
   return Math.max(0, roundPayrollAmount(grossSalary - absentAmount));
 }
 
+export function computeNetPaid(
+  payableAmount: number,
+  deductions: number,
+  paymentForEwd: number,
+  childBenefits: number,
+): number {
+  return roundPayrollAmount(payableAmount - deductions + paymentForEwd + childBenefits);
+}
+
 export function computeAdvanceBalance(advance: number, deduction: number): number {
   return roundPayrollAmount(advance - deduction);
 }

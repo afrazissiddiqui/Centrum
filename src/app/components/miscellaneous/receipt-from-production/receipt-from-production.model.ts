@@ -66,7 +66,7 @@ export function createEmptyReceiptFromProductionHeader(): ReceiptFromProductionH
   const today = todayDateString();
   return {
     branchId: '2',
-    branchName: 'AHCP_HO',
+    branchName: 'Johar Town',
     warehouse: '',
     remarks: '',
     postingDate: today,

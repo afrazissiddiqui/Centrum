@@ -6,6 +6,7 @@ import {
   computeGrossSalaryBreakdown,
   computeAdvanceBalance,
   computeMedicalAllowance,
+  computeNetPaid,
   computeNetPayable,
   computeOvertimeAmount,
   computeOvertimeRate,
@@ -283,12 +284,22 @@ describe('computePayableAmount', () => {
   it('subtracts the absent amount from gross salary', () => {
     expect(computePayableAmount(80000, 5000)).toBe(75000);
   });
+});
 
-  describe('computeAdvanceBalance', () => {
-    it('subtracts the entered deduction from the advance and allows a negative balance', () => {
-      expect(computeAdvanceBalance(10000, 2500)).toBe(7500);
-      expect(computeAdvanceBalance(1000, 1500)).toBe(-500);
-    });
+describe('computeNetPaid', () => {
+  it('subtracts deductions and adds EWD payment and child benefits to payable amount', () => {
+    expect(computeNetPaid(75000, 5000, 1200, 250)).toBe(71450);
+  });
+
+  it('rounds net paid to two decimal places', () => {
+    expect(computeNetPaid(1000.125, 10.001, 25.555, 5.005)).toBe(1020.68);
+  });
+});
+
+describe('computeAdvanceBalance', () => {
+  it('subtracts the entered deduction from the advance and allows a negative balance', () => {
+    expect(computeAdvanceBalance(10000, 2500)).toBe(7500);
+    expect(computeAdvanceBalance(1000, 1500)).toBe(-500);
   });
 
   it('does not return a negative payable amount', () => {

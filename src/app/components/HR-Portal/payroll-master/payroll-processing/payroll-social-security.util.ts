@@ -13,23 +13,16 @@ export function computeSocialSecurityPunjab(
     return 0;
   }
   const branchCode = normalizeBranchCode(location);
-  if (['2', '3'].includes(branchCode) && grossSalaryInBank <= minimumWage * 1.4) {
+  if (['1', '2', '3', '4', '5'].includes(branchCode) && grossSalaryInBank <= minimumWage * 1.4) {
     return minimumWage * 0.06;
   }
   return 0;
 }
 
 export function computeSocialSecurityKpk(
-  minimumWage: number,
-  grossSalaryInBank: number,
-  location: string,
+  _minimumWage: number,
+  _grossSalaryInBank: number,
+  _location: string,
 ): number {
-  if (grossSalaryInBank <= 0) {
-    return 0;
-  }
-  const branchCode = normalizeBranchCode(location);
-  if (branchCode === '1' && grossSalaryInBank <= minimumWage * 1.6) {
-    return minimumWage * 0.06;
-  }
   return 0;
 }
