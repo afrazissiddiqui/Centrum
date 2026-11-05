@@ -42,7 +42,7 @@ describe('AddOvertimeComponent', () => {
         ExtEmpNo: '4023',
         detail: {
           hrSettings: { attendanceShiftManagement: 'Yes' },
-          remuneration: { overTimeApplicable: 'Yes', basicSalary: '30,000' },
+          remuneration: { overTimeApplicable: '2', basicSalary: '30,000' },
         } as ApplicationFormDetail,
       },
       {

@@ -909,23 +909,9 @@
           </div>
 
           <div class="cjr-row">
-            <label>Overtime Applicable:</label>
-            <select [ngModel]="overTimeApplicable()" (ngModelChange)="overTimeApplicable.set($event)"
-              (blur)="touch('overTimeApplicable')">
-              <option value="">No Selection</option>
-              <option value="Yes">Yes</option>
-              <option value="No">No</option>
-            </select>
-          </div>
-
-          <div class="cjr-row">
-            <label>Allowances Applicable:</label>
-            <select [ngModel]="allowancesApplicable()" (ngModelChange)="onAllowancesApplicableChange($event)"
-              (blur)="touch('allowancesApplicable')">
-              <option value="">No Selection</option>
-              <option value="Yes">Yes</option>
-              <option value="No">No</option>
-            </select>
+            <label>Extra Working Days:</label>
+            <input type="number" min="0" step="any" [ngModel]="overTimeApplicable()"
+              (ngModelChange)="onOverTimeApplicableChange($event)" (blur)="touch('overTimeApplicable')" />
           </div>
 
           <div class="cjr-row">

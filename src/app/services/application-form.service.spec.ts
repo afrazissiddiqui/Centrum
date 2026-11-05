@@ -63,6 +63,7 @@ describe('ApplicationFormService', () => {
       remarks: 'Career Growth',
       lastSalary: '50000',
     }];
+    record.detail.remuneration.overTimeApplicable = '2';
     const payload = service.buildFlatEmployeeProfilePayload(record.detail, {
       jobSpecificationId: 'JOB-101',
     });
@@ -78,6 +79,7 @@ describe('ApplicationFormService', () => {
     expect(request.request.body.loginDetail.loginEmployeeName).toBe('alikhan');
     expect(request.request.body.loginDetail.password).toBe('Password@123');
     expect(request.request.body.remuneration.basicSalary).toBe(80000);
+    expect(request.request.body.remuneration.overTimeApplicable).toBe(2);
     expect(request.request.body.education[0].qualification).toBe('BS Computer Science');
     expect(request.request.body.education[0].institution).toBe('FAST NUCES');
     expect(request.request.body.pastExperience[0].company).toBe('Tech Solutions');
@@ -260,6 +262,18 @@ describe('ApplicationFormService', () => {
     expect(rootFlags.detail.remuneration.overTimeApplicable).toBe('Yes');
     expect(nestedFlags.detail.hrSettings.attendanceShiftManagement).toBe('Yes');
     expect(nestedFlags.detail.remuneration.overTimeApplicable).toBe('Yes');
+    expect(
+      (service as any).mapApiItemToFullRecord({
+        employeeCode: 'EMP-003',
+        remuneration: { overTimeApplicable: 0 },
+      }).detail.remuneration.overTimeApplicable,
+    ).toBe('No');
+    expect(
+      (service as any).mapApiItemToFullRecord({
+        employeeCode: 'EMP-004',
+        remuneration: { overTimeApplicable: 2 },
+      }).detail.remuneration.overTimeApplicable,
+    ).toBe('2');
   });
 
   it('always fetches roster rows from the employee-roster-list API', () => {

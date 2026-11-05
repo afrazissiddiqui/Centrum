@@ -413,7 +413,7 @@ export interface EmployeeProfileAddPayload {
   advancePercentAllowed: number | string;
   maximumLoanCapacity: number | string | null;
   maximumAdvanceCapacity: number | string | null;
-  overTimeApplicable: boolean;
+  overTimeApplicable: number | string;
   allowancesApplicable: boolean;
   eobiApplicable: boolean;
   providentApplicable: boolean;
@@ -974,7 +974,7 @@ export class ApplicationFormService {
       advancePercentAllowed: toApiNumber(remuneration.advancePercentAllowed),
       maximumLoanCapacity: maximumLoanCapacity.trim() || null,
       maximumAdvanceCapacity: toNullableApiNumber(remuneration.maximumAdvanceCapacity),
-      overTimeApplicable: toApiFlag(remuneration.overTimeApplicable),
+      overTimeApplicable: toApiNumber(remuneration.overTimeApplicable),
       allowancesApplicable: toApiFlag(remuneration.allowancesApplicable),
       eobiApplicable: toApiFlag(remuneration.eobiApplicable),
       providentApplicable: toApiFlag(remuneration.providentApplicable),

@@ -260,7 +260,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
   protected readonly taxPercentage = signal('');
   protected readonly dateOfJoining = signal('');
   protected readonly advancePercentAllowed = signal('');
-  protected readonly overTimeApplicable = signal<'Yes' | 'No' | ''>('No');
+  protected readonly overTimeApplicable = signal('0');
   protected readonly medicalAllowances = signal('');
   protected readonly fuelAllowances = signal('');
   protected readonly mobileAllowances = signal('');
@@ -616,6 +616,13 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  protected onOverTimeApplicableChange(value: string | number | null): void {
+    const text = String(value ?? '').trim();
+    const numeric = Number(text);
+    this.overTimeApplicable.set(text === '' ? '' : Number.isFinite(numeric) && numeric >= 0 ? text : '0');
+    this.cdr.markForCheck();
+  }
+
   protected onFuelLimitChange(value: string): void {
     this.fuelLimit.set(this.sanitizeDecimalValue(value));
     this.cdr.markForCheck();
@@ -859,6 +866,24 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
       return 'No';
     }
     return '';
+  }
+
+  private normalizeExtraWorkingDays(value: unknown): string {
+    if (typeof value === 'boolean') {
+      return value ? '1' : '0';
+    }
+
+    const normalized = String(value ?? '').trim();
+    const lowerCase = normalized.toLowerCase();
+    if (lowerCase === 'yes' || lowerCase === 'true') {
+      return '1';
+    }
+    if (lowerCase === 'no' || lowerCase === 'false' || normalized === '') {
+      return '0';
+    }
+
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric) && numeric >= 0 ? normalized : '0';
   }
 
   protected onAssetAllocatedChange(value: string): void {
@@ -2039,7 +2064,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     } else {
       this.updateMaximumAdvanceCapacityFromAdvancePercent();
     }
-    this.overTimeApplicable.set((remuneration.overTimeApplicable as 'Yes' | 'No' | '') ?? 'No');
+    this.overTimeApplicable.set(this.normalizeExtraWorkingDays(remuneration.overTimeApplicable));
     this.fuelAllowances.set(this.remunerationValue(remuneration.fuelAllowances));
     if (this.areAllowancesEnabled()) {
       this.mobileAllowances.set(this.remunerationValue(remuneration.mobileAllowances));

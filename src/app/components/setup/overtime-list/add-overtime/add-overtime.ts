@@ -826,6 +826,14 @@ export class AddOvertimeComponent implements OnInit {
   }
 
   private isYes(value: unknown): boolean {
-    return value === true || ['yes', 'true', '1'].includes(String(value ?? '').trim().toLocaleLowerCase());
+    if (value === true) {
+      return true;
+    }
+    const normalized = String(value ?? '').trim().toLocaleLowerCase();
+    if (['yes', 'true'].includes(normalized)) {
+      return true;
+    }
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric) && numeric > 0;
   }
 }

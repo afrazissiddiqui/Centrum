@@ -173,7 +173,7 @@ export type PayrollColumnTone =
   | 'final'
   | 'approval';
 
-export type PayrollColumnType = 'currency' | 'readonly' | 'readonly-pill' | 'approval' | 'print';
+export type PayrollColumnType = 'currency' | 'readonly' | 'readonly-pill' | 'approval' | 'print' | 'empty';
 
 export interface PayrollColumnGroup {
   id: string;
@@ -274,10 +274,10 @@ export class AddPayrollProcessComponent implements OnInit {
   readonly payrollColumns: PayrollColumnDef[] = [
     { key: 'grossSalary', label: 'Salary', groupId: 'salary', type: 'readonly', minWidth: 152 },
     { key: 'grossSalary', label: 'Gross Salary', groupId: 'salary', type: 'readonly', minWidth: 152 },
-    { key: 'netPayable', label: 'Payable Amount', groupId: 'salary', type: 'readonly', minWidth: 160 },
     { key: 'ratePerDay', label: 'Rate/Day', groupId: 'salary', type: 'readonly', minWidth: 130 },
     { key: 'absent', label: 'Absent', groupId: 'salary', type: 'currency', minWidth: 110 },
     { key: 'absentAmount', label: 'Absent Amount', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'netPayable', label: 'Payable Amount', groupId: 'salary', type: 'readonly', minWidth: 160 },
     { key: 'extraWorkingDay', label: 'Extra working day', groupId: 'salary', type: 'currency', minWidth: 160 },
     { key: 'rateExtraDay', label: 'Rate (extra day)', groupId: 'salary', type: 'currency', minWidth: 150 },
     { key: 'paymentForEwd', label: 'Payment for EWD', groupId: 'salary', type: 'readonly', minWidth: 160 },
@@ -286,6 +286,7 @@ export class AddPayrollProcessComponent implements OnInit {
     { key: 'netPayableAfterTax', label: 'Balance', groupId: 'salary', type: 'readonly', minWidth: 152 },
     { key: 'childBenefits', label: 'Child Benefits', groupId: 'salary', type: 'currency', minWidth: 152 },
     { key: 'netPayableManagement', label: 'Net Paid', groupId: 'salary', type: 'readonly', minWidth: 152 },
+    { key: 'signature', label: 'Signature', groupId: 'salary', type: 'empty', minWidth: 160 },
     { key: 'totalEarnings', label: 'Counting', groupId: 'salary', type: 'readonly', minWidth: 152 },
     { key: 'paySlip', label: 'Pay Slip', groupId: 'salary', type: 'print', minWidth: 120 },
   ];
@@ -787,6 +788,7 @@ export class AddPayrollProcessComponent implements OnInit {
     if (
       column.key === 'approved' ||
       column.key === 'paySlip' ||
+      column.key === 'signature' ||
       column.key === 'ratePerDay'
     ) {
       return null;
@@ -1160,7 +1162,17 @@ export class AddPayrollProcessComponent implements OnInit {
     rowsToSubmit: PayrollProcessRow[],
     missedEmployees: string[] = [],
   ): void {
-    const payload = this.buildPayload(rowsToSubmit);
+    const processedBy = this.authService.getSessionUser()?.id ?? Number(this.loggedInUserId());
+    if (!Number.isSafeInteger(processedBy) || processedBy <= 0) {
+      this.saving.set(false);
+      void this.alertService.errorAndWait(
+        'Payroll Not Saved',
+        'Reason: the logged-in user ID is unavailable.',
+      );
+      return;
+    }
+
+    const payload = this.buildPayload(rowsToSubmit, processedBy);
 
     this.payrollProcessingService
       .addPayrollProcessing(payload)
@@ -1196,46 +1208,65 @@ export class AddPayrollProcessComponent implements OnInit {
       });
   }
 
-  private buildPayload(rows: PayrollProcessRow[]): PayrollProcessingSubmitPayload {
+  private buildPayload(
+    rows: PayrollProcessRow[],
+    processedBy: number,
+  ): PayrollProcessingSubmitPayload {
     const monthLabel =
       this.monthOptions.find((option) => option.value === this.selectedMonth())?.label ??
       String(this.selectedMonth());
     const remarks = this.remarks().trim() || `${monthLabel} ${this.selectedYear()} Monthly Payroll`;
+    const selectedBranch = this.selectedBranch();
 
     return {
       header: {
         document_name: 'Payroll_Processing',
         payrollMonth: this.getSelectedPayrollMonth(),
         status: 'Pending',
+        branch:
+          this.branchOptions.find((option) => option.code === selectedBranch)?.name ||
+          selectedBranch ||
+          'All Branches',
         remarks,
+        processedBy,
+        processedDate: this.getProcessedDate(),
       },
       details: rows.map((row) => ({
         employeeCode: row.employeeCode,
         employeeName: row.personName,
-        costCenter: row.costCenter,
+        designation: row.designation,
         branchLocation: row.location,
+        costCenter: row.costCenter,
+        overTimeApplicable: row.overtimeApplicable ? 1 : 0,
+        salary: row.grossSalary,
+        grossSalary: row.grossSalary,
+        ratePerDay: this.ratePerDayForRow(row),
+        absentDays: row.absent,
+        absentAmount: this.absentAmountForRow(row),
+        payableAmount: this.grossPayableForRow(row),
+        extraWorkingDays: row.extraWorkingDay,
+        rateExtraDay: row.rateExtraDay,
+        paymentForEwd: this.paymentForEwdForRow(row),
+        overtime: row.overtime,
+        advance: row.loanAdjustment,
+        loanAdvForm: row.loanAdvForm,
+        deductions: row.deductions,
+        balance: this.netPayableAfterTaxForRow(row),
+        childBenefits: row.childBenefits,
+        netPaid: this.netPaidForRow(row),
+        counting: this.netPaidForRow(row),
         grossSalaryInCash: row.grossSalaryInCash,
         grossSalaryInBank: row.grossSalaryInBank,
-        fuelAllowance: row.fuelAllowance,
-        mobileAllowance: row.mobileAllowance,
-        carAllowance: row.carAllowance,
-        otherAllowances: row.otherAllowances,
-        bonus: row.bonus,
-        overtime: row.overtime,
-        providentFund: row.providentFund,
-        providentFundEmployer: row.providentFundEmployer,
-        socialSecurityPunjab: row.socialSecurityPunjab,
-        socialSecurityKpk: row.socialSecurityKpk,
-        gratuity: row.gratuity,
-        eobiEmployee: row.eobiEmployee,
-        eobiEmployer: row.eobiEmployer,
-        arrears: row.arrears,
-        loanAdjustment: row.loanAdjustment,
-        loanAdvForm: row.loanAdvForm,
-        lateAttendDeduction: this.absentAmountForRow(row),
-        taxDeduction: row.taxDeduction,
       })),
     };
+  }
+
+  private getProcessedDate(): string {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   private loadEmployees(): void {
@@ -1691,7 +1722,11 @@ export class AddPayrollProcessComponent implements OnInit {
 
   private isYesFlag(value: string | undefined): boolean {
     const normalized = (value ?? '').trim().toLowerCase();
-    return normalized === 'yes' || normalized === 'y' || normalized === '1' || normalized === 'true';
+    if (normalized === 'yes' || normalized === 'y' || normalized === 'true') {
+      return true;
+    }
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric) && numeric > 0;
   }
 
   private resolvePayrollLoanAdjustment(employeeCode: string, employeeName: string): number {
