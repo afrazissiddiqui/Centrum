@@ -105,13 +105,9 @@ export class RecruitmentComponent implements OnInit {
     this.loading.set(true);
     this.applicationFormService.fetchEmployeeProfiles().subscribe({
       next: () => this.loading.set(false),
-      error: (error: unknown) => {
+      error: () => {
         this.loading.set(false);
-        const errorMessage =
-          (error as { error?: { message?: string } })?.error?.message ||
-          (error as { message?: string })?.message ||
-          'Failed to load user list.';
-        this.alertService.error('Load Failed', errorMessage);
+        this.alertService.error('Error', 'Under Construction');
       },
     });
   }

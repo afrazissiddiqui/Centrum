@@ -21,6 +21,7 @@ export const gatePassRoutes: Routes = [
     path: 'gate-pass',
     component: GatePassShellComponent,
     canActivate: [
+      showGatePassUnderConstruction,
       requireAccess(
         {
           anyOf: [
@@ -38,7 +39,6 @@ export const gatePassRoutes: Routes = [
         'igp_form',
         'list',
       ),
-      showGatePassUnderConstruction,
     ],
     canActivateChild: [showGatePassUnderConstruction],
     children: [
