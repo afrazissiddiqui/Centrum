@@ -1,4 +1,7 @@
+import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
+import { AddPayrollProcessComponent } from './add-payroll-process';
+import { ApplicationFormRecord } from '../../../../../services/application-form.service';
 import {
   computeBasicSalary,
   computeGratuity,
@@ -15,6 +18,67 @@ import {
 } from '../../payroll-setup/payroll-setup.service';
 import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
 import { selectPayrollEmployeesForSubmission } from '../payroll-employee-selection.util';
+
+describe('AddPayrollProcessComponent profile mapping', () => {
+  it('uses the application profile Advance value in the payroll Advance column', () => {
+    const component = Object.create(AddPayrollProcessComponent.prototype) as any;
+    Object.assign(component, {
+      parseAmount: (value: string | number) => Number(value) || 0,
+      applicationFormService: { formatFuelLimitForForm: () => '' },
+      overtimeRecords: () => [],
+      getSelectedPayrollMonth: () => '2026-11',
+      resolveLastMonthGrossSalary: () => 0,
+      isYesFlag: () => false,
+      resolvePayrollLoanAdjustment: () => 0,
+      resolvePayrollAdvanceDeduction: () => 1200,
+      approvalForEmployee: () => false,
+      recalculateRow: (row: unknown) => row,
+    });
+
+    const record = {
+      EmployeeCode: 'EMP-001',
+      EmployeeName: 'Test Employee',
+      Department: 'HR',
+      EmployeeNature: '',
+      Designation: '',
+      ReportingManager: '',
+      EmploymentType: '',
+      EmploymentStatus: '',
+      EmploymentCategory: '',
+      status: '',
+      apiId: '1',
+      detail: {
+        personalInfo: { costCenter: '', designation: '', branchLocation: '', workGradeLevel: '' },
+        requisition: { costCenter: '' },
+        loginDetails: { userId: '' },
+        remuneration: {
+          basicSalary: '50000',
+          paymentMode: 'Bank',
+          cashSalaryPercentage: '0',
+          taxPercentage: '100',
+          advancePercentAllowed: '10000.00',
+          maximumLoanCapacity: '25000.00',
+          fuelLimit: '',
+          fuelAllowances: '',
+          mobileAllowances: '',
+          carAllowances: '',
+          otherAllowances: '',
+          dateOfJoining: '',
+          overTimeApplicable: '',
+          allowancesApplicable: '',
+          eobiApplicable: '',
+          providentApplicable: '',
+          totalLeaves: '',
+        },
+      },
+    } as unknown as ApplicationFormRecord;
+
+    const row = component.mapRecordToRow(record);
+
+    expect(row.loanAdvForm).toBe(10000);
+    expect(row.deductions).toBe(25000);
+  });
+});
 
 describe('computeOvertimeRate', () => {
   it('calculates the hourly rate by dividing gross salary by 26 days and 8 hours', () => {

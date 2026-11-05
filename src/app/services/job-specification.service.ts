@@ -16,6 +16,7 @@ export interface JobSpecificationRecord {
   gradeWorkLevel: string;
   keyResponsibilities: string;
   basicSalary: number;
+  advancePercentAllowed: string;
   medicalAllowance: number;
   fuelAllowance: number;
   packagePerks: string;
@@ -358,6 +359,13 @@ export class JobSpecificationService {
         asString(item['KeyResponsibilities']) ||
         asString(item['responsibilities']) ||
         '—',
+      advancePercentAllowed:
+        asString(remuneration?.['advancePercentAllowed']) ||
+        asString(remuneration?.['advance_percent_allowed']) ||
+        asString(remuneration?.['AdvancePercentAllowed']) ||
+        asString(item['advancePercentAllowed']) ||
+        asString(item['advance_percent_allowed']) ||
+        asString(item['AdvancePercentAllowed']),
       basicSalary: this.pickAmount(
         { ...item, ...(remuneration ?? {}) },
         ['basicSalary', 'basic_salary', 'BasicSalary', 'salary', 'Salary'],

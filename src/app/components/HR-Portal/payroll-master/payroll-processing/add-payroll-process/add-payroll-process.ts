@@ -1498,6 +1498,7 @@ export class AddPayrollProcessComponent implements OnInit {
     const basicSalary = computeBasicSalary(grossSalaryBreakdown.grossSalaryInBank);
     const allowedLiters = this.parseFuelLiters(remuneration?.fuelLimit);
     const profileFuelAmount = this.parseAmount(remuneration?.fuelAllowances ?? 0);
+    const profileAdvance = remuneration?.advancePercentAllowed?.trim();
     // Prefer a derived per-liter rate from profile fuel amount; otherwise Fuel Price Adjust is the rate.
     const monthlyFuelRate =
       allowedLiters > 0 && profileFuelAmount > 0
@@ -1558,8 +1559,10 @@ export class AddPayrollProcessComponent implements OnInit {
       eobiEmployer: 0,
       arrears: 0,
       loanAdjustment: this.resolvePayrollLoanAdjustment(employeeCode, employeeName),
-      loanAdvForm: this.resolvePayrollAdvanceDeduction(employeeCode, employeeName),
-      deductions: 0,
+      loanAdvForm: profileAdvance
+        ? this.parseAmount(profileAdvance)
+        : this.resolvePayrollAdvanceDeduction(employeeCode, employeeName),
+      deductions: this.parseAmount(remuneration?.maximumLoanCapacity ?? 0),
       absent: this.parseAmount(remuneration?.totalLeaves ?? 0),
       extraWorkingDay: this.parseAmount(remuneration?.overTimeApplicable ?? 0),
       rateExtraDay: 0,

@@ -120,6 +120,25 @@ describe('CreateJobRequisitionComponent validation', () => {
     expect(editableComponent.isRequiredMissing('personName')).toBeFalse();
   });
 
+  it('populates Advance from the selected job specification', () => {
+    (component as any).populateFromJobSpecification({
+      jobTitle: '',
+      department: '',
+      employmentCategory: '',
+      employmentNature: '',
+      employmentType: '',
+      gradeWorkLevel: '',
+      packagePerks: '',
+      basicSalary: 0,
+      advancePercentAllowed: '10000.00',
+      fuelAllowance: 0,
+      medicalAllowance: 0,
+      qualifications: [],
+    });
+
+    expect((component as any).advancePercentAllowed()).toBe('10000.00');
+  });
+
   it('refreshes the Unannounced Leave field from this year\'s leave applications', () => {
     const applications = [{
       EmployeeId: 'EMP-1001',

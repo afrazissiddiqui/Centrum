@@ -8,6 +8,7 @@ import {
   PayrollProcessingDetailPayload,
   PayrollProcessingListRecord,
   PayrollProcessingRecord,
+  PayrollProcessingSubmitPayload,
   PayrollProcessingService,
 } from '../../../../services/payroll-processing.service';
 import { formatApiErrorMessage } from '../../../../utils/api-error.util';
@@ -95,27 +96,83 @@ const PAYROLL_DETAIL_COLUMNS: PayrollDetailColumn[] = [
 ];
 
 interface PayrollExcelColumn extends Omit<PayrollDetailColumn, 'key'> {
-  key: keyof PayrollProcessingDetailPayload | 'ratePerDay' | 'absent' | 'absentAmount';
+  key: keyof PayrollProcessingDetailPayload;
 }
 
-const PAYROLL_EXCEL_COLUMNS: PayrollExcelColumn[] = [
-  { key: 'personName', label: 'Employee Name', kind: 'text' },
-  { key: 'designation', label: 'Designation', kind: 'text' },
-  { key: 'grossSalary', label: 'Salary', kind: 'amount' },
-  { key: 'grossSalary', label: 'Gross Salary', kind: 'amount' },
-  { key: 'netPayable', label: 'Payable Amount', kind: 'amount' },
-  { key: 'ratePerDay', label: 'Rate/Day', kind: 'amount' },
-  { key: 'absent', label: 'Absent', kind: 'number' },
+const PAYROLL_SAVED_LINE_COLUMNS: PayrollDetailColumn[] = [
+  { key: 'costCenter', label: 'Cost Center', kind: 'text' },
+  { key: 'salary', label: 'Saved Salary', kind: 'amount' },
+  { key: 'ratePerDay', label: 'Rate per Day', kind: 'amount' },
+  { key: 'absentDays', label: 'Absent Days', kind: 'number' },
   { key: 'absentAmount', label: 'Absent Amount', kind: 'amount' },
-  { key: 'extraWorkingDay', label: 'Extra working day', kind: 'number' },
-  { key: 'rateExtraDay', label: 'Rate (extra day)', kind: 'amount' },
-  { key: 'paymentForEwd', label: 'Payment for EWD', kind: 'amount' },
-  { key: 'loanAdvForm', label: 'Advance', kind: 'amount' },
-  { key: 'deductions', label: 'Deductions', kind: 'amount' },
-  { key: 'netPayableAfterTax', label: 'Balance', kind: 'amount' },
-  { key: 'childBenefits', label: 'Child Benefits', kind: 'amount' },
-  { key: 'netPayableManagement', label: 'Net Paid', kind: 'amount' },
-  { key: 'totalEarnings', label: 'Total', kind: 'amount' },
+  { key: 'payableAmount', label: 'Payable Amount', kind: 'amount' },
+  { key: 'extraWorkingDays', label: 'Extra Working Days', kind: 'number' },
+  { key: 'advance', label: 'Advance', kind: 'amount' },
+  { key: 'balance', label: 'Balance', kind: 'amount' },
+  { key: 'netPaid', label: 'Net Paid', kind: 'amount' },
+  { key: 'counting', label: 'Counting', kind: 'amount' },
+];
+
+type PayrollSubmitLine = PayrollProcessingSubmitPayload['details'][number];
+
+interface PayrollPrintColumn {
+  key: keyof PayrollSubmitLine;
+  label: string;
+  kind: PayrollDetailColumnKind;
+  value: (detail: PayrollProcessingDetailPayload) => unknown;
+}
+
+const PAYROLL_PRINT_COLUMNS: PayrollPrintColumn[] = [
+  { key: 'employeeCode', label: 'Employee Code', kind: 'text', value: (detail) => detail.employeeCode },
+  { key: 'employeeName', label: 'Employee Name', kind: 'text', value: (detail) => detail.personName },
+  { key: 'designation', label: 'Designation', kind: 'text', value: (detail) => detail.designation },
+  { key: 'branchLocation', label: 'Branch/Location', kind: 'text', value: (detail) => detail.branch },
+  { key: 'costCenter', label: 'Cost Center', kind: 'text', value: (detail) => detail.costCenter },
+  {
+    key: 'overTimeApplicable',
+    label: 'Overtime Applicable',
+    kind: 'boolean',
+    value: (detail) => detail.overtimeApplicable,
+  },
+  { key: 'salary', label: 'Salary', kind: 'amount', value: (detail) => detail.salary },
+  { key: 'grossSalary', label: 'Gross Salary', kind: 'amount', value: (detail) => detail.grossSalary },
+  { key: 'ratePerDay', label: 'Rate per Day', kind: 'amount', value: (detail) => detail.ratePerDay },
+  { key: 'absentDays', label: 'Absent Days', kind: 'number', value: (detail) => detail.absentDays },
+  { key: 'absentAmount', label: 'Absent Amount', kind: 'amount', value: (detail) => detail.absentAmount },
+  { key: 'payableAmount', label: 'Payable Amount', kind: 'amount', value: (detail) => detail.payableAmount },
+  {
+    key: 'extraWorkingDays',
+    label: 'Extra Working Days',
+    kind: 'number',
+    value: (detail) => detail.extraWorkingDays,
+  },
+  { key: 'rateExtraDay', label: 'Rate Extra Day', kind: 'amount', value: (detail) => detail.rateExtraDay },
+  { key: 'paymentForEwd', label: 'Payment for EWD', kind: 'amount', value: (detail) => detail.paymentForEwd },
+  { key: 'overtime', label: 'Overtime', kind: 'amount', value: (detail) => detail.overtime },
+  { key: 'advance', label: 'Advance', kind: 'amount', value: (detail) => detail.advance },
+  { key: 'loanAdvForm', label: 'Loan/Advance Form', kind: 'amount', value: (detail) => detail.loanAdvForm },
+  { key: 'deductions', label: 'Deductions', kind: 'amount', value: (detail) => detail.deductions },
+  { key: 'balance', label: 'Balance', kind: 'amount', value: (detail) => detail.balance },
+  { key: 'childBenefits', label: 'Child Benefits', kind: 'amount', value: (detail) => detail.childBenefits },
+  { key: 'netPaid', label: 'Net Paid', kind: 'amount', value: (detail) => detail.netPaid },
+  { key: 'counting', label: 'Counting', kind: 'amount', value: (detail) => detail.counting },
+  {
+    key: 'grossSalaryInCash',
+    label: 'Gross Salary in Cash',
+    kind: 'amount',
+    value: (detail) => detail.grossSalaryInCash,
+  },
+  {
+    key: 'grossSalaryInBank',
+    label: 'Gross Salary in Bank',
+    kind: 'amount',
+    value: (detail) => detail.grossSalaryInBank,
+  },
+];
+
+const PAYROLL_EXCEL_COLUMNS: PayrollExcelColumn[] = [
+  ...PAYROLL_DETAIL_COLUMNS,
+  ...PAYROLL_SAVED_LINE_COLUMNS,
 ];
 
 @Component({
@@ -391,17 +448,8 @@ export class PayrollProcessingComponent implements OnInit {
       : String(value);
   }
 
-  isPostedPayroll(record: PayrollProcessingListRecord): boolean {
-    return record.Status.trim().toLowerCase() === 'posted';
-  }
-
   printRecord(record: PayrollProcessingListRecord): void {
     if (!this.permissionService.assertCan(PAYROLL_PROCESSING_MODULE, 'view')) {
-      return;
-    }
-
-    if (!this.isPostedPayroll(record)) {
-      void this.alertService.warning('Print', 'Only posted payroll processes can be printed.');
       return;
     }
 
@@ -417,7 +465,7 @@ export class PayrollProcessingComponent implements OnInit {
     }
 
     printWindow.document.write(
-      '<!doctype html><html><head><title>Payroll Print View</title></head><body>Loading posted payroll details…</body></html>',
+      '<!doctype html><html><head><title>Payroll Print View</title></head><body>Loading saved payroll details…</body></html>',
     );
     printWindow.document.close();
 
@@ -428,11 +476,24 @@ export class PayrollProcessingComponent implements OnInit {
         }
 
         try {
+          printWindow.onload = () => {
+            window.setTimeout(() => {
+              if (printWindow.closed) {
+                return;
+              }
+
+              try {
+                printWindow.focus();
+                printWindow.print();
+              } catch {
+                printWindow.close();
+                void this.alertService.error('Print Failed', 'Failed to prepare the payroll print view.');
+              }
+            }, 250);
+          };
           printWindow.document.open();
           printWindow.document.write(this.buildPayrollPrintDocument(detail));
           printWindow.document.close();
-          printWindow.focus();
-          printWindow.print();
         } catch {
           printWindow.close();
           void this.alertService.error('Print Failed', 'Failed to prepare the payroll print view.');
@@ -444,7 +505,7 @@ export class PayrollProcessingComponent implements OnInit {
         }
         void this.alertService.error(
           'Load Failed',
-          formatApiErrorMessage(error, 'Failed to load posted payroll details for printing.'),
+          formatApiErrorMessage(error, 'Failed to load saved payroll details for printing.'),
         );
       },
     });
@@ -462,21 +523,13 @@ export class PayrollProcessingComponent implements OnInit {
     const header = record.Header;
     const monthLabel = this.formatMonth(header.month) || String(header.month || '');
     const headerFields: Array<[string, string]> = [
-      ['Payroll ID', String(record.Id)],
-      ['Period', `${monthLabel} ${header.year || ''}`.trim()],
+      ['Document Name', header.documentName || 'Payroll Processing'],
+      ['Payroll Month', header.payrollMonth || `${monthLabel} ${header.year || ''}`.trim()],
       ['Status', header.status],
-      ['Currency', header.currency],
-      ['Processed By', String(header.processedBy || '—')],
+      ['Branch', header.branch || '—'],
+      ['Remarks', header.remarks || '—'],
+      ['Processed By', String(header.processedBy)],
       ['Processed Date', this.formatProcessedDate(header.processedDate) || '—'],
-      ['Monthly Fuel Rate Adjustment', this.formatMoney(header.fuelPriceAdjust || 0, header.currency)],
-      ['Minimum Wage Adjustment', this.formatMoney(header.minimumWageAdjust || 0, header.currency)],
-    ];
-
-    const detailGroups: Array<{ title: string; columns: PayrollDetailColumn[] }> = [
-      { title: 'Employee Information', columns: PAYROLL_DETAIL_COLUMNS.slice(0, 19) },
-      { title: 'Salary and Allowances', columns: PAYROLL_DETAIL_COLUMNS.slice(19, 35) },
-      { title: 'Contributions and Deductions', columns: PAYROLL_DETAIL_COLUMNS.slice(35, 52) },
-      { title: 'Payroll Summary', columns: PAYROLL_DETAIL_COLUMNS.slice(52) },
     ];
 
     const renderFields = (fields: Array<[string, string]>): string =>
@@ -486,44 +539,32 @@ export class PayrollProcessingComponent implements OnInit {
           <span class="value">${escapeHtml(value || '—')}</span>
         </div>`).join('');
 
-    const renderEmployee = (employee: PayrollProcessingDetailPayload, index: number): string => {
-      const groups = detailGroups.map(({ title, columns }) => `
-        <section class="detail-group">
-          <h3>${escapeHtml(title)}</h3>
-          <div class="field-grid">
-            ${renderFields(columns.map((column) => [
-              column.label,
-              this.formatDetailValue(employee, column, header.currency),
-            ]))}
-          </div>
-        </section>`).join('');
-
-      return `
-        <article class="employee">
-          <div class="employee-heading">
-            <div>
-              <span class="eyebrow">Employee ${index + 1}</span>
-              <h2>${escapeHtml(employee.personName || employee.employeeCode || 'Payroll detail')}</h2>
-            </div>
-            <div class="employee-id">${escapeHtml(employee.employeeCode || employee.employeeId || '—')}</div>
-          </div>
-          ${groups}
-        </article>`;
+    const formatPrintValue = (column: PayrollPrintColumn, detail: PayrollProcessingDetailPayload): string => {
+      const value = column.value(detail);
+      if (column.kind === 'boolean') {
+        return value ? '1' : '0';
+      }
+      if (column.kind === 'amount' || column.kind === 'number') {
+        const amount = Number(value);
+        return Number.isFinite(amount) ? amount.toLocaleString('en-PK', { maximumFractionDigits: 2 }) : '0';
+      }
+      return String(value ?? '—');
     };
 
-    const remarks = header.remarks
-      ? `<section class="remarks"><h2>Remarks</h2><p>${escapeHtml(header.remarks)}</p></section>`
-      : '';
-    const employees = record.Details.length
-      ? record.Details.map((employee, index) => renderEmployee(employee, index)).join('')
-      : '<p class="empty">No employee detail lines are available for this payroll.</p>';
+    const lineRows = record.Details.length
+      ? record.Details.map((detail) => `
+          <tr>${PAYROLL_PRINT_COLUMNS.map((column) =>
+            `<td>${escapeHtml(formatPrintValue(column, detail))}</td>`,
+          ).join('')}</tr>`).join('')
+      : `<tr><td class="empty" colspan="${PAYROLL_PRINT_COLUMNS.length}">No saved payroll lines are available.</td></tr>`;
+    const lineHeaders = PAYROLL_PRINT_COLUMNS.map((column) => `<th>${escapeHtml(column.label)}</th>`).join('');
 
     return `<!doctype html>
       <html lang="en">
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Posted Payroll ${escapeHtml(record.Id)} — ${escapeHtml(monthLabel)} ${escapeHtml(header.year)}</title>
+          <title>Payroll ${escapeHtml(record.Id)} — ${escapeHtml(monthLabel)} ${escapeHtml(header.year)}</title>
           <style>
             :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; color: #172b4d; }
             * { box-sizing: border-box; }
@@ -543,18 +584,10 @@ export class PayrollProcessingComponent implements OnInit {
             .field { min-width: 0; padding: 10px 11px; border: 1px solid #e4eaf1; border-radius: 6px; background: #f8fafc; overflow-wrap: anywhere; }
             .label { display: block; margin-bottom: 5px; color: #62748a; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
             .value { display: block; color: #172b4d; font-size: 11px; font-weight: 600; white-space: pre-wrap; }
-            .remarks { margin-top: 18px; padding: 14px; border-left: 3px solid #0a6ed1; background: #f5f8fc; }
-            .remarks h2 { margin: 0 0 6px; font-size: 13px; }
-            .remarks p { margin: 0; white-space: pre-wrap; }
-            .employee { margin-top: 26px; padding: 22px; background: #fff; border: 1px solid #dce3ec; border-radius: 10px; }
-            .employee-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid #dce8f5; }
-            .employee-heading .eyebrow { color: #0a6ed1; opacity: 1; }
-            .employee-heading h2 { margin: 5px 0 0; font-size: 18px; }
-            .employee-id { color: #52657a; font-size: 12px; font-weight: 700; }
-            .detail-group { margin-top: 16px; }
-            .detail-group h3 { margin: 0 0 8px; padding-bottom: 6px; color: #26496b; border-bottom: 1px solid #e4eaf1; font-size: 12px; }
-            .empty { padding: 18px 0; color: #62748a; }
-            footer { padding: 16px 0 4px; color: #718096; font-size: 10px; text-align: right; }
+            .line-items { width: 100%; max-width: 100%; margin-top: 22px; border-collapse: collapse; table-layout: fixed; font-size: 8px; }
+            .line-items th, .line-items td { min-width: 0; padding: 6px 5px; border: 1px solid #dce3ec; text-align: left; overflow-wrap: anywhere; word-break: break-word; }
+            .line-items th { color: #26496b; background: #edf3fa; }
+            .empty { padding: 18px 0; color: #62748a; text-align: center !important; }
             @media (max-width: 750px) { .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } main { margin: 14px auto; padding: 0 12px; } .report-content { padding: 18px; } }
             @page { size: A4 landscape; margin: 12mm; }
             @media print {
@@ -563,10 +596,9 @@ export class PayrollProcessingComponent implements OnInit {
               main { max-width: none; margin: 0; padding: 0; }
               .report-header { border-radius: 0; }
               .report-content { padding: 18px 0; border: 0; }
-              .employee { margin: 18px 0 0; padding: 14px 0; border: 0; border-top: 2px solid #dce3ec; border-radius: 0; break-inside: auto; }
-              .detail-group { break-inside: avoid; }
               .field { padding: 7px; }
-              footer { position: fixed; bottom: 0; right: 0; }
+              .line-items { width: 100%; font-size: 7px; }
+              .line-items th, .line-items td { padding: 3px 2px; }
             }
           </style>
         </head>
@@ -577,18 +609,18 @@ export class PayrollProcessingComponent implements OnInit {
           </div>
           <main>
             <header class="report-header">
-              <span class="eyebrow">Payroll Processing · ${escapeHtml(header.status || 'Posted')}</span>
+              <span class="eyebrow">Payroll Processing</span>
               <h1>Payroll Register</h1>
-              <p class="subtitle">${escapeHtml(monthLabel)} ${escapeHtml(header.year)} · Payroll #${escapeHtml(record.Id)}</p>
             </header>
             <div class="report-content">
               <section>
-                <h2 class="section-title">Payroll Summary</h2>
+                <h2 class="section-title">Header Payload</h2>
                 <div class="field-grid">${renderFields(headerFields)}</div>
-                ${remarks}
               </section>
-              ${employees}
-              <footer>Generated ${escapeHtml(new Date().toLocaleString())}</footer>
+              <table class="line-items">
+                <thead><tr>${lineHeaders}</tr></thead>
+                <tbody>${lineRows}</tbody>
+              </table>
             </div>
           </main>
         </body>
@@ -664,12 +696,8 @@ export class PayrollProcessingComponent implements OnInit {
             const line = PAYROLL_EXCEL_COLUMNS.map((column) => {
               const value =
                 column.key === 'ratePerDay'
-                  ? (Number(r.grossSalary) || 0) / 30
-                  : column.key === 'absent'
-                    ? r.paidLeaveDays + r.unpaidLeaveDays
-                    : column.key === 'absentAmount'
-                      ? r.lateAttendDeduction
-                      : r[column.key];
+                  ? Number(r.ratePerDay) || (Number(r.grossSalary) || 0) / 30
+                  : r[column.key];
               if (column.kind === 'boolean') {
                 return escape(value ? 'Yes' : 'No');
               }

@@ -11,6 +11,9 @@ export interface PayrollProcessingHeaderPayload {
   status: string;
   processedBy: number;
   processedDate: string;
+  documentName?: string;
+  payrollMonth?: string;
+  branch?: string;
   fuelPriceAdjust?: number;
   minimumWageAdjust?: number;
 }
@@ -19,6 +22,7 @@ export interface PayrollProcessingDetailPayload {
   employeeId: string;
   employeeCode: string;
   personName: string;
+  costCenter: string;
   username: string;
   designation: string;
   department: string;
@@ -36,6 +40,7 @@ export interface PayrollProcessingDetailPayload {
   eobiApplicable: boolean;
   providentApplicable: boolean;
   basicSalary: number;
+  salary: number;
   grossSalary: number;
   grossSalaryInCash: number;
   grossSalaryInBank: number;
@@ -52,6 +57,15 @@ export interface PayrollProcessingDetailPayload {
   lastMonthGrossSalary: number;
   overtimeHours: number;
   overtime: number;
+  ratePerDay: number;
+  absentDays: number;
+  absentAmount: number;
+  payableAmount: number;
+  extraWorkingDays: number;
+  advance: number;
+  balance: number;
+  netPaid: number;
+  counting: number;
   providentFund: number;
   providentFundEmployer: number;
   socialSecurityPunjab: number;
@@ -216,6 +230,9 @@ export class PayrollProcessingService {
       status: this.pickString([source], ['status', 'Status']) || 'Draft',
       processedBy: this.pickNumber([source], ['processedBy', 'processed_by', 'ProcessedBy']),
       processedDate: this.pickString([source], ['processedDate', 'processed_date', 'ProcessedDate']),
+      documentName: this.pickString([source], ['document_name', 'documentName', 'DocumentName']),
+      payrollMonth: this.pickString([source], ['payrollMonth', 'payroll_month', 'PayrollMonth']),
+      branch: this.pickString([source], ['branch', 'Branch']),
       fuelPriceAdjust: this.pickAmount(source, ['fuelPriceAdjust', 'fuel_price_adjust', 'FuelPriceAdjust']),
       minimumWageAdjust: this.pickAmount(source, ['minimumWageAdjust', 'minimum_wage_adjust', 'MinimumWageAdjust']),
     };
@@ -226,6 +243,7 @@ export class PayrollProcessingService {
       employeeId: this.pickString([item], ['employeeId', 'employee_id', 'EmployeeId']),
       employeeCode: this.pickString([item], ['employeeCode', 'employee_code', 'EmployeeCode']),
       personName: this.pickString([item], ['personName', 'person_name', 'PersonName', 'employeeName', 'employee_name']),
+      costCenter: this.pickString([item], ['costCenter', 'cost_center', 'CostCenter']),
       username: this.pickString([item], ['username', 'userName', 'user_name', 'Username']),
       designation: this.pickString([item], ['designation', 'Designation']),
       department: this.pickString([item], ['department', 'Department']),
@@ -233,17 +251,25 @@ export class PayrollProcessingService {
       employmentNature: this.pickString([item], ['employmentNature', 'employment_nature', 'EmploymentNature']),
       employmentType: this.pickString([item], ['employmentType', 'employment_type', 'EmploymentType']),
       jobTitle: this.pickString([item], ['jobTitle', 'job_title', 'JobTitle']),
-      branch: this.pickString([item], ['branch', 'Branch', 'location', 'Location']),
-      location: this.pickString([item], ['location', 'Location', 'branch', 'Branch']),
+      branch: this.pickString([item], ['branch', 'Branch', 'branchLocation', 'branch_location', 'location', 'Location']),
+      location: this.pickString([item], ['location', 'Location', 'branchLocation', 'branch_location', 'branch', 'Branch']),
       workGradeLevel: this.pickString([item], ['workGradeLevel', 'work_grade_level', 'WorkGradeLevel']),
       dateOfJoining: this.pickString([item], ['dateOfJoining', 'date_of_joining', 'DateOfJoining']),
       yearsOfService: this.pickAmount(item, ['yearsOfService', 'years_of_service', 'YearsOfService']),
-      overtimeApplicable: this.pickBoolean(item, ['overtimeApplicable', 'overtime_applicable', 'OvertimeApplicable']),
+      overtimeApplicable: this.pickBoolean(item, [
+        'overtimeApplicable',
+        'overTimeApplicable',
+        'overtime_applicable',
+        'over_time_applicable',
+        'OvertimeApplicable',
+        'OverTimeApplicable',
+      ]),
       allowancesApplicable: this.pickBoolean(item, ['allowancesApplicable', 'allowances_applicable', 'AllowancesApplicable']),
       eobiApplicable: this.pickBoolean(item, ['eobiApplicable', 'eobi_applicable', 'EobiApplicable']),
       providentApplicable: this.pickBoolean(item, ['providentApplicable', 'provident_applicable', 'ProvidentApplicable']),
       basicSalary: this.pickAmount(item, ['basicSalary', 'basic_salary', 'BasicSalary']),
-      grossSalary: this.pickAmount(item, ['grossSalary', 'gross_salary', 'GrossSalary']),
+      salary: this.pickAmount(item, ['salary', 'Salary']),
+      grossSalary: this.pickAmount(item, ['grossSalary', 'gross_salary', 'GrossSalary', 'salary', 'Salary']),
       grossSalaryInCash: this.pickAmount(item, ['grossSalaryInCash', 'gross_salary_in_cash', 'GrossSalaryInCash']),
       grossSalaryInBank: this.pickAmount(item, ['grossSalaryInBank', 'gross_salary_in_bank', 'GrossSalaryInBank']),
       childBenefits: this.pickAmount(item, ['childBenefits', 'child_benefits', 'ChildBenefits']),
@@ -259,6 +285,15 @@ export class PayrollProcessingService {
       lastMonthGrossSalary: this.pickAmount(item, ['lastMonthGrossSalary', 'last_month_gross_salary', 'LastMonthGrossSalary']),
       overtimeHours: this.pickAmount(item, ['overtimeHours', 'overtime_hours', 'OvertimeHours']),
       overtime: this.pickAmount(item, ['overtime', 'Overtime']),
+      ratePerDay: this.pickAmount(item, ['ratePerDay', 'rate_per_day', 'RatePerDay']),
+      absentDays: this.pickAmount(item, ['absentDays', 'absent_days', 'AbsentDays']),
+      absentAmount: this.pickAmount(item, ['absentAmount', 'absent_amount', 'AbsentAmount']),
+      payableAmount: this.pickAmount(item, ['payableAmount', 'payable_amount', 'PayableAmount']),
+      extraWorkingDays: this.pickAmount(item, ['extraWorkingDays', 'extra_working_days', 'ExtraWorkingDays']),
+      advance: this.pickAmount(item, ['advance', 'Advance']),
+      balance: this.pickAmount(item, ['balance', 'Balance']),
+      netPaid: this.pickAmount(item, ['netPaid', 'net_paid', 'NetPaid']),
+      counting: this.pickAmount(item, ['counting', 'Counting']),
       providentFund: this.pickAmount(item, ['providentFund', 'provident_fund', 'ProvidentFund']),
       providentFundEmployer: this.pickAmount(item, ['providentFundEmployer', 'provident_fund_employer', 'ProvidentFundEmployer']),
       socialSecurityPunjab: this.pickAmount(item, ['socialSecurityPunjab', 'social_security_punjab', 'SocialSecurityPunjab']),
@@ -267,21 +302,21 @@ export class PayrollProcessingService {
       eobiEmployee: this.pickAmount(item, ['eobiEmployee', 'eobi_employee', 'EobiEmployee', 'eobi', 'EOBI']),
       eobiEmployer: this.pickAmount(item, ['eobiEmployer', 'eobi_employer', 'EobiEmployer']),
       arrears: this.pickAmount(item, ['arrears', 'Arrears']),
-      loanAdjustment: this.pickAmount(item, ['loanAdjustment', 'loan_adjustment', 'LoanAdjustment', 'loanInstallment', 'loan_installment']),
+      loanAdjustment: this.pickAmount(item, ['loanAdjustment', 'loan_adjustment', 'LoanAdjustment', 'loanInstallment', 'loan_installment', 'advance', 'Advance']),
       loanAdvForm: this.pickAmount(item, ['loanAdvForm', 'loan_adv_form', 'LoanAdvForm', 'otherDeductions', 'other_deductions']),
       deductions: this.pickAmount(item, ['deductions', 'deduction', 'Deductions', 'Deduction']),
-      lateAttendDeduction: this.pickAmount(item, ['lateAttendDeduction', 'late_attend_deduction', 'LateAttendDeduction']),
+      lateAttendDeduction: this.pickAmount(item, ['lateAttendDeduction', 'late_attend_deduction', 'LateAttendDeduction', 'absentAmount', 'absent_amount', 'AbsentAmount']),
       paidLeaveDays: this.pickAmount(item, ['paidLeaveDays', 'paid_leave_days', 'PaidLeaveDays']),
       unpaidLeaveDays: this.pickAmount(item, ['unpaidLeaveDays', 'unpaid_leave_days', 'UnpaidLeaveDays']),
-      extraWorkingDay: this.pickAmount(item, ['extraWorkingDay', 'extra_working_day', 'ExtraWorkingDay']),
+      extraWorkingDay: this.pickAmount(item, ['extraWorkingDay', 'extra_working_day', 'ExtraWorkingDay', 'extraWorkingDays', 'extra_working_days', 'ExtraWorkingDays']),
       rateExtraDay: this.pickAmount(item, ['rateExtraDay', 'rate_extra_day', 'RateExtraDay']),
       paymentForEwd: this.pickAmount(item, ['paymentForEwd', 'payment_for_ewd', 'PaymentForEwd']),
       costToCompany: this.pickAmount(item, ['costToCompany', 'cost_to_company', 'CostToCompany']),
       taxDeduction: this.pickAmount(item, ['taxDeduction', 'tax_deduction', 'TaxDeduction']),
       totalEarnings: this.pickAmount(item, ['totalEarnings', 'total_earnings', 'TotalEarnings']),
-      netPayable: this.pickAmount(item, ['netPayable', 'net_payable', 'NetPayable']),
-      netPayableAfterTax: this.pickAmount(item, ['netPayableAfterTax', 'net_payable_after_tax', 'NetPayableAfterTax']),
-      netPayableManagement: this.pickAmount(item, ['netPayableManagement', 'net_payable_management', 'NetPayableManagement']),
+      netPayable: this.pickAmount(item, ['netPayable', 'net_payable', 'NetPayable', 'payableAmount', 'payable_amount', 'PayableAmount']),
+      netPayableAfterTax: this.pickAmount(item, ['netPayableAfterTax', 'net_payable_after_tax', 'NetPayableAfterTax', 'balance', 'Balance']),
+      netPayableManagement: this.pickAmount(item, ['netPayableManagement', 'net_payable_management', 'NetPayableManagement', 'netPaid', 'net_paid', 'NetPaid', 'counting', 'Counting']),
       finalGrossSalary: this.pickAmount(item, ['finalGrossSalary', 'final_gross_salary', 'FinalGrossSalary']),
       approved: this.pickBoolean(item, ['approved', 'Approved']),
     };

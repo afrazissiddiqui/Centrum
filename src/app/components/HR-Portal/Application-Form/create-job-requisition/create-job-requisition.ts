@@ -1557,6 +1557,10 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
       this.updateMedicalAllowanceFromGrossSalary();
       this.updateMaximumAdvanceCapacityFromAdvancePercent();
     }
+    if (record.advancePercentAllowed) {
+      this.advancePercentAllowed.set(record.advancePercentAllowed);
+      this.updateMaximumAdvanceCapacityFromAdvancePercent();
+    }
     if (record.fuelAllowance) {
       this.fuelAllowances.set(String(record.fuelAllowance));
     }

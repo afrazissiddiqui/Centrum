@@ -85,9 +85,8 @@
             <td style="border: 1px solid #e2e8f0; padding: 10px; text-align: left; white-space: nowrap;" (click)="$event.stopPropagation()">
               <button class="update-btn" type="button" (click)="viewRecord(row)" title="View payroll process">View</button>
               <button class="export-btn" type="button" (click)="exportToExcel(row)" title="Import to Excel" style="margin-left:8px;">Import to Excel</button>
-              <button class="update-btn" type="button" (click)="printRecord(row)" [disabled]="!isPostedPayroll(row)"
-                [title]="isPostedPayroll(row) ? 'Print posted payroll' : 'Printing is available for posted payrolls only'"
-                style="margin-left:8px;">Print</button>
+              <button class="update-btn" type="button" (click)="printRecord(row)"
+                title="Print saved payroll lines" style="margin-left:8px;">Print</button>
             </td>
           </tr>
         </tbody>
