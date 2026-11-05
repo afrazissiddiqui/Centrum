@@ -148,6 +148,11 @@ export function computeNetPaid(
   return roundPayrollAmount(payableAmount - deductions + paymentForEwd + childBenefits);
 }
 
+export function computePayrollCounting(netPaid: number): number {
+  const remainder = ((netPaid % 10) + 10) % 10;
+  return (remainder <= 5 ? Math.floor(netPaid / 10) : Math.ceil(netPaid / 10)) * 10;
+}
+
 export function computeAdvanceBalance(advance: number, deduction: number): number {
   return roundPayrollAmount(advance - deduction);
 }

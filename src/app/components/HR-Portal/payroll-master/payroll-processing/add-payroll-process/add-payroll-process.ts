@@ -60,6 +60,7 @@ import {
   computeOvertimeAmount,
   computeOvertimeRate,
   computePayableAmount,
+  computePayrollCounting,
   computeRatePerDay,
   computeProvidentFund,
   computeYearsOfService,
@@ -429,7 +430,7 @@ export class AddPayrollProcessComponent implements OnInit {
       totals.netPayable += this.grossPayableForRow(row);
       totals.netPayableAfterTax += this.netPayableAfterTaxForRow(row);
       totals.netPayableManagement += this.netPaidForRow(row);
-      totals.totalEarnings += this.totalEarningsForRow(row);
+      totals.totalEarnings += this.countingForRow(row);
       totals.deductions += this.totalDeductionsForRow(row);
       totals.finalGrossSalary += row.grossSalary;
     }
@@ -677,6 +678,10 @@ export class AddPayrollProcessComponent implements OnInit {
     );
   }
 
+  countingForRow(row: PayrollProcessRow): number {
+    return computePayrollCounting(this.netPaidForRow(row));
+  }
+
   earningsRatioForRow(row: PayrollProcessRow): number {
     if (row.basicSalary <= 0) {
       return 0;
@@ -704,7 +709,7 @@ export class AddPayrollProcessComponent implements OnInit {
       return this.netPaidForRow(row);
     }
     if (column.key === 'totalEarnings') {
-      return this.totalEarningsForRow(row);
+      return this.countingForRow(row);
     }
     if (column.key === 'deductions') {
       return this.totalDeductionsForRow(row);
@@ -1074,9 +1079,9 @@ export class AddPayrollProcessComponent implements OnInit {
       return;
     }
 
-    const employeeSummaries = this.employeeSummaries();
+    const employeeSummaries = this.filteredEmployeeSummaries();
     if (employeeSummaries.length === 0) {
-      void this.alertService.validation('No employees available to save.');
+      void this.alertService.validation('No employees match the current filters.');
       return;
     }
 
@@ -1248,13 +1253,13 @@ export class AddPayrollProcessComponent implements OnInit {
         rateExtraDay: row.rateExtraDay,
         paymentForEwd: this.paymentForEwdForRow(row),
         overtime: row.overtime,
-        advance: row.loanAdjustment,
+        advance: row.loanAdvForm,
         loanAdvForm: row.loanAdvForm,
         deductions: row.deductions,
         balance: this.netPayableAfterTaxForRow(row),
         childBenefits: row.childBenefits,
         netPaid: this.netPaidForRow(row),
-        counting: this.netPaidForRow(row),
+        counting: this.countingForRow(row),
         grossSalaryInCash: row.grossSalaryInCash,
         grossSalaryInBank: row.grossSalaryInBank,
       })),

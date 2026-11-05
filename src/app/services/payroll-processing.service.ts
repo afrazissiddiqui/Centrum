@@ -139,6 +139,7 @@ export interface PayrollProcessingListRecord {
   Remarks: string;
   Currency: string;
   Status: string;
+  Branch: string;
   ProcessedBy: number;
   ProcessedDate: string;
   EmployeeCount: number;
@@ -213,6 +214,7 @@ export class PayrollProcessingService {
       Remarks: this.pickString(sources, ['remarks', 'Remarks']),
       Currency: this.pickString(sources, ['currency', 'Currency']) || 'PKR',
       Status: this.pickString(sources, ['status', 'Status']),
+      Branch: this.pickString(sources, ['branch', 'Branch']) || 'Not specified',
       ProcessedBy: this.pickNumber(sources, ['processedBy', 'processed_by', 'ProcessedBy']),
       ProcessedDate: this.pickString(sources, ['processedDate', 'processed_date', 'ProcessedDate']),
       EmployeeCount:
@@ -303,7 +305,15 @@ export class PayrollProcessingService {
       eobiEmployer: this.pickAmount(item, ['eobiEmployer', 'eobi_employer', 'EobiEmployer']),
       arrears: this.pickAmount(item, ['arrears', 'Arrears']),
       loanAdjustment: this.pickAmount(item, ['loanAdjustment', 'loan_adjustment', 'LoanAdjustment', 'loanInstallment', 'loan_installment', 'advance', 'Advance']),
-      loanAdvForm: this.pickAmount(item, ['loanAdvForm', 'loan_adv_form', 'LoanAdvForm', 'otherDeductions', 'other_deductions']),
+      loanAdvForm: this.pickAmount(item, [
+        'loanAdvForm',
+        'loan_adv_form',
+        'LoanAdvForm',
+        'otherDeductions',
+        'other_deductions',
+        'advance',
+        'Advance',
+      ]),
       deductions: this.pickAmount(item, ['deductions', 'deduction', 'Deductions', 'Deduction']),
       lateAttendDeduction: this.pickAmount(item, ['lateAttendDeduction', 'late_attend_deduction', 'LateAttendDeduction', 'absentAmount', 'absent_amount', 'AbsentAmount']),
       paidLeaveDays: this.pickAmount(item, ['paidLeaveDays', 'paid_leave_days', 'PaidLeaveDays']),

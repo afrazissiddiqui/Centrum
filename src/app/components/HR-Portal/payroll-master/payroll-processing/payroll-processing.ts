@@ -116,7 +116,7 @@ const PAYROLL_SAVED_LINE_COLUMNS: PayrollDetailColumn[] = [
 type PayrollSubmitLine = PayrollProcessingSubmitPayload['details'][number];
 
 interface PayrollPrintColumn {
-  key: keyof PayrollSubmitLine;
+  key: keyof PayrollSubmitLine | 'signature';
   label: string;
   kind: PayrollDetailColumnKind;
   value: (detail: PayrollProcessingDetailPayload) => unknown;
@@ -126,14 +126,6 @@ const PAYROLL_PRINT_COLUMNS: PayrollPrintColumn[] = [
   { key: 'employeeCode', label: 'Employee Code', kind: 'text', value: (detail) => detail.employeeCode },
   { key: 'employeeName', label: 'Employee Name', kind: 'text', value: (detail) => detail.personName },
   { key: 'designation', label: 'Designation', kind: 'text', value: (detail) => detail.designation },
-  { key: 'branchLocation', label: 'Branch/Location', kind: 'text', value: (detail) => detail.branch },
-  { key: 'costCenter', label: 'Cost Center', kind: 'text', value: (detail) => detail.costCenter },
-  {
-    key: 'overTimeApplicable',
-    label: 'Overtime Applicable',
-    kind: 'boolean',
-    value: (detail) => detail.overtimeApplicable,
-  },
   { key: 'salary', label: 'Salary', kind: 'amount', value: (detail) => detail.salary },
   { key: 'grossSalary', label: 'Gross Salary', kind: 'amount', value: (detail) => detail.grossSalary },
   { key: 'ratePerDay', label: 'Rate per Day', kind: 'amount', value: (detail) => detail.ratePerDay },
@@ -148,26 +140,13 @@ const PAYROLL_PRINT_COLUMNS: PayrollPrintColumn[] = [
   },
   { key: 'rateExtraDay', label: 'Rate Extra Day', kind: 'amount', value: (detail) => detail.rateExtraDay },
   { key: 'paymentForEwd', label: 'Payment for EWD', kind: 'amount', value: (detail) => detail.paymentForEwd },
-  { key: 'overtime', label: 'Overtime', kind: 'amount', value: (detail) => detail.overtime },
   { key: 'advance', label: 'Advance', kind: 'amount', value: (detail) => detail.advance },
-  { key: 'loanAdvForm', label: 'Loan/Advance Form', kind: 'amount', value: (detail) => detail.loanAdvForm },
   { key: 'deductions', label: 'Deductions', kind: 'amount', value: (detail) => detail.deductions },
   { key: 'balance', label: 'Balance', kind: 'amount', value: (detail) => detail.balance },
   { key: 'childBenefits', label: 'Child Benefits', kind: 'amount', value: (detail) => detail.childBenefits },
   { key: 'netPaid', label: 'Net Paid', kind: 'amount', value: (detail) => detail.netPaid },
+  { key: 'signature', label: 'Signature', kind: 'text', value: () => '' },
   { key: 'counting', label: 'Counting', kind: 'amount', value: (detail) => detail.counting },
-  {
-    key: 'grossSalaryInCash',
-    label: 'Gross Salary in Cash',
-    kind: 'amount',
-    value: (detail) => detail.grossSalaryInCash,
-  },
-  {
-    key: 'grossSalaryInBank',
-    label: 'Gross Salary in Bank',
-    kind: 'amount',
-    value: (detail) => detail.grossSalaryInBank,
-  },
 ];
 
 const PAYROLL_EXCEL_COLUMNS: PayrollExcelColumn[] = [
@@ -265,6 +244,7 @@ export class PayrollProcessingComponent implements OnInit {
     { key: 'Remarks', label: 'Remarks', visible: true },
     { key: 'Currency', label: 'Currency', visible: true },
     { key: 'Status', label: 'Status', visible: true },
+    { key: 'Branch', label: 'Employee Scope', visible: true },
     { key: 'ProcessedBy', label: 'Processed By', visible: false },
     { key: 'ProcessedDate', label: 'Processed Date', visible: true },
     { key: 'EmployeeCount', label: 'Employees', visible: true },
@@ -312,6 +292,7 @@ export class PayrollProcessingComponent implements OnInit {
       row.Remarks.toLowerCase().includes(search) ||
       row.Currency.toLowerCase().includes(search) ||
       row.Status.toLowerCase().includes(search) ||
+      row.Branch.toLowerCase().includes(search) ||
       row.ProcessedDate.toLowerCase().includes(search) ||
       String(row.EmployeeCount).includes(search),
     );
@@ -449,23 +430,31 @@ export class PayrollProcessingComponent implements OnInit {
   }
 
   printRecord(record: PayrollProcessingListRecord): void {
+    this.openPayrollPrintView(record, 'Print');
+  }
+
+  saveAsPdf(record: PayrollProcessingListRecord): void {
+    this.openPayrollPrintView(record, 'Save as PDF');
+  }
+
+  private openPayrollPrintView(record: PayrollProcessingListRecord, action: string): void {
     if (!this.permissionService.assertCan(PAYROLL_PROCESSING_MODULE, 'view')) {
       return;
     }
 
     if (!record.Id) {
-      void this.alertService.warning('Print', 'Unable to print this row: missing payroll process id.');
+      void this.alertService.warning(action, 'Unable to open this row: missing payroll process id.');
       return;
     }
 
     const printWindow = window.open('', '_blank', 'width=1100,height=850');
     if (!printWindow) {
-      void this.alertService.warning('Print', 'Allow pop-ups to open the payroll print view.');
+      void this.alertService.warning(action, 'Allow pop-ups to open the payroll print view.');
       return;
     }
 
     printWindow.document.write(
-      '<!doctype html><html><head><title>Payroll Print View</title></head><body>Loading saved payroll details…</body></html>',
+      `<!doctype html><html><head><title>Payroll ${action} View</title></head><body>Loading saved payroll details…</body></html>`,
     );
     printWindow.document.close();
 
@@ -487,7 +476,7 @@ export class PayrollProcessingComponent implements OnInit {
                 printWindow.print();
               } catch {
                 printWindow.close();
-                void this.alertService.error('Print Failed', 'Failed to prepare the payroll print view.');
+                void this.alertService.error(`${action} Failed`, 'Failed to prepare the payroll print view.');
               }
             }, 250);
           };
@@ -496,7 +485,7 @@ export class PayrollProcessingComponent implements OnInit {
           printWindow.document.close();
         } catch {
           printWindow.close();
-          void this.alertService.error('Print Failed', 'Failed to prepare the payroll print view.');
+          void this.alertService.error(`${action} Failed`, 'Failed to prepare the payroll print view.');
         }
       },
       error: (error: unknown) => {
@@ -505,7 +494,7 @@ export class PayrollProcessingComponent implements OnInit {
         }
         void this.alertService.error(
           'Load Failed',
-          formatApiErrorMessage(error, 'Failed to load saved payroll details for printing.'),
+          formatApiErrorMessage(error, 'Failed to load saved payroll details for printing or PDF export.'),
         );
       },
     });
@@ -551,11 +540,32 @@ export class PayrollProcessingComponent implements OnInit {
       return String(value ?? '—');
     };
 
+    const employeeRows = record.Details.map((detail) => `
+      <tr>${PAYROLL_PRINT_COLUMNS.map((column) =>
+        `<td>${escapeHtml(formatPrintValue(column, detail))}</td>`,
+      ).join('')}</tr>`).join('');
+    const totalValues = PAYROLL_PRINT_COLUMNS.map((column) => {
+      if (column.key === 'signature' || column.key === 'ratePerDay' || column.key === 'rateExtraDay') {
+        return '';
+      }
+
+      if (column.kind !== 'amount' && column.kind !== 'number') {
+        return '';
+      }
+
+      const total = record.Details.reduce((sum, detail) => {
+        const value = Number(column.value(detail));
+        return sum + (Number.isFinite(value) ? value : 0);
+      }, 0);
+      return total.toLocaleString('en-PK', { maximumFractionDigits: 2 });
+    });
+    const totalRow = record.Details.length
+      ? `<tr class="total-row"><th colspan="3">Grand Total</th>${totalValues.slice(3).map((value) =>
+          `<td>${escapeHtml(value)}</td>`,
+        ).join('')}</tr>`
+      : '';
     const lineRows = record.Details.length
-      ? record.Details.map((detail) => `
-          <tr>${PAYROLL_PRINT_COLUMNS.map((column) =>
-            `<td>${escapeHtml(formatPrintValue(column, detail))}</td>`,
-          ).join('')}</tr>`).join('')
+      ? `${employeeRows}${totalRow}`
       : `<tr><td class="empty" colspan="${PAYROLL_PRINT_COLUMNS.length}">No saved payroll lines are available.</td></tr>`;
     const lineHeaders = PAYROLL_PRINT_COLUMNS.map((column) => `<th>${escapeHtml(column.label)}</th>`).join('');
 
@@ -587,6 +597,7 @@ export class PayrollProcessingComponent implements OnInit {
             .line-items { width: 100%; max-width: 100%; margin-top: 22px; border-collapse: collapse; table-layout: fixed; font-size: 8px; }
             .line-items th, .line-items td { min-width: 0; padding: 6px 5px; border: 1px solid #dce3ec; text-align: left; overflow-wrap: anywhere; word-break: break-word; }
             .line-items th { color: #26496b; background: #edf3fa; }
+            .line-items .total-row th, .line-items .total-row td { font-weight: 700; background: #edf3fa; }
             .empty { padding: 18px 0; color: #62748a; text-align: center !important; }
             @media (max-width: 750px) { .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } main { margin: 14px auto; padding: 0 12px; } .report-content { padding: 18px; } }
             @page { size: A4 landscape; margin: 12mm; }

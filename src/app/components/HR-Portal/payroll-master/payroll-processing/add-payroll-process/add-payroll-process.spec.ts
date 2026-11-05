@@ -14,12 +14,37 @@ import {
   computeOvertimeAmount,
   computeOvertimeRate,
   computePayableAmount,
+  computePayrollCounting,
   computeRatePerDay,
 } from '../../payroll-setup/payroll-setup.service';
 import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
 import { selectPayrollEmployeesForSubmission } from '../payroll-employee-selection.util';
 
 describe('AddPayrollProcessComponent profile mapping', () => {
+  it('submits the visible Advance value in the saved payroll advance field', () => {
+    const component = Object.create(AddPayrollProcessComponent.prototype) as any;
+    Object.assign(component, {
+      monthOptions: [{ value: 1, label: 'January' }],
+      selectedMonth: () => 1,
+      selectedYear: () => 2026,
+      remarks: () => '',
+      selectedBranch: () => 'DHA',
+      branchOptions: [{ code: 'DHA', name: 'DHA' }],
+      getSelectedPayrollMonth: () => '2026-01',
+      ratePerDayForRow: () => 0,
+      absentAmountForRow: () => 0,
+      grossPayableForRow: () => 0,
+      paymentForEwdForRow: () => 0,
+      netPayableAfterTaxForRow: () => 0,
+      netPaidForRow: () => 0,
+    });
+
+    const payload = component.buildPayload([{ loanAdvForm: 5000, loanAdjustment: 0 }], 1);
+
+    expect(payload.details[0].advance).toBe(5000);
+    expect(payload.details[0].loanAdvForm).toBe(5000);
+  });
+
   it('uses the application profile Advance value in the payroll Advance column', () => {
     const component = Object.create(AddPayrollProcessComponent.prototype) as any;
     Object.assign(component, {
@@ -357,6 +382,22 @@ describe('computeNetPaid', () => {
 
   it('rounds net paid to two decimal places', () => {
     expect(computeNetPaid(1000.125, 10.001, 25.555, 5.005)).toBe(1020.68);
+  });
+});
+
+describe('computePayrollCounting', () => {
+  it('rounds net paid down when the last digit is five or less', () => {
+    expect(computePayrollCounting(12345)).toBe(12340);
+    expect(computePayrollCounting(12345.01)).toBe(12350);
+  });
+
+  it('rounds net paid up when the last digit is greater than five', () => {
+    expect(computePayrollCounting(12346)).toBe(12350);
+  });
+
+  it('uses Excel MOD behavior for negative values', () => {
+    expect(computePayrollCounting(-14)).toBe(-10);
+    expect(computePayrollCounting(-16)).toBe(-20);
   });
 });
 

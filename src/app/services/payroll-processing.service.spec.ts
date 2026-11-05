@@ -1,9 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { publicApiUrl } from '../config/api.config';
-import { PayrollProcessingRecord, PayrollProcessingService } from './payroll-processing.service';
+import {
+  PayrollProcessingListRecord,
+  PayrollProcessingRecord,
+  PayrollProcessingSubmitPayload,
+  PayrollProcessingService,
+} from './payroll-processing.service';
 
 describe('PayrollProcessingService', () => {
   let service: PayrollProcessingService;
@@ -22,6 +27,73 @@ describe('PayrollProcessingService', () => {
   });
 
   afterEach(() => httpMock.verify());
+
+  it('sends advance in each payroll detail when saving', () => {
+    const payload: PayrollProcessingSubmitPayload = {
+      header: {
+        document_name: 'Payroll_Processing',
+        payrollMonth: '2026-01',
+        status: 'Pending',
+        branch: 'DHA',
+        remarks: '',
+        processedBy: 1,
+        processedDate: '2026-01-31',
+      },
+      details: [{
+        employeeCode: 'EMP-003',
+        employeeName: 'Test Employee',
+        designation: 'Accountant',
+        branchLocation: 'DHA',
+        costCenter: 'FIN',
+        overTimeApplicable: 0,
+        salary: 50000,
+        grossSalary: 50000,
+        ratePerDay: 0,
+        absentDays: 0,
+        absentAmount: 0,
+        payableAmount: 50000,
+        extraWorkingDays: 0,
+        rateExtraDay: 0,
+        paymentForEwd: 0,
+        overtime: 0,
+        advance: 5000,
+        loanAdvForm: 5000,
+        deductions: 0,
+        balance: 50000,
+        childBenefits: 0,
+        netPaid: 50000,
+        counting: 50000,
+        grossSalaryInCash: 0,
+        grossSalaryInBank: 50000,
+      }],
+    };
+
+    service.addPayrollProcessing(payload).subscribe();
+
+    const request = httpMock.expectOne(publicApiUrl('payroll-processing-add'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body.details[0].advance).toBe(5000);
+    request.flush({ success: true });
+  });
+
+  it('maps the saved employee branch scope for the payroll list', () => {
+    let records: PayrollProcessingListRecord[] | undefined;
+
+    service.fetchPayrollProcessingList().subscribe((result) => {
+      records = result;
+    });
+
+    const request = httpMock.expectOne(publicApiUrl('payroll-processing-list'));
+    expect(request.request.method).toBe('GET');
+    request.flush({
+      data: [
+        { id: 1, header: { branch: 'All Branches' }, details: [] },
+        { id: 2, header: { branch: 'DHA' }, details: [] },
+      ],
+    });
+
+    expect(records?.map((record) => record.Branch)).toEqual(['All Branches', 'DHA']);
+  });
 
   it('maps all saved payroll line fields from the detail response', () => {
     let detail: PayrollProcessingRecord | undefined;
@@ -100,5 +172,44 @@ describe('PayrollProcessingService', () => {
       grossSalaryInCash: 10000,
       grossSalaryInBank: 42000,
     });
+  });
+
+  it('maps the saved Advance value when the API returns it as advance', () => {
+    let detail: PayrollProcessingRecord | undefined;
+
+    service.fetchPayrollProcessingDetail(43).subscribe((result) => {
+      detail = result;
+    });
+
+    const request = httpMock.expectOne(publicApiUrl('payroll-processing-detail/43'));
+    request.flush({
+      data: {
+        id: 43,
+        header: { month: 11, year: 2026 },
+        details: [{ employeeCode: 'EMP-002', advance: 1250 }],
+      },
+    });
+
+    expect(detail?.Details[0].advance).toBe(1250);
+  });
+
+  it('preserves a zero Advance value from a posted payroll detail response', () => {
+    let detail: PayrollProcessingRecord | undefined;
+
+    service.fetchPayrollProcessingDetail(3).subscribe((result) => {
+      detail = result;
+    });
+
+    const request = httpMock.expectOne(publicApiUrl('payroll-processing-detail/3'));
+    expect(request.request.method).toBe('GET');
+    request.flush({
+      data: {
+        id: 3,
+        header: { month: 1, year: 2026, status: 'Pending' },
+        details: [{ employeeCode: 'EMP-003', advance: 0 }],
+      },
+    });
+
+    expect(detail?.Details[0].advance).toBe(0);
   });
 });
