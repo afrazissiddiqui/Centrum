@@ -84,7 +84,6 @@ export class AddTrainingDevelopmentComponent implements OnInit {
   protected readonly trainingStageOptions = ['Internship', 'Training', 'On-Job Training'] as const;
   protected readonly departmentApplicabilityOptions = [
     'Production Department',
-    'Plant Maintenance Department',
     'Electrical Department',
     'Quality Control Department',
     'Logistics Department',

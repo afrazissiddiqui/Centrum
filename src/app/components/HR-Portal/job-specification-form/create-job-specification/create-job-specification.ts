@@ -11,7 +11,6 @@ import { AlertService } from '../../../../services/alert.service';
 
 const DEPARTMENT_OPTIONS = [
   'Production Department',
-  'Plant Maintenance Department',
   'Electrical Department',
   'Quality Control Department',
   'Logistics Department',

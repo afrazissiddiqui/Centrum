@@ -1,4 +1,5 @@
-const API_BASE_URL = 'Centrumstarter/api';
+const API_BASE_URL = 'http://116.203.172.106:8084/centrum_test';
+export const AHCP_API_BASE_URL = '/ahcp-api';
 
 
 /** Pioneer attendance API (proxied in local dev via proxy.conf.json). */
@@ -20,4 +21,10 @@ function resolveBiometricsApiBaseUrl(): string {
 export function apiUrl(endpoint: string, baseUrl = API_BASE_URL): string {
   const path = endpoint.replace(/^\/+/, '');
   return `${baseUrl}/api/${path}`;
+}
+
+/** Builds a full public API URL: `{API_BASE_URL}/public/api/{endpoint}` */
+export function publicApiUrl(endpoint: string, baseUrl = API_BASE_URL): string {
+  const path = endpoint.replace(/^\/+/, '');
+  return `${baseUrl}/public/api/${path}`;
 }

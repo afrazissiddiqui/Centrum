@@ -15,7 +15,6 @@ export const GATE_PASS_WAREHOUSE_OPTIONS: GatePassWarehouseOption[] = [
   { code: 'FSD-WH06', name: 'QC Warehouse' },
   { code: 'FSD-WH07', name: 'Rented Warehouse' },
   { code: 'FSD-WH08', name: 'General Stores' },
-  { code: 'FSD-WH09', name: 'Plant Maintenance Store' },
   { code: 'FSD-WH10', name: 'Scrap Yard' },
   { code: 'PSH-WH01', name: 'SC Main Warehouse 1' },
   { code: 'PSH-WH02', name: 'SC Warehouse 2 (Production Hall)' },
@@ -25,7 +24,6 @@ export const GATE_PASS_WAREHOUSE_OPTIONS: GatePassWarehouseOption[] = [
   { code: 'PSH-WH06', name: 'QC Warehouse' },
   { code: 'PSH-WH07', name: 'Rented Warehouse' },
   { code: 'PSH-WH08', name: 'General Stores' },
-  { code: 'PSH-WH09', name: 'Plant Maintenance Store' },
   { code: 'PSH-WH10', name: 'Scrap Yard' },
 ];
 

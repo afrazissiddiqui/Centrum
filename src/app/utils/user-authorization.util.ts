@@ -76,7 +76,6 @@ const MODULE_SLUG_ALIASES: Record<string, string> = {
   kpi: 'kpi_setup_form',
   'kpi_setup': 'kpi_setup_form',
   'kpi-setup': 'kpi_setup_form',
-  itr: 'itr_form',
   'itr_setup': 'kpi_setup_form',
   'itr-setup': 'kpi_setup_form',
   itr_setup_form: 'kpi_setup_form',
@@ -200,31 +199,6 @@ export const AUTHORIZATION_MODULE_DEFINITIONS = [
   {
     slug: 'agp_form',
     name: 'AGP Form',
-    actions: ['add', 'view', 'list', 'update', 'delete'] as const,
-  },
-  {
-    slug: 'plant_maintenance_master_form',
-    name: 'Plant Maintenance Master Form',
-    actions: ['add', 'view', 'list', 'update', 'delete'] as const,
-  },
-  {
-    slug: 'husky_form',
-    name: 'Husky Form',
-    actions: ['add', 'view', 'list', 'update', 'delete'] as const,
-  },
-  {
-    slug: 'itr_form',
-    name: 'ITR Form',
-    actions: ['add', 'view', 'list', 'update', 'delete'] as const,
-  },
-  {
-    slug: 'sub_component_defination_form',
-    name: 'Sub Component Defination Form',
-    actions: ['add', 'view', 'list', 'update', 'delete'] as const,
-  },
-  {
-    slug: 'maintenance_activity_defination_form',
-    name: 'Maintenance Activity Defination Form',
     actions: ['add', 'view', 'list', 'update', 'delete'] as const,
   },
   {

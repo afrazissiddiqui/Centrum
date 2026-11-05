@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, concatMap, forkJoin, from, last, map, of, scan, switchMap, tap } from 'rxjs';
-import { apiUrl } from '../config/api.config';
+import { apiUrl, publicApiUrl } from '../config/api.config';
 import { formatDateOfBirthFromApi, formatDateForInput, formatDateToApiIso } from '../utils/date-format.util';
 import { sanitizeApiText } from '../utils/api-text.util';
 import { normalizeEmploymentStatus } from '../utils/employment-status.util';
@@ -267,8 +267,8 @@ export interface EmployeeMasterDataRecord {
 }
 
 const EMPLOYEE_PROFILE_ADD_URL = apiUrl('employee-profile-add');
-const EMPLOYEE_PROFILE_LIST_URL = apiUrl('employee-profile-list');
-const EMPLOYEE_PROFILE_VIEW_URL = apiUrl('employee-profile-detail');
+const EMPLOYEE_PROFILE_LIST_URL = publicApiUrl('employee-profile-list');
+const EMPLOYEE_PROFILE_VIEW_URL = publicApiUrl('employee-profile-detail');
 const EMPLOYEE_PROFILE_UPDATE_URL = apiUrl('employee-profile-update');
 const EMPLOYEE_PROFILE_DELETE_URL = apiUrl('employee-profile-delete');
 

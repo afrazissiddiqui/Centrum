@@ -57,34 +57,6 @@ export const HR_MENU_OPTIONS: HrMenuOption[] = [
     { moduleSlug: 'purchase_request_form', action: 'list' },
   ] } },
   {
-    label: 'Plant maintenance',
-    value: 'plant-maintenance',
-    icon: 'factory',
-    children: [
-      {
-        label: 'Main Form',
-        value: 'plant-maintenance/main-form',
-        icon: 'form',
-        route: '/plant-maintenance/main-form',
-        access: { anyOf: [
-          { moduleSlug: 'plant_maintenance_master_form', action: 'list' },
-          { moduleSlug: 'husky_form', action: 'list' },
-          { moduleSlug: 'itr_form', action: 'list' },
-        ] },
-      },
-      {
-        label: 'Setup Form',
-        value: 'plant-maintenance/setup-form',
-        icon: 'settings',
-        route: '/plant-maintenance/setup-form',
-        access: { anyOf: [
-          { moduleSlug: 'sub_component_defination_form', action: 'list' },
-          { moduleSlug: 'maintenance_activity_defination_form', action: 'list' },
-        ] },
-      },
-    ],
-  },
-  {
     label: 'Setup',
     value: 'setup',
     icon: 'settings',

@@ -5,7 +5,6 @@ import { BehaviorSubject } from 'rxjs';
 import { ColumnResizeDirective } from '../../../column-resize';
 import { PageToolbarComponent } from '../../page-toolbar/page-toolbar';
 import { SidebarComponent, SidebarItem, SidebarSection } from '../../sidebar/sidebar';
-import { Router } from '@angular/router';
 import { AlertService } from '../../../services/alert.service';
 import {
   ApplicationFormAttachmentMeta,
@@ -70,7 +69,6 @@ export class RecruitmentComponent implements OnInit {
   });
 
   constructor(
-    private router: Router,
     private applicationFormService: ApplicationFormService,
     private readonly alertService: AlertService,
     private readonly permissionService: PermissionService,
@@ -450,57 +448,23 @@ export class RecruitmentComponent implements OnInit {
       return;
     }
 
-    void this.router.navigate(['/recruitment/create']);
+    this.alertService.error('Error', 'Under Construction');
   }
 
-  onUpdate(record: ApplicationFormRecord): void {
+  onUpdate(_record: ApplicationFormRecord): void {
     if (!this.permissionService.assertCan(APPLICATION_FORM_MODULE, 'update')) {
       return;
     }
 
-    const id = record.apiId;
-    if (!id) {
-      this.alertService.warning('Update', 'Unable to update this row: missing employee id.');
-      return;
-    }
-    void this.router.navigate(['/recruitment/edit', id]);
+    this.alertService.error('Error', 'Under Construction');
   }
 
-  async onDelete(record: ApplicationFormRecord): Promise<void> {
+  onDelete(_record: ApplicationFormRecord): void {
     if (!this.permissionService.assertCan(APPLICATION_FORM_MODULE, 'delete')) {
       return;
     }
 
-    const result = await this.alertService.confirm(
-      'Delete employee?',
-      `Remove ${record.EmployeeName} (${record.EmployeeCode}) from the list?`,
-    );
-    if (!result.isConfirmed) {
-      return;
-    }
-
-    const id = record.apiId;
-    if (!id) {
-      this.alertService.warning('Delete', 'Unable to delete this row: missing employee id.');
-      return;
-    }
-
-    this.applicationFormService.deleteEmployeeProfile(id).subscribe({
-      next: () => {
-        this.applicationFormService.removeApplicationRecord(record);
-        if (this.paginatedList.length === 0 && this.currentPage > 1) {
-          this.currentPage -= 1;
-        }
-        this.alertService.success('Deleted', 'Employee removed successfully.');
-      },
-      error: (error: unknown) => {
-        const errorMessage =
-          (error as { error?: { message?: string } })?.error?.message ||
-          (error as { message?: string })?.message ||
-          'Failed to delete employee.';
-        this.alertService.error('Delete Failed', errorMessage);
-      },
-    });
+    this.alertService.error('Error', 'Under Construction');
   }
 
   // Sidebar event handlers

@@ -29,7 +29,7 @@ export class App {
   protected readonly selectedHeaderTitle = signal('Home');
   protected readonly hoveredHeaderTitle = signal<string | null>(null);
   protected readonly selectedHrOption = signal<string>('dashboard');
-  /** Parent HR menu item whose child options are shown (e.g. plant maintenance). */
+  /** Parent HR menu item whose child options are shown. */
   protected readonly expandedHrMenuValue = signal<string | null>(null);
   /** Hide HR shellbar on full-page routes (e.g. login). */
   protected readonly showMainChrome = signal(true);
@@ -93,9 +93,7 @@ export class App {
     const initialKey = (this.router.url.split('?')[0] ?? '').replace(/^\//, '');
     this.showMainChrome.set(initialKey !== 'login');
     this.shellbarSearch.setPlaceholder(resolveShellbarSearchPlaceholder(initialKey));
-    if (initialKey.startsWith('plant-maintenance')) {
-      this.expandedHrMenuValue.set('plant-maintenance');
-    } else if (initialKey.startsWith('setup/') || initialKey === 'setup') {
+    if (initialKey.startsWith('setup/') || initialKey === 'setup') {
       this.expandedHrMenuValue.set('setup');
     } else if (this.isHrModuleRoute(initialKey)) {
       this.expandedHrMenuValue.set('hr');
@@ -113,9 +111,7 @@ export class App {
 
         this.selectedHeaderTitle.set(mappedTitle);
         this.selectedHrOption.set(this.resolveHrOptionValue(routeKey));
-        if (routeKey.startsWith('plant-maintenance')) {
-          this.expandedHrMenuValue.set('plant-maintenance');
-        } else if (routeKey.startsWith('setup/') || routeKey === 'setup') {
+        if (routeKey.startsWith('setup/') || routeKey === 'setup') {
           this.expandedHrMenuValue.set('setup');
         } else if (this.isHrModuleRoute(routeKey)) {
           this.expandedHrMenuValue.set('hr');
@@ -290,7 +286,6 @@ export class App {
   private collapseHrSubmenuUnlessActiveRoute(): void {
     const routeKey = (this.router.url.split('?')[0] ?? '').replace(/^\//, '');
     if (
-      !routeKey.startsWith('plant-maintenance') &&
       !routeKey.startsWith('setup/') &&
       routeKey !== 'setup' &&
       !this.isHrModuleRoute(routeKey)
@@ -313,12 +308,6 @@ export class App {
   }
 
   private resolveHrOptionValue(routeKey: string): string {
-    if (routeKey.startsWith('plant-maintenance/')) {
-      return routeKey;
-    }
-    if (routeKey === 'plant-maintenance') {
-      return 'plant-maintenance';
-    }
     if (routeKey.startsWith('setup/')) {
       return routeKey;
     }

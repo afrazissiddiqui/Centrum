@@ -14,6 +14,26 @@ describe('ApplicationFormService', () => {
     service = TestBed.inject(ApplicationFormService);
   });
 
+  it('loads employee profiles from the public employee profile list API', () => {
+    service.fetchEmployeeProfiles().subscribe();
+
+    const request = TestBed.inject(HttpTestingController).expectOne(
+      'http://116.203.172.106:8084/centrum_test/public/api/employee-profile-list',
+    );
+    expect(request.request.method).toBe('GET');
+    request.flush([]);
+  });
+
+  it('loads employee profile details from the public employee profile API', () => {
+    service.fetchEmployeeProfileDetail(1).subscribe();
+
+    const request = TestBed.inject(HttpTestingController).expectOne(
+      'http://116.203.172.106:8084/centrum_test/public/api/employee-profile-detail/1',
+    );
+    expect(request.request.method).toBe('GET');
+    request.flush({ data: { id: 1 } });
+  });
+
   it('continues from the intended sequence when the list includes a later outlier cluster', () => {
     (service as any).applicationRecords.set([
       { EmployeeCode: 'Emp-00000254' },

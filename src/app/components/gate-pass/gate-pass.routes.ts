@@ -1,3 +1,4 @@
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
 import { GatePassShellComponent } from './gate-pass-shell';
 import { IgpComponent } from './igp/igp';
@@ -8,6 +9,12 @@ import { AgpComponent } from './agp/agp';
 import { CreateAgpComponent } from './agp/create-agp/create-agp';
 import { requireAccess, requirePermission } from '../../guards/permission.guard';
 import { GatePassRedirectComponent } from './gate-pass-redirect';
+import { AlertService } from '../../services/alert.service';
+
+function showGatePassUnderConstruction(): false {
+  inject(AlertService).error('Error', 'Under Construction');
+  return false;
+}
 
 export const gatePassRoutes: Routes = [
   {
@@ -31,7 +38,9 @@ export const gatePassRoutes: Routes = [
         'igp_form',
         'list',
       ),
+      showGatePassUnderConstruction,
     ],
+    canActivateChild: [showGatePassUnderConstruction],
     children: [
       { path: '', pathMatch: 'full', component: GatePassRedirectComponent },
       { path: 'igp', component: IgpComponent, canActivate: [requirePermission('igp_form', 'list')] },

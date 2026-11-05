@@ -278,11 +278,6 @@ export const routes: Routes = [
   },
   {
     path: '',
-    loadChildren: () => import('./components/Plant-Maintenance/plant-maintenance.routes').then((m) => m.plantMaintenanceRoutes),
-    canActivate: [authGuard],
-  },
-  {
-    path: '',
     loadChildren: () => import('./components/miscellaneous/miscellaneous.routes').then((m) => m.miscellaneousRoutes),
     canActivate: [authGuard],
   },

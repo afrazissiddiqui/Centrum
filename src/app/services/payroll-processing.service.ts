@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map, tap } from 'rxjs';
-import { apiUrl } from '../config/api.config';
+import { apiUrl, publicApiUrl } from '../config/api.config';
 
 export interface PayrollProcessingHeaderPayload {
   month: number;
@@ -98,7 +98,7 @@ export interface PayrollProcessingRecord {
   Details: PayrollProcessingDetailPayload[];
 }
 
-const PAYROLL_PROCESSING_LIST_URL = apiUrl('payroll-processing-list');
+const PAYROLL_PROCESSING_LIST_URL = publicApiUrl('payroll-processing-list');
 const PAYROLL_PROCESSING_ADD_URL = apiUrl('payroll-processing-add');
 const PAYROLL_PROCESSING_DETAIL_URL = apiUrl('payroll-processing-detail');
 
