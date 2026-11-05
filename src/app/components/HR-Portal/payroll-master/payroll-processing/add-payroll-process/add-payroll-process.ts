@@ -1167,15 +1167,12 @@ export class AddPayrollProcessComponent implements OnInit {
     rowsToSubmit: PayrollProcessRow[],
     missedEmployees: string[] = [],
   ): void {
-    const processedBy = this.authService.getSessionUser()?.id ?? Number(this.loggedInUserId());
-    if (!Number.isSafeInteger(processedBy) || processedBy <= 0) {
-      this.saving.set(false);
-      void this.alertService.errorAndWait(
-        'Payroll Not Saved',
-        'Reason: the logged-in user ID is unavailable.',
-      );
-      return;
-    }
+    const processedByCandidate = this.authService.getSessionUser()?.id ?? Number(this.loggedInUserId());
+    // Temporary frontend-only sessions have no operator ID; use 0 until sign-in is enabled.
+    const processedBy =
+      Number.isSafeInteger(processedByCandidate) && processedByCandidate > 0
+        ? processedByCandidate
+        : 0;
 
     const payload = this.buildPayload(rowsToSubmit, processedBy);
 

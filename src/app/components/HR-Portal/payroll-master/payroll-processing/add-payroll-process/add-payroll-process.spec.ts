@@ -1,5 +1,6 @@
 import '@angular/compiler';
-import { describe, expect, it } from 'vitest';
+import { of } from 'rxjs';
+import { describe, expect, it, vi } from 'vitest';
 import { AddPayrollProcessComponent } from './add-payroll-process';
 import { ApplicationFormRecord } from '../../../../../services/application-form.service';
 import {
@@ -21,6 +22,24 @@ import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
 import { selectPayrollEmployeesForSubmission } from '../payroll-employee-selection.util';
 
 describe('AddPayrollProcessComponent profile mapping', () => {
+  it('submits payroll with processedBy 0 when no session user ID is available', () => {
+    const component = Object.create(AddPayrollProcessComponent.prototype) as any;
+    const addPayrollProcessing = vi.fn(() => of({}));
+    Object.assign(component, {
+      authService: { getSessionUser: () => null },
+      loggedInUserId: () => '—',
+      saving: { set: vi.fn() },
+      payrollProcessingService: { addPayrollProcessing },
+      buildPayload: (_rows: unknown, processedBy: number) => ({ header: { processedBy } }),
+      alertService: { success: vi.fn() },
+      router: { navigateByUrl: vi.fn() },
+    });
+
+    component.submitPayrollRows([]);
+
+    expect(addPayrollProcessing).toHaveBeenCalledWith({ header: { processedBy: 0 } });
+  });
+
   it('submits the visible Advance value in the saved payroll advance field', () => {
     const component = Object.create(AddPayrollProcessComponent.prototype) as any;
     Object.assign(component, {
