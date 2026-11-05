@@ -439,13 +439,13 @@
                                   </div>
                                 } @else {
                                   <div class="comp-input-wrap">
-                                  @if (col.key !== 'overtimeHours') {
+                                  @if (col.key !== 'overtimeHours' && col.key !== 'absent') {
                                     <span class="comp-input-prefix">{{ currencyCode }}</span>
                                   }
                                   <input
                                       type="number"
                                       min="0"
-                                      step="0.01"
+                                      [step]="col.key === 'absent' ? '1' : '0.01'"
                                       class="comp-input"
                                       [ngModel]="getColumnValue(row, col)"
                                       (ngModelChange)="updateRowField(row.apiId, $any(col.key), $event)"

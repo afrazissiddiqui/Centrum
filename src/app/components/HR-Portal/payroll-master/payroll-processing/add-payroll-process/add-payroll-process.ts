@@ -128,6 +128,7 @@ export interface PayrollProcessRow {
   arrears: number;
   loanAdjustment: number;
   loanAdvForm: number;
+  absent: number;
   costToCompany: number;
   taxDeduction: number;
   approved: boolean;
@@ -267,6 +268,8 @@ export class AddPayrollProcessComponent implements OnInit {
     { key: 'grossSalary', label: 'Gross Salary', groupId: 'salary', type: 'readonly', minWidth: 152 },
     { key: 'netPayable', label: 'Payable Amount', groupId: 'salary', type: 'readonly', minWidth: 160 },
     { key: 'ratePerDay', label: 'Rate/Day', groupId: 'salary', type: 'readonly', minWidth: 130 },
+    { key: 'absent', label: 'Absent', groupId: 'salary', type: 'currency', minWidth: 110 },
+    { key: 'absentAmount', label: 'Absent Amount', groupId: 'salary', type: 'readonly', minWidth: 152 },
     { key: 'loanAdvForm', label: 'Advance', groupId: 'salary', type: 'currency', minWidth: 145 },
     { key: 'deductions', label: 'Deductions', groupId: 'salary', type: 'readonly', minWidth: 152 },
     { key: 'netPayableAfterTax', label: 'Balance', groupId: 'salary', type: 'readonly', minWidth: 152 },
@@ -363,6 +366,8 @@ export class AddPayrollProcessComponent implements OnInit {
       arrears: 0,
       loanAdjustment: 0,
       loanAdvForm: 0,
+      absent: 0,
+      absentAmount: 0,
       costToCompany: 0,
       taxDeduction: 0,
       netPayable: 0,
@@ -401,6 +406,8 @@ export class AddPayrollProcessComponent implements OnInit {
       totals.arrears += row.arrears;
       totals.loanAdjustment += row.loanAdjustment;
       totals.loanAdvForm += row.loanAdvForm;
+      totals.absent += row.absent;
+      totals.absentAmount += this.absentAmountForRow(row);
       totals.costToCompany += row.costToCompany;
       totals.taxDeduction += row.taxDeduction;
       totals.netPayable += this.grossPayableForRow(row);
@@ -635,6 +642,7 @@ export class AddPayrollProcessComponent implements OnInit {
       row.eobiEmployee +
       row.loanAdjustment +
       row.loanAdvForm +
+      this.absentAmountForRow(row) +
       row.taxDeduction
     );
   }
@@ -654,7 +662,7 @@ export class AddPayrollProcessComponent implements OnInit {
       eobiEmployee: row.eobiEmployee,
       loanDeduction: row.loanAdjustment,
       advanceDeduction: row.loanAdvForm,
-      lateAttendanceDeduction: 0,
+      lateAttendanceDeduction: this.absentAmountForRow(row),
     });
   }
 
@@ -678,16 +686,10 @@ export class AddPayrollProcessComponent implements OnInit {
       return this.grossPayableForRow(row);
     }
     if (column.key === 'ratePerDay') {
-      const year = this.selectedYear();
-      const month = this.selectedMonth();
-      const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-      let nonSundayDays = 0;
-      for (let day = 1; day <= daysInMonth; day += 1) {
-        if (new Date(Date.UTC(year, month - 1, day)).getUTCDay() !== 0) {
-          nonSundayDays += 1;
-        }
-      }
-      return row.grossSalary / nonSundayDays;
+      return this.ratePerDayForRow(row);
+    }
+    if (column.key === 'absentAmount') {
+      return this.absentAmountForRow(row);
     }
     if (column.key === 'netPayableAfterTax') {
       return this.netPayableAfterTaxForRow(row);
@@ -717,6 +719,23 @@ export class AddPayrollProcessComponent implements OnInit {
     return typeof value === 'number' ? value : String(value ?? '');
   }
 
+  private ratePerDayForRow(row: PayrollProcessRow): number {
+    const year = this.selectedYear();
+    const month = this.selectedMonth();
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    let nonSundayDays = 0;
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      if (new Date(Date.UTC(year, month - 1, day)).getUTCDay() !== 0) {
+        nonSundayDays += 1;
+      }
+    }
+    return row.grossSalary / nonSundayDays;
+  }
+
+  private absentAmountForRow(row: PayrollProcessRow): number {
+    return Math.round(this.ratePerDayForRow(row) * row.absent * 100) / 100;
+  }
+
   isColumnReadonlyForRow(row: PayrollProcessRow, column: PayrollColumnDef): boolean {
     if (column.type !== 'currency') {
       return true;
@@ -735,6 +754,9 @@ export class AddPayrollProcessComponent implements OnInit {
 
   formatColumnDisplay(row: PayrollProcessRow, column: PayrollColumnDef): string {
     const value = this.getColumnValue(row, column);
+    if (column.key === 'absent') {
+      return typeof value === 'number' ? value.toLocaleString('en-PK', { maximumFractionDigits: 2 }) : String(value);
+    }
     if (column.key === 'overtimeHours' || column.key === 'allowedLiters') {
       return typeof value === 'number'
         ? value.toLocaleString('en-PK', { maximumFractionDigits: 2 })
@@ -766,8 +788,18 @@ export class AddPayrollProcessComponent implements OnInit {
   }
 
   getGroupTotal(column: PayrollColumnDef): number | null {
-    if (column.key === 'approved' || column.key === 'paySlip' || column.key === 'ratePerDay') {
+    if (
+      column.key === 'approved' ||
+      column.key === 'paySlip' ||
+      column.key === 'ratePerDay'
+    ) {
       return null;
+    }
+    if (column.key === 'absent') {
+      return this.groupTotals().absent;
+    }
+    if (column.key === 'absentAmount') {
+      return this.groupTotals().absentAmount;
     }
     if (column.key === 'netPayable') {
       return this.groupTotals().netPayable;
@@ -796,7 +828,7 @@ export class AddPayrollProcessComponent implements OnInit {
     if (total === null) {
       return '';
     }
-    if (column.key === 'allowedLiters' || column.key === 'overtimeHours') {
+    if (column.key === 'allowedLiters' || column.key === 'overtimeHours' || column.key === 'absent') {
       return total.toLocaleString('en-PK', { maximumFractionDigits: 2 });
     }
     return this.formatMoney(total);
@@ -884,6 +916,9 @@ export class AddPayrollProcessComponent implements OnInit {
       ['Salary', this.formatMoney(row.grossSalary)],
       ['Gross Salary', this.formatMoney(row.grossSalary)],
       ['Payable Amount', this.formatMoney(this.grossPayableForRow(row))],
+      ['Rate/Day', this.formatMoney(this.ratePerDayForRow(row))],
+      ['Absent', row.absent],
+      ['Absent Amount', this.formatMoney(this.absentAmountForRow(row))],
       ['Advance', this.formatMoney(row.loanAdvForm)],
       ['Deductions', this.formatMoney(this.totalDeductionsForRow(row))],
       ['Balance', this.formatMoney(this.netPayableAfterTaxForRow(row))],
@@ -965,6 +1000,7 @@ export class AddPayrollProcessComponent implements OnInit {
       'arrears',
       'loanAdjustment',
       'loanAdvForm',
+      'absent',
       'childBenefits',
       'costToCompany',
     ];
@@ -1408,6 +1444,7 @@ export class AddPayrollProcessComponent implements OnInit {
       arrears: 0,
       loanAdjustment: 0,
       loanAdvForm: 0,
+      absent: 0,
       costToCompany: 0,
       taxDeduction: 0,
       approved: this.approvalForEmployee(this.resolveEmployeeKey(record)),
@@ -1494,6 +1531,7 @@ export class AddPayrollProcessComponent implements OnInit {
       arrears: 0,
       loanAdjustment: this.resolvePayrollLoanAdjustment(employeeCode, employeeName),
       loanAdvForm: this.resolvePayrollAdvanceDeduction(employeeCode, employeeName),
+      absent: this.parseAmount(remuneration?.totalLeaves ?? 0),
       costToCompany: 0,
       taxDeduction: 0,
       approved: this.approvalForEmployee(record.apiId ?? record.EmployeeCode),
@@ -1560,7 +1598,13 @@ export class AddPayrollProcessComponent implements OnInit {
       row.arrears +
       gratuity +
       providentFund -
-      (socialSecurityPunjab + socialSecurityKpk + eobiEmployee + providentFund + row.loanAdjustment + row.loanAdvForm);
+      (socialSecurityPunjab +
+        socialSecurityKpk +
+        eobiEmployee +
+        providentFund +
+        row.loanAdjustment +
+        row.loanAdvForm +
+        this.absentAmountForRow(row));
     const taxDeduction = computeMonthlyWithholdingTax(
       grossSalaryBreakdown.grossSalaryInBank,
       this.withholdingTaxBrackets(),
