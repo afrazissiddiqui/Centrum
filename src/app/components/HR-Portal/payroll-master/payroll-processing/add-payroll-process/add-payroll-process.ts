@@ -1561,7 +1561,7 @@ export class AddPayrollProcessComponent implements OnInit {
       loanAdvForm: this.resolvePayrollAdvanceDeduction(employeeCode, employeeName),
       deductions: 0,
       absent: this.parseAmount(remuneration?.totalLeaves ?? 0),
-      extraWorkingDay: 0,
+      extraWorkingDay: this.parseAmount(remuneration?.overTimeApplicable ?? 0),
       rateExtraDay: 0,
       costToCompany: 0,
       taxDeduction: 0,
