@@ -2196,7 +2196,10 @@ export class ApplicationFormService {
       (loginSource ? pickFrom(loginSource, camel, snake) : '') || pickFrom(item, camel, snake);
 
     const overTimeRaw = pickRem('overTimeApplicable', 'over_time_applicable');
-    const overTimeApplicable = this.yesNoFromApi(overTimeRaw);
+    const overTimeApplicable =
+      overTimeRaw.trim() !== '' && Number.isFinite(Number(overTimeRaw))
+        ? overTimeRaw
+        : this.yesNoFromApi(overTimeRaw);
     const apiMaximumLoanCapacity = pickRem('maximumLoanCapacity', 'maximum_loan_capacity');
     const maximumLoanAllowed = pickRem('maximumLoanAllowed', 'maximum_loan_allowed');
     const legacyLoanAmountAllowed = pickRem('loanAmountAllowed', 'loan_amount_allowed');

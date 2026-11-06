@@ -108,7 +108,7 @@ describe('AddPayrollProcessComponent profile mapping', () => {
           carAllowances: '',
           otherAllowances: '',
           dateOfJoining: '',
-          overTimeApplicable: '',
+          overTimeApplicable: '1',
           allowancesApplicable: '',
           eobiApplicable: '125.5',
           providentApplicable: '',
@@ -122,6 +122,7 @@ describe('AddPayrollProcessComponent profile mapping', () => {
     expect(row.loanAdvForm).toBe(10000);
     expect(row.deductions).toBe(25000);
     expect(row.rateExtraDay).toBe(125.5);
+    expect(row.extraWorkingDay).toBe(1);
   });
 });
 

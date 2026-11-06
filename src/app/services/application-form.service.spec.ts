@@ -286,7 +286,13 @@ describe('ApplicationFormService', () => {
         employeeCode: 'EMP-003',
         remuneration: { overTimeApplicable: 0 },
       }).detail.remuneration.overTimeApplicable,
-    ).toBe('No');
+    ).toBe('0');
+    expect(
+      (service as any).mapApiItemToFullRecord({
+        employeeCode: 'EMP-005',
+        remuneration: { overTimeApplicable: 1 },
+      }).detail.remuneration.overTimeApplicable,
+    ).toBe('1');
     expect(
       (service as any).mapApiItemToFullRecord({
         employeeCode: 'EMP-004',
