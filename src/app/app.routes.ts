@@ -182,6 +182,16 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'commission/schema-setup',
+    loadComponent: () => import('./components/commission/schema-setup/schema-setup').then((m) => m.SchemaSetupComponent),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'commission/mapping-teams',
+    loadComponent: () => import('./components/commission/mapping-teams/mapping-teams').then((m) => m.MappingTeamsComponent),
+    canActivate: [authGuard],
+  },
+  {
     path: 'setup/gl-account-determination',
     loadComponent: () => import('./components/setup/gl-account-determination/gl-account-determination').then((m) => m.GlAccountDeterminationComponent),
     canActivate: [authGuard, requirePermission('gl_account_determination_form', 'list')],

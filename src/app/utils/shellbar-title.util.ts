@@ -70,6 +70,8 @@ const EXACT_TITLES: Record<string, string> = {
   'setup/employee-roster': 'Employee Roster',
   'setup/issue-from-production-list': 'Issue For Production',
   'setup/issue-from-production': 'Issue For Production',
+  'commission/schema-setup': 'Commission Scheme Setup',
+  'commission/mapping-teams': 'Mappings & Teams',
 };
 
 const PREFIX_TITLES: Array<{ prefix: string; title: string }> = [
@@ -83,6 +85,7 @@ const PREFIX_TITLES: Array<{ prefix: string; title: string }> = [
   { prefix: 'job-specification-form', title: 'Job Specification' },
   { prefix: 'recruitment', title: 'Recruitment' },
   { prefix: 'gate-pass', title: 'Gate Pass' },
+  { prefix: 'commission', title: 'Commission Scheme Setup' },
   { prefix: 'setup', title: 'Setup' },
 ];
 

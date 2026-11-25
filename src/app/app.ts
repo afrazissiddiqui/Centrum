@@ -95,6 +95,8 @@ export class App {
     this.shellbarSearch.setPlaceholder(resolveShellbarSearchPlaceholder(initialKey));
     if (initialKey.startsWith('setup/') || initialKey === 'setup') {
       this.expandedHrMenuValue.set('setup');
+    } else if (initialKey.startsWith('commission/')) {
+      this.expandedHrMenuValue.set('comission');
     } else if (this.isHrModuleRoute(initialKey)) {
       this.expandedHrMenuValue.set('hr');
     }
@@ -113,6 +115,8 @@ export class App {
         this.selectedHrOption.set(this.resolveHrOptionValue(routeKey));
         if (routeKey.startsWith('setup/') || routeKey === 'setup') {
           this.expandedHrMenuValue.set('setup');
+        } else if (routeKey.startsWith('commission/')) {
+          this.expandedHrMenuValue.set('comission');
         } else if (this.isHrModuleRoute(routeKey)) {
           this.expandedHrMenuValue.set('hr');
         }
@@ -288,6 +292,7 @@ export class App {
     if (
       !routeKey.startsWith('setup/') &&
       routeKey !== 'setup' &&
+      !routeKey.startsWith('commission/') &&
       !this.isHrModuleRoute(routeKey)
     ) {
       this.expandedHrMenuValue.set(null);

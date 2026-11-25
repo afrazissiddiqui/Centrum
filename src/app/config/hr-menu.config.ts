@@ -57,6 +57,29 @@ export const HR_MENU_OPTIONS: HrMenuOption[] = [
     { moduleSlug: 'purchase_request_form', action: 'list' },
   ] } },
   {
+    label: 'Comission Module',
+    value: 'comission',
+    icon: 'opportunities',
+    children: [
+      { label: 'Comission Dashboard', value: 'comission/dashboard', icon: 'bbyd-dashboard' },
+      { label: 'Monthly Processing', value: 'comission/monthly-processing', icon: 'time-entry-request' },
+      {
+        label: 'Schema Setup',
+        value: 'commission/schema-setup',
+        icon: 'settings',
+        route: '/commission/schema-setup',
+      },
+      {
+        label: 'Mapping & Teams',
+        value: 'commission/mapping-teams',
+        icon: 'org-chart',
+        route: '/commission/mapping-teams',
+      },
+      { label: 'Comission Register', value: 'comission/register', icon: 'table-view' },
+      { label: 'Audit Trail', value: 'comission/audit-trail', icon: 'history' },
+    ],
+  },
+  {
     label: 'Setup',
     value: 'setup',
     icon: 'settings',

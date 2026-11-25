@@ -1,0 +1,219 @@
+<main class="commission-page" [class.is-resizing]="isResizingEditor()">
+  <header class="commission-toolbar">
+    <div class="commission-heading">
+      <h1>Commission Scheme Setup</h1>
+      <span class="toolbar-pill">Nov 2026 (Current)</span>
+      <label class="toolbar-select">
+        <span class="visually-hidden">Filter by branch</span>
+        <select [ngModel]="selectedBranch()" (ngModelChange)="selectedBranch.set($event)">
+          <option value="All Branches">All Branches (4)</option>
+          <option *ngFor="let branch of branches.slice(1)" [value]="branch">{{ branch }}</option>
+        </select>
+      </label>
+    </div>
+    <div class="toolbar-actions">
+      <button type="button" class="button button--secondary" (click)="exportSummary()">Export Summary</button>
+      <button type="button" class="button button--primary" (click)="fetchSapData()">
+        <ui5-icon name="refresh" aria-hidden="true"></ui5-icon>
+        Fetch SAP Data
+      </button>
+    </div>
+  </header>
+
+  @if (notice()) {
+    <div class="notice" role="status">{{ notice() }}</div>
+  }
+
+  <div class="commission-layout" [style.--editor-width]="editorWidth() + 'px'"
+       (pointermove)="resizeEditor($event)"
+       (pointerup)="stopEditorResize($event)"
+       (pointercancel)="stopEditorResize($event)">
+    <section class="schemes-panel" aria-labelledby="scheme-list-title">
+      <div class="schemes-heading">
+        <h2 id="scheme-list-title">Configured commission schemes</h2>
+        <nav class="category-tabs" aria-label="Filter schemes by type">
+          <button
+            *ngFor="let category of categories"
+            type="button"
+            [class.is-active]="selectedCategory() === category"
+            (click)="selectedCategory.set(category)"
+          >
+            {{ category }} <span>({{ countForCategory(category) }})</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="scheme-table-card">
+        <div class="table-tools">
+          <label class="search-field">
+            <ui5-icon name="search" aria-hidden="true"></ui5-icon>
+            <input
+              type="search"
+              placeholder="Search scheme code or branch..."
+              aria-label="Search scheme code or branch"
+              [ngModel]="searchText()"
+              (ngModelChange)="searchText.set($event)"
+            />
+          </label>
+          <span class="table-hint">Effective-date versioned rules</span>
+        </div>
+
+        <div class="table-scroll">
+          <table class="scheme-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Type</th>
+                <th class="numeric-cell">Rate</th>
+                <th>Branch / Scope</th>
+                <th>Validity</th>
+                <th>Status</th>
+                <th><span class="visually-hidden">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (scheme of filteredSchemes(); track scheme.id) {
+                <tr [class.is-selected]="selectedSchemeId() === scheme.id">
+                  <td class="scheme-code">{{ scheme.code }}</td>
+                  <td>{{ scheme.type }}</td>
+                  <td class="numeric-cell">{{ rateLabel(scheme) }}</td>
+                  <td>{{ scheme.branch }}</td>
+                  <td class="validity-cell">{{ validityLabel(scheme) }}</td>
+                  <td>
+                    <span class="status-badge" [class.status-badge--inactive]="scheme.status === 'Inactive'">
+                      {{ scheme.status }}
+                    </span>
+                  </td>
+                  <td class="row-actions">
+                    <button
+                      *ngIf="scheme.status === 'Active'; else viewAction"
+                      type="button"
+                      class="icon-button"
+                      [attr.aria-label]="'Edit ' + scheme.code"
+                      [title]="'Edit ' + scheme.code"
+                      (click)="editScheme(scheme)"
+                    >
+                      <ui5-icon name="edit" aria-hidden="true"></ui5-icon>
+                    </button>
+                    <ng-template #viewAction>
+                      <button
+                        type="button"
+                        class="icon-button"
+                        [attr.aria-label]="'View ' + scheme.code"
+                        [title]="'View ' + scheme.code"
+                        (click)="viewScheme(scheme)"
+                      >
+                        <ui5-icon name="detail-view" aria-hidden="true"></ui5-icon>
+                      </button>
+                    </ng-template>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" class="empty-state">No commission schemes match these filters.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div
+      class="editor-resize-handle"
+      role="separator"
+      aria-label="Resize Scheme Rule Editor"
+      aria-orientation="vertical"
+      aria-valuemin="360"
+      aria-valuemax="640"
+      [attr.aria-valuenow]="editorWidth()"
+      tabindex="0"
+      (pointerdown)="startEditorResize($event)"
+      (keydown)="resizeEditorWithKeyboard($event)"
+    ></div>
+
+    <aside class="editor-card" aria-labelledby="editor-title">
+      <div class="editor-heading">
+        <div>
+          <h2 id="editor-title">Scheme Rule Editor</h2>
+          <p>Amending rates preserves historical batches</p>
+        </div>
+        <span class="status-badge" [class.status-badge--inactive]="editorStatus() === 'Inactive'">
+          {{ editorStatus() }}
+        </span>
+      </div>
+
+      <form class="scheme-form" (ngSubmit)="saveScheme()">
+        <label class="form-field">
+          <span>Scheme Code</span>
+          <input name="code" [(ngModel)]="draft.code" placeholder="e.g. SCH-SLS-02" required />
+        </label>
+        <label class="form-field">
+          <span>Commission Type</span>
+          <select name="type" [(ngModel)]="draft.type">
+            <option *ngFor="let type of schemeTypes" [value]="type">{{ type }}</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Calculation Basis</span>
+          <select name="basis" [(ngModel)]="draft.basis">
+            <option *ngFor="let basis of calculationBases" [value]="basis">{{ basis }}</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Commission Rate</span>
+          <div class="rate-input">
+            <input name="rate" type="number" min="0" step="0.01" [(ngModel)]="draft.rate" required />
+            <select name="rateMode" aria-label="Commission rate type" [(ngModel)]="draft.rateMode">
+              <option value="Percentage">%</option>
+              <option value="Fixed amount">PKR</option>
+            </select>
+          </div>
+        </label>
+        <label class="form-field">
+          <span>Effective From</span>
+          <input name="effectiveFrom" type="date" [(ngModel)]="draft.effectiveFrom" required />
+        </label>
+        <label class="form-field">
+          <span>Effective To</span>
+          <input name="effectiveTo" type="date" [(ngModel)]="draft.effectiveTo" />
+        </label>
+        <label class="form-field">
+          <span>Branch</span>
+          <select name="branch" [(ngModel)]="draft.branch">
+            <option *ngFor="let branch of branches" [value]="branch">{{ branch }}</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Employee / Team</span>
+          <select name="employeeTeam" [(ngModel)]="draft.employeeTeam">
+            <option *ngFor="let team of employeeTeams" [value]="team">{{ team }}</option>
+          </select>
+        </label>
+        <label class="form-field">
+          <span>Min Target (PKR)</span>
+          <input name="minTarget" type="number" min="0" step="1000" [(ngModel)]="draft.minTarget" />
+        </label>
+        <label class="form-field">
+          <span>Max Cap (PKR)</span>
+          <input name="maxCap" type="number" min="0" step="1000" [(ngModel)]="draft.maxCap" placeholder="Optional cap" />
+        </label>
+
+        <label class="overlap-option">
+          <input
+            type="checkbox"
+            [ngModel]="preventOverlap()"
+            (ngModelChange)="preventOverlap.set($event)"
+            name="preventOverlap"
+          />
+          <span>Prevent overlapping active schemes</span>
+        </label>
+
+        <div class="form-actions">
+          <button type="button" class="button button--secondary" (click)="resetDraft()">Reset</button>
+          <button type="submit" class="button button--primary">Save Scheme</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+</main>
