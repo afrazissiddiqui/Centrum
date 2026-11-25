@@ -6,7 +6,7 @@
       <label class="toolbar-select">
         <span class="visually-hidden">Filter by branch</span>
         <select [ngModel]="selectedBranch()" (ngModelChange)="selectedBranch.set($event)">
-          <option value="All Branches">All Branches (4)</option>
+          <option value="All Branches">All Branches (5)</option>
           <option *ngFor="let branch of branches.slice(1)" [value]="branch">{{ branch }}</option>
         </select>
       </label>

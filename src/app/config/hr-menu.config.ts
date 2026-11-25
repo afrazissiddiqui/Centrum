@@ -61,8 +61,18 @@ export const HR_MENU_OPTIONS: HrMenuOption[] = [
     value: 'comission',
     icon: 'opportunities',
     children: [
-      { label: 'Comission Dashboard', value: 'comission/dashboard', icon: 'bbyd-dashboard' },
-      { label: 'Monthly Processing', value: 'comission/monthly-processing', icon: 'time-entry-request' },
+      {
+        label: 'Comission Dashboard',
+        value: 'commission/dashboard',
+        icon: 'bbyd-dashboard',
+        route: '/commission/dashboard',
+      },
+      {
+        label: 'Monthly Processing',
+        value: 'commission/monthly-processing',
+        icon: 'time-entry-request',
+        route: '/commission/monthly-processing',
+      },
       {
         label: 'Schema Setup',
         value: 'commission/schema-setup',

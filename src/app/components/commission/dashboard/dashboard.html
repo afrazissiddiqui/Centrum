@@ -1,0 +1,207 @@
+<main class="commission-dashboard-page">
+  <header class="dashboard-toolbar">
+    <div class="dashboard-heading">
+      <h1>Commission Dashboard</h1>
+      <span class="toolbar-pill">Nov 2026 (Current)</span>
+      <label class="toolbar-select">
+        <span class="visually-hidden">Filter by branch</span>
+        <select [ngModel]="selectedBranch()" (ngModelChange)="selectedBranch.set($event)">
+          <option value="All Branches">All Branches (4)</option>
+          <option *ngFor="let branch of branches.slice(1)" [value]="branch">{{ branch }}</option>
+        </select>
+      </label>
+    </div>
+    <div class="toolbar-actions">
+      <button type="button" class="button button--secondary" (click)="exportSummary()">Export Summary</button>
+      <button type="button" class="button button--primary" (click)="fetchSapData()">
+        <ui5-icon name="refresh" aria-hidden="true"></ui5-icon>
+        Fetch SAP Data
+      </button>
+    </div>
+  </header>
+
+  @if (notice()) {
+    <div class="notice" role="status">{{ notice() }}</div>
+  }
+
+  <section class="summary-cards" aria-label="Commission overview">
+    <article class="summary-card">
+      <div class="summary-card__top">
+        <span>Total Payable</span>
+        <ui5-icon name="account" aria-hidden="true"></ui5-icon>
+      </div>
+      <strong>PKR {{ formatPkr(totalPayable()) }}</strong>
+      <small>4 categories · 46 earners</small>
+    </article>
+    <article class="summary-card">
+      <div class="summary-card__top">
+        <span>Pending Approval</span>
+        <ui5-icon name="time-entry-request" aria-hidden="true"></ui5-icon>
+      </div>
+      <strong>PKR {{ formatPkr(pendingApprovalTotal()) }}</strong>
+      <small>{{ countForTab('Pending Approval') }} batches awaiting review</small>
+    </article>
+    <article class="summary-card">
+      <div class="summary-card__top">
+        <span>Transferred to Payroll</span>
+        <ui5-icon name="accept" aria-hidden="true"></ui5-icon>
+      </div>
+      <strong>PKR {{ formatPkr(transferredTotal()) }}</strong>
+      <small>{{ countForTab('Transferred') }} batches posted to register</small>
+    </article>
+    <article class="summary-card summary-card--warning">
+      <div class="summary-card__top">
+        <span>Mapping Exceptions</span>
+        <ui5-icon name="decline" aria-hidden="true"></ui5-icon>
+      </div>
+      <strong>2 Unmapped</strong>
+      <small>SAP SlpCode 14 &amp; 19 missing</small>
+    </article>
+  </section>
+
+  <section class="category-section" aria-labelledby="categories-title">
+    <div class="section-heading">
+      <h2 id="categories-title">Commission categories</h2>
+      <span>SAP Business One source breakdown</span>
+    </div>
+    <div class="category-cards">
+      @for (category of categories; track category.title) {
+        <button type="button" class="category-card" (click)="openCategory(category)">
+          <span class="category-card__top">
+            <span>{{ category.title }}</span>
+            <ui5-icon [attr.name]="category.icon" aria-hidden="true"></ui5-icon>
+          </span>
+          <strong>PKR {{ formatPkr(category.amount) }}</strong>
+          <small>{{ category.source }}</small>
+        </button>
+      }
+    </div>
+  </section>
+
+  <div class="dashboard-lower-layout">
+    <section class="batch-section" aria-labelledby="batches-title">
+      <div class="batch-section-heading">
+        <h2 id="batches-title">Monthly calculation &amp; transfer batches</h2>
+        <nav class="batch-tabs" aria-label="Filter batches by status">
+          @for (tab of tabs; track tab) {
+            <button
+              type="button"
+              [class.is-active]="selectedTab() === tab"
+              (click)="selectTab(tab)"
+            >
+              {{ tab }} <span>({{ countForTab(tab) }})</span>
+            </button>
+          }
+        </nav>
+      </div>
+
+      <div class="batch-table-card">
+        <div class="batch-table-tools">
+          <label class="search-field">
+            <ui5-icon name="search" aria-hidden="true"></ui5-icon>
+            <input
+              type="search"
+              placeholder="Filter by batch ID, branch, or category..."
+              aria-label="Filter commission batches"
+              [ngModel]="searchText()"
+              (ngModelChange)="searchText.set($event)"
+            />
+          </label>
+          <span>Showing {{ visibleBatches().length }} of {{ countForTab(selectedTab()) }} batches</span>
+        </div>
+        <div class="table-scroll">
+          <table class="batch-table">
+            <thead>
+              <tr>
+                <th>Batch ID</th>
+                <th>Category</th>
+                <th>Branch</th>
+                <th class="numeric-cell">PKR</th>
+                <th>Status</th>
+                <th class="action-column">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (batch of visibleBatches(); track batch.id) {
+                <tr>
+                  <td class="batch-id">{{ batch.id }}</td>
+                  <td>{{ batch.category }}</td>
+                  <td>{{ batch.branch }}</td>
+                  <td class="numeric-cell amount-cell">{{ formatPkr(batch.amount) }}</td>
+                  <td>
+                    <span class="status-badge" [ngClass]="'status-badge--' + batch.status.toLowerCase()">
+                      {{ batch.status }}
+                    </span>
+                  </td>
+                  <td class="action-column">
+                    <button
+                      type="button"
+                      class="icon-button"
+                      [attr.aria-label]="'Open ' + batch.id + ' in monthly processing'"
+                      [title]="'Open ' + batch.id"
+                      (click)="openMonthlyProcessing()"
+                    >
+                      <ui5-icon
+                        [attr.name]="batch.status === 'Transferred' ? 'detail-view' : batch.status === 'Submitted' ? 'discussion' : 'slim-arrow-right'"
+                        aria-hidden="true"
+                      ></ui5-icon>
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="6" class="empty-state">No commission batches match these filters.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <aside class="dashboard-side-panels">
+      <section class="side-card alerts-card" aria-labelledby="alerts-title">
+        <div class="side-card-heading">
+          <div>
+            <h2 id="alerts-title">SAP Alerts</h2>
+            <p>Required before payroll transfer</p>
+          </div>
+          <span class="warning-count">2 Warnings</span>
+        </div>
+        <div class="alert-list">
+          @for (alert of alerts; track alert.source) {
+            <div class="alert-item">
+              <div class="alert-item__heading">
+                <strong>{{ alert.source }}</strong>
+                <span>{{ alert.status }}</span>
+              </div>
+              <p>{{ alert.detail }}</p>
+            </div>
+          }
+        </div>
+        <div class="side-card-actions">
+          <button type="button" class="button button--primary" (click)="resolveMappings()">Resolve Mappings</button>
+        </div>
+      </section>
+
+      <section class="side-card earners-card" aria-labelledby="earners-title">
+        <div class="side-card-heading">
+          <h2 id="earners-title">Top Earners</h2>
+          <button type="button" class="text-button" (click)="openRegister()">View Register</button>
+        </div>
+        <button
+          *ngFor="let earner of topEarners"
+          type="button"
+          class="earner-row"
+          (click)="openRegister()"
+        >
+          <span>
+            <strong>{{ earner.employee }}</strong>
+            <small>{{ earner.summary }}</small>
+          </span>
+          <b>PKR {{ formatPkr(earner.amount) }}</b>
+        </button>
+      </section>
+    </aside>
+  </div>
+</main>

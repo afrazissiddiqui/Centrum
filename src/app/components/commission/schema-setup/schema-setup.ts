@@ -57,7 +57,7 @@ const INITIAL_SCHEMES: CommissionScheme[] = [
     type: 'Executive',
     rate: 1.5,
     rateMode: 'Percentage',
-    branch: 'Lahore Main',
+    branch: 'DHA',
     effectiveFrom: '2026-01-01',
     effectiveTo: '',
     status: 'Active',
@@ -72,7 +72,7 @@ const INITIAL_SCHEMES: CommissionScheme[] = [
     type: 'Production',
     rate: 5,
     rateMode: 'Fixed amount',
-    branch: 'Faisalabad Plant',
+    branch: 'Johar Town',
     effectiveFrom: '2026-08-01',
     effectiveTo: '',
     status: 'Active',
@@ -87,7 +87,7 @@ const INITIAL_SCHEMES: CommissionScheme[] = [
     type: 'Assembly',
     rate: 1,
     rateMode: 'Percentage',
-    branch: 'Teams A, B, C',
+    branch: 'MB',
     effectiveFrom: '2026-09-01',
     effectiveTo: '',
     status: 'Active',
@@ -173,8 +173,8 @@ export class SchemaSetupComponent {
 
   readonly categories = ['All', 'Sales', 'Executive', 'Production', 'Assembly'];
   readonly schemeTypes = ['Employee Sales', 'Executive', 'Production', 'Assembly'];
-  readonly branches = ['All Branches', 'Lahore Main', 'Faisalabad Plant', 'Teams A, B, C'];
-  readonly calculationBases = ['% of Eligible Amount', 'Flat Amount', 'Per Unit'];
+  readonly branches = ['All Branches', 'DHA', 'Johar Town', 'MB', 'SAM', 'RUDA'];
+  readonly calculationBases = ['% of Eligible Amount', 'Rate', 'Per Unit'];
   readonly employeeTeams = [
     'All Sales Employees',
     'All Executives',

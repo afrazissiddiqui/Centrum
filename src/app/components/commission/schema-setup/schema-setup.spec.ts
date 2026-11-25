@@ -8,6 +8,20 @@ describe('SchemaSetupComponent', () => {
     }).compileComponents();
   });
 
+  it('offers the configured branch values', () => {
+    const fixture = TestBed.createComponent(SchemaSetupComponent);
+    const component = fixture.componentInstance;
+
+    expect(component.branches).toEqual([
+      'All Branches',
+      'DHA',
+      'Johar Town',
+      'MB',
+      'SAM',
+      'RUDA',
+    ]);
+  });
+
   it('updates the selected scheme without adding another row', () => {
     const fixture = TestBed.createComponent(SchemaSetupComponent);
     const component = fixture.componentInstance;

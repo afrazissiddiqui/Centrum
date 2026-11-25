@@ -197,6 +197,16 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'commission/monthly-processing',
+    loadComponent: () => import('./components/commission/monthly-processing/monthly-processing').then((m) => m.MonthlyProcessingComponent),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'commission/dashboard',
+    loadComponent: () => import('./components/commission/dashboard/dashboard').then((m) => m.CommissionDashboardComponent),
+    canActivate: [authGuard],
+  },
+  {
     path: 'setup/gl-account-determination',
     loadComponent: () => import('./components/setup/gl-account-determination/gl-account-determination').then((m) => m.GlAccountDeterminationComponent),
     canActivate: [authGuard, requirePermission('gl_account_determination_form', 'list')],
