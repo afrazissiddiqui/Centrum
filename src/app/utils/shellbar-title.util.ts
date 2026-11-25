@@ -72,6 +72,7 @@ const EXACT_TITLES: Record<string, string> = {
   'setup/issue-from-production': 'Issue For Production',
   'commission/schema-setup': 'Commission Scheme Setup',
   'commission/mapping-teams': 'Mappings & Teams',
+  'commission/register': 'Commission Register',
 };
 
 const PREFIX_TITLES: Array<{ prefix: string; title: string }> = [

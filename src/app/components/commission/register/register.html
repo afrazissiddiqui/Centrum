@@ -1,0 +1,198 @@
+<main class="commission-register-page">
+  <header class="register-toolbar">
+    <div class="register-heading">
+      <h1>Commission Register</h1>
+      <span class="toolbar-pill">Nov 2026 (Current)</span>
+      <label class="toolbar-select">
+        <span class="visually-hidden">Filter by branch</span>
+        <select [ngModel]="selectedBranch()" (ngModelChange)="selectedBranch.set($event)">
+          <option value="All Branches">All Branches (4)</option>
+          <option *ngFor="let branch of branches.slice(1)" [value]="branch">{{ branch }}</option>
+        </select>
+      </label>
+    </div>
+    <div class="toolbar-actions">
+      <button type="button" class="button button--secondary" (click)="exportSummary()">Export Summary</button>
+      <button type="button" class="button button--primary" (click)="fetchSapData()">
+        <ui5-icon name="refresh" aria-hidden="true"></ui5-icon>
+        Fetch SAP Data
+      </button>
+    </div>
+  </header>
+
+  @if (notice()) {
+    <div class="notice" role="status">{{ notice() }}</div>
+  }
+
+  <section class="register-summary" aria-label="Commission totals">
+    <article class="summary-card">
+      <div class="summary-card__top">
+        <span>Register Total</span>
+        <ui5-icon name="account" aria-hidden="true"></ui5-icon>
+      </div>
+      <strong>PKR {{ formatPkr(registerTotal()) }}</strong>
+      <small>Consolidated Nov 2026 sample</small>
+    </article>
+    <article class="summary-card">
+      <div class="summary-card__top">
+        <span>Posted to Payroll</span>
+        <ui5-icon name="accept" aria-hidden="true"></ui5-icon>
+      </div>
+      <strong>PKR {{ formatPkr(postedTotal()) }}</strong>
+      <small>1 employee posted</small>
+    </article>
+    <article class="summary-card">
+      <div class="summary-card__top">
+        <span>Approved</span>
+        <ui5-icon name="validate" aria-hidden="true"></ui5-icon>
+      </div>
+      <strong>PKR {{ formatPkr(approvedTotal()) }}</strong>
+      <small>Ready for payroll transfer</small>
+    </article>
+    <article class="summary-card">
+      <div class="summary-card__top">
+        <span>Pending</span>
+        <ui5-icon name="time-entry-request" aria-hidden="true"></ui5-icon>
+      </div>
+      <strong>PKR {{ formatPkr(pendingTotal()) }}</strong>
+      <small>Awaiting supervisor sign-off</small>
+    </article>
+  </section>
+
+  <section class="register-content" aria-labelledby="register-title">
+    <div class="register-section-heading">
+      <h2 id="register-title">Employee-wise commission register</h2>
+      <div class="register-export-actions">
+        <button type="button" class="button button--secondary" (click)="exportExcel()">
+          <ui5-icon name="table-view" aria-hidden="true"></ui5-icon>
+          Export Excel
+        </button>
+        <button type="button" class="button button--secondary" (click)="exportPdf()">
+          <ui5-icon name="form" aria-hidden="true"></ui5-icon>
+          Export PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="register-table-card">
+      <div class="register-table-tools">
+        <div class="table-filters">
+          <label class="search-field">
+            <ui5-icon name="search" aria-hidden="true"></ui5-icon>
+            <input
+              type="search"
+              placeholder="Search employee..."
+              aria-label="Search employee"
+              [ngModel]="searchText()"
+              (ngModelChange)="searchText.set($event)"
+            />
+          </label>
+          <label class="status-filter">
+            <span class="visually-hidden">Filter by status</span>
+            <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+              <option *ngFor="let status of statuses" [value]="status">{{ status }}</option>
+            </select>
+          </label>
+        </div>
+        <span class="table-hint">Click any row for SAP document drill-down</span>
+      </div>
+
+      <div class="table-scroll">
+        <table class="register-table">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th class="numeric-cell">Sales</th>
+              <th class="numeric-cell">Executive</th>
+              <th class="numeric-cell">Production</th>
+              <th class="numeric-cell">Assembly</th>
+              <th class="numeric-cell">Total (PKR)</th>
+              <th>Status</th>
+              <th class="drilldown-heading">Drill-down</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (record of filteredEmployees(); track record.id) {
+              <tr
+                tabindex="0"
+                [class.is-selected]="selectedEmployee()?.id === record.id"
+                [attr.aria-label]="'View SAP document details for ' + record.employee"
+                (click)="selectEmployee(record)"
+                (keydown.enter)="selectEmployee(record)"
+                (keydown.space)="selectEmployee(record); $event.preventDefault()"
+              >
+                <td class="employee-name">{{ record.employee }}</td>
+                <td class="numeric-cell">{{ formatPkr(record.sales) }}</td>
+                <td class="numeric-cell">{{ record.executive ? formatPkr(record.executive) : '–' }}</td>
+                <td class="numeric-cell">{{ formatPkr(record.production) }}</td>
+                <td class="numeric-cell">{{ formatPkr(record.assembly) }}</td>
+                <td class="numeric-cell total-cell">{{ formatPkr(employeeTotal(record)) }}</td>
+                <td>
+                  <span class="status-badge" [ngClass]="'status-badge--' + record.status.toLowerCase()">
+                    {{ record.status }}
+                  </span>
+                </td>
+                <td class="drilldown-cell"><span aria-hidden="true">›</span></td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="8" class="empty-state">No commission records match these filters.</td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr>
+              <th>Total</th>
+              <th class="numeric-cell">{{ formatPkr(totals().sales) }}</th>
+              <th class="numeric-cell">{{ formatPkr(totals().executive) }}</th>
+              <th class="numeric-cell">{{ formatPkr(totals().production) }}</th>
+              <th class="numeric-cell">{{ formatPkr(totals().assembly) }}</th>
+              <th class="numeric-cell total-cell">{{ formatPkr(totals().total) }}</th>
+              <td>{{ filteredEmployees().length }} employees</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  @if (selectedEmployee(); as employee) {
+    <section class="document-panel" aria-labelledby="drilldown-title">
+      <div class="document-heading">
+        <h2 id="drilldown-title">Document Drill-down: {{ employee.employee }}</h2>
+        <span>SAP DocEntry + LineNum audit</span>
+      </div>
+      <div class="table-scroll">
+        <table class="document-table">
+          <thead>
+            <tr>
+              <th>SAP Doc</th>
+              <th>Category</th>
+              <th>Scheme</th>
+              <th class="numeric-cell">Base</th>
+              <th class="numeric-cell">Rate</th>
+              <th class="numeric-cell">PKR</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (detail of selectedDetails(); track detail.document) {
+              <tr>
+                <td class="document-code">{{ detail.document }}</td>
+                <td>{{ detail.category }}</td>
+                <td class="scheme-code">{{ detail.scheme }}</td>
+                <td class="numeric-cell">{{ detail.base }}</td>
+                <td class="numeric-cell">{{ detail.rate }}</td>
+                <td class="numeric-cell total-cell">{{ formatPkr(detail.amount) }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6" class="empty-state">No SAP document details are available for this employee.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</main>

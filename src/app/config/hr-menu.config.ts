@@ -75,7 +75,12 @@ export const HR_MENU_OPTIONS: HrMenuOption[] = [
         icon: 'org-chart',
         route: '/commission/mapping-teams',
       },
-      { label: 'Comission Register', value: 'comission/register', icon: 'table-view' },
+      {
+        label: 'Comission Register',
+        value: 'commission/register',
+        icon: 'table-view',
+        route: '/commission/register',
+      },
       { label: 'Audit Trail', value: 'comission/audit-trail', icon: 'history' },
     ],
   },

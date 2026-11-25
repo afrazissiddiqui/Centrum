@@ -192,6 +192,11 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'commission/register',
+    loadComponent: () => import('./components/commission/register/register').then((m) => m.CommissionRegisterComponent),
+    canActivate: [authGuard],
+  },
+  {
     path: 'setup/gl-account-determination',
     loadComponent: () => import('./components/setup/gl-account-determination/gl-account-determination').then((m) => m.GlAccountDeterminationComponent),
     canActivate: [authGuard, requirePermission('gl_account_determination_form', 'list')],
