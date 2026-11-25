@@ -332,19 +332,56 @@
   min-height: 0;
   display: flex;
   align-items: stretch;
+  position: relative;
   overflow: hidden;
 }
 
 .comp-table-fixed {
-  flex: 0 0 280px;
+  flex: 0 0 auto;
   z-index: 3;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: #fff;
   border-right: 2px solid #8a9aa8;
   box-shadow: 6px 0 16px rgba(15, 23, 42, 0.05);
+}
+
+.comp-employee-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 6;
+  width: 10px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+  touch-action: none;
+  outline-offset: -2px;
+}
+
+.comp-employee-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  background: #8a9aa8;
+  transition: background 0.15s ease, width 0.15s ease;
+}
+
+.comp-employee-resizer:hover::after,
+.comp-employee-resizer:focus-visible::after {
+  left: 3px;
+  width: 4px;
+  background: #0070f2;
+}
+
+.comp-table-layout:has(.comp-employee-resizer:active) {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .comp-table-fixed .comp-pane-body {
@@ -460,7 +497,7 @@
 }
 
 .comp-grid--fixed {
-  width: 280px;
+  width: 100%;
   table-layout: fixed;
 }
 
@@ -471,15 +508,12 @@
 
 .comp-grid--fixed th:nth-child(2),
 .comp-grid--fixed td:nth-child(2) {
-  width: 120px;
+  width: auto;
+  min-width: 80px;
 }
 
 .comp-employee-name-col {
   width: 160px;
-}
-
-.comp-designation-col {
-  width: 120px;
 }
 
 .comp-grid--scroll {

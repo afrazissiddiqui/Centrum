@@ -29,6 +29,8 @@ describe('AddPayrollProcessComponent profile mapping', () => {
       authService: { getSessionUser: () => null },
       loggedInUserId: () => '—',
       saving: { set: vi.fn() },
+      editingPayrollId: () => null,
+      existingPayrollRecord: () => null,
       payrollProcessingService: { addPayrollProcessing },
       buildPayload: (_rows: unknown, processedBy: number) => ({ header: { processedBy } }),
       alertService: { success: vi.fn() },
@@ -40,6 +42,26 @@ describe('AddPayrollProcessComponent profile mapping', () => {
     expect(addPayrollProcessing).toHaveBeenCalledWith({ header: { processedBy: 0 } });
   });
 
+  it('updates the existing payroll and retains its processedBy when no session user ID is available', () => {
+    const component = Object.create(AddPayrollProcessComponent.prototype) as any;
+    const updatePayrollProcessing = vi.fn(() => of({}));
+    Object.assign(component, {
+      authService: { getSessionUser: () => null },
+      loggedInUserId: () => '—',
+      editingPayrollId: () => '12',
+      existingPayrollRecord: () => ({ Header: { processedBy: 7 } }),
+      saving: { set: vi.fn() },
+      payrollProcessingService: { updatePayrollProcessing },
+      buildPayload: (_rows: unknown, processedBy: number) => ({ header: { processedBy } }),
+      alertService: { success: vi.fn() },
+      back: vi.fn(),
+    });
+
+    component.submitPayrollRows([]);
+
+    expect(updatePayrollProcessing).toHaveBeenCalledWith('12', { header: { processedBy: 7 } });
+  });
+
   it('submits the visible Advance value in the saved payroll advance field', () => {
     const component = Object.create(AddPayrollProcessComponent.prototype) as any;
     Object.assign(component, {
@@ -48,6 +70,7 @@ describe('AddPayrollProcessComponent profile mapping', () => {
       selectedYear: () => 2026,
       remarks: () => '',
       selectedBranch: () => 'DHA',
+      existingPayrollRecord: () => null,
       branchOptions: [{ code: 'DHA', name: 'DHA' }],
       getSelectedPayrollMonth: () => '2026-01',
       ratePerDayForRow: () => 0,
@@ -123,6 +146,50 @@ describe('AddPayrollProcessComponent profile mapping', () => {
     expect(row.deductions).toBe(25000);
     expect(row.rateExtraDay).toBe(125.5);
     expect(row.extraWorkingDay).toBe(1);
+  });
+});
+
+describe('employee information panel resize', () => {
+  it('resizes the employee panel by pointer drag within the available width', () => {
+    const component = Object.create(AddPayrollProcessComponent.prototype) as any;
+    const layout = {
+      clientWidth: 1000,
+      getBoundingClientRect: () => ({ left: 100 }),
+    };
+    const setPointerCapture = vi.fn();
+    Object.assign(component, {
+      employeeInfoPanelWidth: { set: vi.fn(), update: vi.fn() },
+      tableLayout: () => ({ nativeElement: layout }),
+    });
+
+    component.onEmployeeInfoResizePointerDown({
+      currentTarget: { setPointerCapture },
+      pointerId: 1,
+      preventDefault: vi.fn(),
+    });
+    component.onEmployeeInfoResizePointerMove({ clientX: 450 });
+
+    expect(setPointerCapture).toHaveBeenCalledWith(1);
+    expect(component.employeeInfoPanelWidth.set).toHaveBeenCalledWith(350);
+  });
+
+  it('supports keyboard resizing and clamps the minimum panel width', () => {
+    const component = Object.create(AddPayrollProcessComponent.prototype) as any;
+    let width = 205;
+    Object.assign(component, {
+      employeeInfoPanelWidth: {
+        update: (update: (current: number) => number) => {
+          width = update(width);
+        },
+      },
+      tableLayout: () => ({ nativeElement: { clientWidth: 1000 } }),
+    });
+    const preventDefault = vi.fn();
+
+    component.onEmployeeInfoResizeKeydown({ key: 'ArrowLeft', preventDefault });
+
+    expect(width).toBe(200);
+    expect(preventDefault).toHaveBeenCalled();
   });
 });
 

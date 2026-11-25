@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map, tap } from 'rxjs';
-import { publicApiUrl } from '../config/api.config';
+import { apiUrl, publicApiUrl } from '../config/api.config';
 
 export interface PayrollProcessingHeaderPayload {
   month: number;
@@ -154,6 +154,7 @@ export interface PayrollProcessingRecord {
 const PAYROLL_PROCESSING_LIST_URL = publicApiUrl('payroll-processing-list');
 const PAYROLL_PROCESSING_ADD_URL = publicApiUrl('payroll-processing-add');
 const PAYROLL_PROCESSING_DETAIL_URL = publicApiUrl('payroll-processing-detail');
+const PAYROLL_PROCESSING_UPDATE_URL = apiUrl('payroll-processing-update');
 
 @Injectable({
   providedIn: 'root',
@@ -188,6 +189,14 @@ export class PayrollProcessingService {
 
   addPayrollProcessing(payload: PayrollProcessingSubmitPayload): Observable<unknown> {
     return this.http.post(PAYROLL_PROCESSING_ADD_URL, payload);
+  }
+
+  updatePayrollProcessing(
+    id: string | number,
+    payload: PayrollProcessingSubmitPayload,
+  ): Observable<unknown> {
+    const identifier = encodeURIComponent(String(id));
+    return this.http.post(`${PAYROLL_PROCESSING_UPDATE_URL}/${identifier}`, payload);
   }
 
   private mapDetailResponse(response: unknown): PayrollProcessingRecord {

@@ -803,12 +803,8 @@
 
           <div class="cjr-row">
             <label>Cost Center:</label>
-            <select [ngModel]="costCenter()" (ngModelChange)="costCenter.set($event)" (blur)="touch('costCenter')">
-              <option value="">No Selection</option>
-              @for (option of costCenterOptions(); track option.code) {
-                <option [value]="option.code">{{ option.code }} - {{ option.name }}</option>
-              }
-            </select>
+            <input type="text" [ngModel]="costCenter()" (ngModelChange)="costCenter.set($event)"
+              (blur)="touch('costCenter')" />
           </div>
 
           <div class="cjr-row">
@@ -1053,13 +1049,8 @@
                   <input type="text" class="cjr-leave-table__input cjr-leave-table__input--readonly"
                     [ngModel]="row.leaveType" readonly aria-label="Leave type" />
                   } @else {
-                  <select class="cjr-leave-table__input" [ngModel]="row.leaveType"
+                  <input type="text" class="cjr-leave-table__input" [ngModel]="row.leaveType"
                     (ngModelChange)="updateLeaveManagementRow(i, 'leaveType', $event)">
-                    <option value="">Select leave type</option>
-                    @for (option of leaveTypeOptions(); track option.id) {
-                    <option [value]="option.name">{{ option.name }}</option>
-                    }
-                  </select>
                   }
                 </td>
                 <td>

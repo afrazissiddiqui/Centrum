@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { PageToolbarComponent } from '../../../page-toolbar/page-toolbar';
 import { AlertService } from '../../../../services/alert.service';
 import {
@@ -219,6 +219,7 @@ const PAYROLL_EXCEL_COLUMNS: PayrollExcelColumn[] = [
 export class PayrollProcessingComponent implements OnInit {
   private readonly layout = inject(PayrollMasterLayoutService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly payrollProcessingService = inject(PayrollProcessingService);
   private readonly alertService = inject(AlertService);
   private readonly permissionService = inject(PermissionService);
@@ -252,6 +253,10 @@ export class PayrollProcessingComponent implements OnInit {
 
   trackPaginationItem(index: number, item: PaginationFooterItem): string {
     return paginationItemTrack(index, item);
+  }
+
+  get canUpdatePayroll(): boolean {
+    return this.permissionService.can(PAYROLL_PROCESSING_MODULE, 'update');
   }
 
   ngOnInit(): void {
@@ -666,6 +671,19 @@ export class PayrollProcessingComponent implements OnInit {
         );
       },
     });
+  }
+
+  editRecord(record: PayrollProcessingListRecord): void {
+    if (!this.permissionService.assertCan(PAYROLL_PROCESSING_MODULE, 'update')) {
+      return;
+    }
+
+    if (!record.Id) {
+      void this.alertService.warning('Edit', 'Unable to edit this row: missing payroll process id.');
+      return;
+    }
+
+    void this.router.navigate(['payroll-processing', record.Id, 'edit'], { relativeTo: this.route });
   }
 
   exportToExcel(record: PayrollProcessingListRecord): void {

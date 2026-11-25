@@ -5,12 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { CreateJobRequisitionComponent } from './create-job-requisition';
 import { ApplicationFormService } from '../../../../services/application-form.service';
-import { DepartmentsPrService } from '../../../../services/departments-pr.service';
 import { JobSpecificationService } from '../../../../services/job-specification.service';
-import { LeaveTypeService } from '../../../../services/leave-type.service';
-import { LeaveApplicationRecord, LeaveApplicationService } from '../../../../services/leave-application.service';
-import { AttendanceManagementService } from '../../../../services/attendance-management.service';
-import { WorkstationService } from '../../../../services/workstation.service';
 import { GatePassItemMasterService } from '../../../gate-pass/gate-pass-item-master.service';
 import { GatePassDepartmentService } from '../../../gate-pass/gate-pass-department.service';
 import { AlertService } from '../../../../services/alert.service';
@@ -31,14 +26,9 @@ describe('CreateJobRequisitionComponent validation', () => {
         formatEmployeeUserId: () => '',
         getNextEmployeeCode: () => '1234',
       } as unknown as ApplicationFormService,
-      { fetchLeaveApplications: () => of([]) } as unknown as LeaveApplicationService,
-      { fetchEmployeeRosterAttendance: () => of(new Map()) } as unknown as AttendanceManagementService,
-      { fetchWorkstations: () => of([]) } as unknown as WorkstationService,
       { fetchJobSpecificationsForApplication: () => ({ subscribe: () => undefined }) } as unknown as JobSpecificationService,
-      { fetchLeaveTypes: () => ({ subscribe: () => undefined }) } as unknown as LeaveTypeService,
       { listAllocatableAssets: () => [] } as unknown as GatePassItemMasterService,
       { ensureLoaded: () => ({ subscribe: () => undefined }), departmentNames: () => [] } as unknown as GatePassDepartmentService,
-      { ensureLoaded: () => of([]) } as unknown as DepartmentsPrService,
       {
         warning: () => undefined,
         error: () => undefined,
@@ -139,43 +129,6 @@ describe('CreateJobRequisitionComponent validation', () => {
     expect((component as any).advancePercentAllowed()).toBe('10000.00');
   });
 
-  it('refreshes the Unannounced Leave field from this year\'s leave applications', () => {
-    const applications = [{
-      EmployeeId: 'EMP-1001',
-      LeaveType: 'Unannounced Leave',
-      RequestStatus: 'Submitted',
-      RequestDate: '2026-02-01',
-      FromDate: '2026-02-01',
-      ToDate: '2026-02-03',
-      TotalLeaveDaysRequested: '3',
-    }] as LeaveApplicationRecord[];
-    (component as any).leaveApplicationService.fetchLeaveApplications = () => of(applications);
-
-    (component as any).refreshUnannouncedLeaveCount({ EmployeeCode: 'Emp-00001001' });
-
-    expect((component as any).unannouncedLeaves()).toBe('3');
-    expect((component as any).leaveManagementRows()).toEqual(jasmine.arrayContaining([{
-      leaveType: 'Unannounced Leave',
-      leavesAllocated: '0',
-      leavesAvailed: '3',
-    }]));
-  });
-
-  it('adds earlier unposted roster absences to the profile field and Leave Management row', () => {
-    (component as any).applicationFormService.fetchEmployeeRosterList = () => of([
-      { employee_id: 'EMP-1001', shift_date: '2026-08-03', shift: 'D' },
-      { employee_id: 'Emp-00001001', shift_date: '2026-08-04', shift: 'A' },
-    ]);
-    (component as any).refreshUnannouncedLeaveCount({ EmployeeCode: 'Emp-00001001' });
-
-    expect((component as any).unannouncedLeaves()).toBe('2');
-    expect((component as any).leaveManagementRows()).toEqual(jasmine.arrayContaining([{
-      leaveType: 'Unannounced Leave',
-      leavesAllocated: '0',
-      leavesAvailed: '2',
-    }]));
-  });
-
   it('allows the legacy code field to be edited in the login details form', async () => {
     await TestBed.configureTestingModule({
       imports: [CreateJobRequisitionComponent],
@@ -193,24 +146,8 @@ describe('CreateJobRequisitionComponent validation', () => {
           },
         },
         {
-          provide: LeaveApplicationService,
-          useValue: { fetchLeaveApplications: () => of([]) },
-        },
-        {
-          provide: AttendanceManagementService,
-          useValue: { fetchEmployeeRosterAttendance: () => of(new Map()) },
-        },
-        {
-          provide: WorkstationService,
-          useValue: { fetchWorkstations: () => of([]), workstations: () => [] },
-        },
-        {
           provide: JobSpecificationService,
           useValue: { fetchJobSpecificationsForApplication: () => of([]) },
-        },
-        {
-          provide: LeaveTypeService,
-          useValue: { fetchLeaveTypes: () => of([]) },
         },
         {
           provide: GatePassItemMasterService,
@@ -220,7 +157,6 @@ describe('CreateJobRequisitionComponent validation', () => {
           provide: GatePassDepartmentService,
           useValue: { ensureLoaded: () => of([]), departmentNames: () => [] },
         },
-        { provide: DepartmentsPrService, useValue: { ensureLoaded: () => of([]) } },
         { provide: AlertService, useValue: { warning: () => undefined, error: () => undefined } },
       ],
     }).compileComponents();

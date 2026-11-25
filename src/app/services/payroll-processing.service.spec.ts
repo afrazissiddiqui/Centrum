@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { publicApiUrl } from '../config/api.config';
+import { apiUrl, publicApiUrl } from '../config/api.config';
 import {
   PayrollProcessingListRecord,
   PayrollProcessingRecord,
@@ -73,6 +73,28 @@ describe('PayrollProcessingService', () => {
     const request = httpMock.expectOne(publicApiUrl('payroll-processing-add'));
     expect(request.request.method).toBe('POST');
     expect(request.request.body.details[0].advance).toBe(5000);
+    request.flush({ success: true });
+  });
+
+  it('updates an existing payroll using its id and the supplied payload', () => {
+    const payload: PayrollProcessingSubmitPayload = {
+      header: {
+        document_name: 'Payroll_Processing',
+        payrollMonth: '2026-02',
+        status: 'Pending',
+        branch: 'All Branches',
+        remarks: 'February payroll',
+        processedBy: 1,
+        processedDate: '2026-02-28',
+      },
+      details: [],
+    };
+
+    service.updatePayrollProcessing(12, payload).subscribe();
+
+    const request = httpMock.expectOne(apiUrl('payroll-processing-update/12'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual(payload);
     request.flush({ success: true });
   });
 

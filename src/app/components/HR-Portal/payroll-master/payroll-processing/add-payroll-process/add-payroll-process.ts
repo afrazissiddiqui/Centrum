@@ -13,7 +13,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import {
   Subscription,
   catchError,
@@ -42,6 +42,8 @@ import {
 import { OvertimeListRecord, OvertimeListService } from '../../../../../services/overtime-list.service';
 import {
   PayrollProcessingService,
+  PayrollProcessingDetailPayload,
+  PayrollProcessingRecord,
   PayrollProcessingSubmitPayload,
 } from '../../../../../services/payroll-processing.service';
 import { sumSubmittedOvertimeHours } from '../payroll-overtime.util';
@@ -213,6 +215,7 @@ export class AddPayrollProcessComponent implements OnInit {
   private readonly payrollProcessingService = inject(PayrollProcessingService);
   private readonly withholdingTaxService = inject(WithholdingTaxService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -220,6 +223,7 @@ export class AddPayrollProcessComponent implements OnInit {
   readonly overtimeRecords = signal<OvertimeListRecord[]>([]);
   readonly rowCache = signal<Map<string, PayrollProcessRow>>(new Map());
   readonly loading = signal(true);
+  readonly editingPayrollId = signal<string | null>(null);
   readonly loadingPageDetails = signal(false);
   readonly saving = signal(false);
   readonly currentPage = signal(1);
@@ -230,6 +234,7 @@ export class AddPayrollProcessComponent implements OnInit {
   readonly minimumWageAdjust = signal(0);
   readonly searchText = signal('');
   readonly selectedBranch = signal('');
+  readonly existingPayrollRecord = signal<PayrollProcessingRecord | null>(null);
   readonly branchOptions = GL_ACCOUNT_BRANCH_OPTIONS;
   readonly allApprovalsSelected = signal(false);
   readonly selectedMonth = signal(new Date().getMonth() + 1);
@@ -255,9 +260,12 @@ export class AddPayrollProcessComponent implements OnInit {
   readonly detailLoading = signal(false);
   readonly detailRecord = signal<ApplicationFormRecord | null>(null);
   readonly withholdingTaxBrackets = signal<WithholdingTaxRecord[]>([]);
+  readonly employeeInfoPanelWidth = signal(280);
 
+  private readonly tableLayout = viewChild<ElementRef<HTMLElement>>('tableLayout');
   private readonly fixedPane = viewChild<ElementRef<HTMLElement>>('fixedPane');
   private readonly scrollPane = viewChild<ElementRef<HTMLElement>>('scrollPane');
+  private resizingEmployeeInfoPanel = false;
   private syncingScroll = false;
   private pageDetailsSub?: Subscription;
   private pageDetailsGeneration = 0;
@@ -440,10 +448,150 @@ export class AddPayrollProcessComponent implements OnInit {
 
   ngOnInit(): void {
     this.destroyRef.onDestroy(() => this.pageDetailsSub?.unsubscribe());
+    const payrollId = this.route.snapshot.paramMap.get('id');
+    if (payrollId) {
+      this.editingPayrollId.set(payrollId);
+      this.loadExistingPayroll(payrollId);
+      return;
+    }
+
     this.loadWithholdingTaxes();
     this.loadLoanAdvances();
     this.loadOvertimeRecords();
     this.loadEmployees();
+  }
+
+  private loadExistingPayroll(id: string): void {
+    this.loading.set(true);
+    this.payrollProcessingService.fetchPayrollProcessingDetail(id).subscribe({
+      next: (record) => {
+        this.existingPayrollRecord.set(record);
+        const header = record.Header;
+        this.remarks.set(header.remarks);
+        this.fuelPriceAdjust.set(header.fuelPriceAdjust ?? 0);
+        this.minimumWageAdjust.set(header.minimumWageAdjust ?? 0);
+
+        const [yearText, monthText] = (header.payrollMonth || '').split('-');
+        const year = header.year || Number(yearText);
+        const month = header.month || Number(monthText);
+        if (Number.isInteger(year) && year > 0) {
+          this.selectedYear.set(year);
+        }
+        if (Number.isInteger(month) && month >= 1 && month <= 12) {
+          this.selectedMonth.set(month);
+        }
+
+        const savedBranch = header.branch?.trim();
+        if (savedBranch && savedBranch.toLowerCase() !== 'all branches') {
+          this.selectedBranch.set(
+            this.branchOptions.find(
+              (option) =>
+                option.code.toLowerCase() === savedBranch.toLowerCase() ||
+                option.name.toLowerCase() === savedBranch.toLowerCase(),
+            )?.code || resolveBranchCode(savedBranch) || savedBranch,
+          );
+        }
+
+        const summaries: ApplicationFormRecord[] = [];
+        const rows = new Map<string, PayrollProcessRow>();
+        for (const detail of record.Details) {
+          const employeeCode = detail.employeeCode || detail.employeeId;
+          if (!employeeCode) {
+            continue;
+          }
+          summaries.push({
+            EmployeeCode: employeeCode,
+            EmployeeName: detail.personName,
+            Department: detail.department,
+            EmployeeNature: detail.employmentNature,
+            Designation: detail.designation,
+            ReportingManager: '',
+            EmploymentType: detail.employmentType,
+            EmploymentStatus: '',
+            EmploymentCategory: detail.employeeCategory,
+            status: '',
+            apiId: employeeCode,
+          });
+          rows.set(employeeCode, this.mapSavedPayrollDetail(detail, employeeCode));
+          this.payrollDetailsLoaded.add(employeeCode);
+        }
+
+        this.employeeSummaries.set(summaries);
+        this.rowCache.set(rows);
+        this.currentPage.set(1);
+        this.loading.set(false);
+        this.cdr.markForCheck();
+      },
+      error: (error: unknown) => {
+        this.loading.set(false);
+        void this.alertService.error(
+          'Load Failed',
+          formatApiErrorMessage(error, 'Failed to load the existing payroll process.'),
+        );
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  private mapSavedPayrollDetail(
+    detail: PayrollProcessingDetailPayload,
+    apiId: string,
+  ): PayrollProcessRow {
+    return {
+      apiId,
+      employeeCode: detail.employeeCode || detail.employeeId,
+      personName: detail.personName,
+      username: detail.username,
+      costCenter: detail.costCenter,
+      designation: detail.designation,
+      department: detail.department,
+      employeeCategory: detail.employeeCategory,
+      employmentNature: detail.employmentNature,
+      employmentType: detail.employmentType,
+      jobTitle: detail.jobTitle,
+      location: detail.location,
+      workGradeLevel: detail.workGradeLevel,
+      dateOfJoining: detail.dateOfJoining,
+      yearsOfService: detail.yearsOfService,
+      overtimeApplicable: detail.overtimeApplicable,
+      allowancesApplicable: detail.allowancesApplicable,
+      eobiApplicable: detail.eobiApplicable,
+      providentApplicable: detail.providentApplicable,
+      basicSalary: detail.basicSalary,
+      grossSalary: detail.grossSalary,
+      grossSalaryInCash: detail.grossSalaryInCash,
+      grossSalaryInBank: detail.grossSalaryInBank,
+      childBenefits: detail.childBenefits,
+      paymentMode: detail.paymentMode,
+      medicalAllowance: detail.medicalAllowance,
+      allowedLiters: detail.allowedLiters,
+      monthlyFuelRate: detail.monthlyFuelRate,
+      fuelAllowance: detail.fuelAllowance,
+      mobileAllowance: detail.mobileAllowance,
+      carAllowance: detail.carAllowance,
+      otherAllowances: detail.otherAllowances,
+      bonus: detail.bonus,
+      lastMonthGrossSalary: detail.lastMonthGrossSalary,
+      overtimeHours: detail.overtimeHours,
+      overtime: detail.overtime,
+      providentFund: detail.providentFund,
+      providentFundEmployer: detail.providentFundEmployer,
+      socialSecurityPunjab: detail.socialSecurityPunjab,
+      socialSecurityKpk: detail.socialSecurityKpk,
+      gratuity: detail.gratuity,
+      eobiEmployee: detail.eobiEmployee,
+      eobiEmployer: detail.eobiEmployer,
+      arrears: detail.arrears,
+      loanAdjustment: detail.loanAdjustment,
+      loanAdvForm: detail.loanAdvForm,
+      deductions: detail.deductions,
+      absent: detail.absentDays,
+      extraWorkingDay: detail.extraWorkingDay || detail.extraWorkingDays,
+      rateExtraDay: detail.rateExtraDay,
+      costToCompany: detail.costToCompany,
+      taxDeduction: detail.taxDeduction,
+      approved: detail.approved,
+    };
   }
 
   isRowLoaded(apiId: string): boolean {
@@ -566,6 +714,47 @@ export class AddPayrollProcessComponent implements OnInit {
     this.syncingScroll = true;
     fixed.scrollTop = scroll.scrollTop;
     this.syncingScroll = false;
+  }
+
+  onEmployeeInfoResizePointerDown(event: PointerEvent): void {
+    this.resizingEmployeeInfoPanel = true;
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  onEmployeeInfoResizePointerMove(event: PointerEvent): void {
+    if (!this.resizingEmployeeInfoPanel) {
+      return;
+    }
+
+    const layout = this.tableLayout()?.nativeElement;
+    if (!layout) {
+      return;
+    }
+
+    const maxWidth = Math.max(200, Math.min(520, layout.clientWidth - 180));
+    const nextWidth = Math.max(200, Math.min(maxWidth, event.clientX - layout.getBoundingClientRect().left));
+    this.employeeInfoPanelWidth.set(nextWidth);
+  }
+
+  onEmployeeInfoResizePointerUp(event: PointerEvent): void {
+    this.resizingEmployeeInfoPanel = false;
+    const handle = event.currentTarget as HTMLElement;
+    if (handle.hasPointerCapture(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  onEmployeeInfoResizeKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+      return;
+    }
+
+    event.preventDefault();
+    const layout = this.tableLayout()?.nativeElement;
+    const maxWidth = Math.max(200, Math.min(520, (layout?.clientWidth ?? 700) - 180));
+    const delta = event.key === 'ArrowRight' ? 10 : -10;
+    this.employeeInfoPanelWidth.update((width) => Math.max(200, Math.min(maxWidth, width + delta)));
   }
 
   onFixedPaneScroll(event: Event): void {
@@ -1079,16 +1268,20 @@ export class AddPayrollProcessComponent implements OnInit {
       return;
     }
 
-    const employeeSummaries = this.filteredEmployeeSummaries();
+    const employeeSummaries = this.editingPayrollId()
+      ? this.employeeSummaries()
+      : this.filteredEmployeeSummaries();
     if (employeeSummaries.length === 0) {
       void this.alertService.validation('No employees match the current filters.');
       return;
     }
 
-    const summariesToSubmit = selectPayrollEmployeesForSubmission(
-      employeeSummaries,
-      (summary) => this.approvalForEmployee(this.resolveEmployeeKey(summary)),
-    );
+    const summariesToSubmit = this.editingPayrollId()
+      ? employeeSummaries
+      : selectPayrollEmployeesForSubmission(
+          employeeSummaries,
+          (summary) => this.approvalForEmployee(this.resolveEmployeeKey(summary)),
+        );
 
     const cachedRows = this.rowCache();
     const rowsByEmployee = new Map<string, PayrollProcessRow>();
@@ -1099,7 +1292,7 @@ export class AddPayrollProcessComponent implements OnInit {
       if (summary.detail) {
         rowsByEmployee.set(employeeKey, cachedRow ?? this.mapRecordToRow(summary));
         this.payrollDetailsLoaded.add(employeeKey);
-      } else if (cachedRow && this.payrollDetailsLoaded.has(employeeKey)) {
+      } else if (cachedRow && (this.editingPayrollId() || this.payrollDetailsLoaded.has(employeeKey))) {
         rowsByEmployee.set(employeeKey, cachedRow);
       } else {
         summariesToLoad.push(summary);
@@ -1172,12 +1365,15 @@ export class AddPayrollProcessComponent implements OnInit {
     const processedBy =
       Number.isSafeInteger(processedByCandidate) && processedByCandidate > 0
         ? processedByCandidate
-        : 0;
+        : this.existingPayrollRecord()?.Header.processedBy || 0;
 
     const payload = this.buildPayload(rowsToSubmit, processedBy);
 
-    this.payrollProcessingService
-      .addPayrollProcessing(payload)
+    const saveRequest = this.editingPayrollId()
+      ? this.payrollProcessingService.updatePayrollProcessing(this.editingPayrollId()!, payload)
+      : this.payrollProcessingService.addPayrollProcessing(payload);
+
+    saveRequest
       .pipe(finalize(() => this.saving.set(false)))
       .subscribe({
         next: () => {
@@ -1194,7 +1390,7 @@ export class AddPayrollProcessComponent implements OnInit {
           } else {
             void this.alertService.success(
               'Success',
-              `Payroll process saved for ${rowsToSubmit.length} employee(s).`,
+              `Payroll process ${this.editingPayrollId() ? 'updated' : 'saved'} for ${rowsToSubmit.length} employee(s).`,
             );
             this.back();
           }
@@ -1219,19 +1415,20 @@ export class AddPayrollProcessComponent implements OnInit {
       String(this.selectedMonth());
     const remarks = this.remarks().trim() || `${monthLabel} ${this.selectedYear()} Monthly Payroll`;
     const selectedBranch = this.selectedBranch();
+    const existingHeader = this.existingPayrollRecord()?.Header;
 
     return {
       header: {
-        document_name: 'Payroll_Processing',
+        document_name: existingHeader?.documentName || 'Payroll_Processing',
         payrollMonth: this.getSelectedPayrollMonth(),
-        status: 'Pending',
+        status: existingHeader?.status || 'Pending',
         branch:
           this.branchOptions.find((option) => option.code === selectedBranch)?.name ||
           selectedBranch ||
           'All Branches',
         remarks,
         processedBy,
-        processedDate: this.getProcessedDate(),
+        processedDate: existingHeader?.processedDate || this.getProcessedDate(),
       },
       details: rows.map((row) => ({
         employeeCode: row.employeeCode,

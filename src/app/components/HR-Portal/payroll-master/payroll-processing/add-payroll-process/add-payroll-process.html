@@ -2,11 +2,11 @@
   <div class="comp-topbar">
     <div class="comp-topbar__left">
       <button type="button" class="comp-back" (click)="back()" aria-label="Back">❮</button>
-      <h1 class="comp-topbar__title">Payroll Processing</h1>
+      <h1 class="comp-topbar__title">{{ editingPayrollId() ? 'Edit Payroll Process' : 'Payroll Processing' }}</h1>
     </div>
     <div class="comp-topbar__actions">
-      <button type="button" class="comp-btn comp-btn--primary" (click)="save()" [disabled]="loading() || loadingPageDetails() || saving() || filteredEmployeeSummaries().length === 0">
-        {{ saving() ? 'Saving…' : 'Save' }}
+      <button type="button" class="comp-btn comp-btn--primary" (click)="save()" [disabled]="loading() || loadingPageDetails() || saving() || (editingPayrollId() ? employeeSummaries().length : filteredEmployeeSummaries().length) === 0">
+        {{ saving() ? 'Saving…' : editingPayrollId() ? 'Update' : 'Save' }}
       </button>
     </div>
   </div>
@@ -126,8 +126,8 @@
         aria-busy="true"
         aria-label="Loading employee payroll data"
       >
-        <div class="comp-table-layout">
-          <div class="comp-table-fixed">
+        <div class="comp-table-layout" #tableLayout>
+          <div class="comp-table-fixed" [style.width.px]="employeeInfoPanelWidth()">
             <div class="comp-pane-head">
               <table class="comp-grid comp-grid--fixed">
                 <thead>
@@ -171,6 +171,22 @@
               </table>
             </div>
           </div>
+          <div
+            class="comp-employee-resizer"
+            role="separator"
+            aria-label="Resize employee information panel"
+            aria-orientation="vertical"
+            tabindex="0"
+            [attr.aria-valuenow]="employeeInfoPanelWidth()"
+            aria-valuemin="200"
+            aria-valuemax="520"
+            [style.left.px]="employeeInfoPanelWidth()"
+            (pointerdown)="onEmployeeInfoResizePointerDown($event)"
+            (pointermove)="onEmployeeInfoResizePointerMove($event)"
+            (pointerup)="onEmployeeInfoResizePointerUp($event)"
+            (pointercancel)="onEmployeeInfoResizePointerUp($event)"
+            (keydown)="onEmployeeInfoResizeKeydown($event)"
+          ></div>
 
           <div class="comp-table-scroll">
             <div class="comp-scroll-inner" [style.width.px]="scrollMinWidth()">
@@ -277,8 +293,8 @@
       </div>
     } @else {
       <div class="comp-table-card">
-          <div class="comp-table-layout">
-          <div class="comp-table-fixed">
+          <div class="comp-table-layout" #tableLayout>
+          <div class="comp-table-fixed" [style.width.px]="employeeInfoPanelWidth()">
             <div class="comp-pane-head">
               <table class="comp-grid comp-grid--fixed">
                 <thead>
@@ -336,6 +352,22 @@
               </table>
             </div>
           </div>
+          <div
+            class="comp-employee-resizer"
+            role="separator"
+            aria-label="Resize employee information panel"
+            aria-orientation="vertical"
+            tabindex="0"
+            [attr.aria-valuenow]="employeeInfoPanelWidth()"
+            aria-valuemin="200"
+            aria-valuemax="520"
+            [style.left.px]="employeeInfoPanelWidth()"
+            (pointerdown)="onEmployeeInfoResizePointerDown($event)"
+            (pointermove)="onEmployeeInfoResizePointerMove($event)"
+            (pointerup)="onEmployeeInfoResizePointerUp($event)"
+            (pointercancel)="onEmployeeInfoResizePointerUp($event)"
+            (keydown)="onEmployeeInfoResizeKeydown($event)"
+          ></div>
 
           <div class="comp-table-scroll">
             <div class="comp-scroll-inner" [style.width.px]="scrollMinWidth()">

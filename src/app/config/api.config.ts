@@ -27,4 +27,4 @@ export function apiUrl(endpoint: string, baseUrl = API_BASE_URL): string {
 export function publicApiUrl(endpoint: string, baseUrl = API_BASE_URL): string {
   const path = endpoint.replace(/^\/+/, '');
   return `${baseUrl}/public/api/${path}`;
-}
+} 

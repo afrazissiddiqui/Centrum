@@ -18,6 +18,7 @@ export const payrollMasterRoutes: Routes = [
         {
           anyOf: [
             { moduleSlug: 'payroll_processing_form', action: 'list' },
+            { moduleSlug: 'payroll_processing_form', action: 'update' },
             { moduleSlug: 'attendance_managment_form', action: 'list' },
             { moduleSlug: 'employee_roster_form', action: 'list' },
             { moduleSlug: 'tax_allowance_form', action: 'list' },
@@ -31,6 +32,7 @@ export const payrollMasterRoutes: Routes = [
     children: [
       { path: '', component: PayrollProcessingComponent, canActivate: [requirePermission('payroll_processing_form', 'list')] },
       { path: 'payroll-processing/create', component: AddPayrollProcessComponent, canActivate: [requirePermission('payroll_processing_form', 'add')] },
+      { path: 'payroll-processing/:id/edit', component: AddPayrollProcessComponent, canActivate: [requirePermission('payroll_processing_form', 'update')] },
       { path: 'attendance-managment', component: AttendanceManagmentComponent, canActivate: [requirePermission('attendance_managment_form', 'list')] },
       {
         path: 'unpaid-leave',
