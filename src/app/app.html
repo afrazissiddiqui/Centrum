@@ -77,16 +77,39 @@
           @if (option.children?.length && isHrOptionExpanded(option)) {
             <div class="hr-dropdown-submenu">
               @for (child of option.children; track child.value) {
-                <button
-                  class="hr-dropdown-item hr-dropdown-item--child"
-                  [class.is-selected]="isHrOptionSelected(child)"
-                  (click)="selectHrOption(child, $event)"
-                  (mouseenter)="previewHrOption(child.label)"
-                  type="button"
-                >
-                  <ui5-icon class="hr-dropdown-icon" [attr.name]="child.icon"></ui5-icon>
-                  <span class="hr-dropdown-label">{{ child.label }}</span>
-                </button>
+                <div>
+                  <button
+                    class="hr-dropdown-item hr-dropdown-item--child"
+                    [class.has-children]="child.children?.length"
+                    [class.is-expanded]="isNestedHrOptionExpanded(child)"
+                    [class.is-selected]="isHrOptionSelected(child)"
+                    (click)="selectNestedHrOption(child, $event)"
+                    (mouseenter)="previewHrOption(child.label)"
+                    type="button"
+                  >
+                    <ui5-icon class="hr-dropdown-icon" [attr.name]="child.icon"></ui5-icon>
+                    <span class="hr-dropdown-label">{{ child.label }}</span>
+                    @if (child.children?.length) {
+                      <ui5-icon class="hr-dropdown-chevron" name="slim-arrow-right"></ui5-icon>
+                    }
+                  </button>
+                  @if (child.children?.length && isNestedHrOptionExpanded(child)) {
+                    <div class="hr-dropdown-submenu hr-dropdown-submenu--nested">
+                      @for (grandchild of child.children; track grandchild.value) {
+                        <button
+                          class="hr-dropdown-item hr-dropdown-item--grandchild"
+                          [class.is-selected]="isHrOptionSelected(grandchild)"
+                          (click)="selectHrOption(grandchild, $event)"
+                          (mouseenter)="previewHrOption(grandchild.label)"
+                          type="button"
+                        >
+                          <ui5-icon class="hr-dropdown-icon" [attr.name]="grandchild.icon"></ui5-icon>
+                          <span class="hr-dropdown-label">{{ grandchild.label }}</span>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
               }
             </div>
           }

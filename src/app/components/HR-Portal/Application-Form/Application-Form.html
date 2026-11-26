@@ -38,6 +38,15 @@
       </div>
 
       <div class="sapMTBActions">
+        <select
+          class="branch-filter"
+          aria-label="Filter submitted applications by branch"
+          [ngModel]="selectedBranch"
+          (ngModelChange)="onBranchChange($event)"
+        >
+          <option value="">All Branches</option>
+          <option *ngFor="let branch of branchOptions" [value]="branch.code">{{ branch.name }}</option>
+        </select>
         <app-table-filter
           [config]="applicationFormTableFilter"
           [data]="sirList"

@@ -17,7 +17,11 @@ import { ShellbarSearchService } from '../../../services/shellbar-search.service
 import { buildCompactPageNumbers } from '../../../utils/pagination.util';
 import { connectShellbarSearch } from '../../../utils/shellbar-search-connect.util';
 import { displayDateOnly } from '../../../utils/date-format.util';
-import { glAccountBranchLabel } from '../../setup/gl-account-determination/gl-account-branch.options';
+import {
+  GL_ACCOUNT_BRANCH_OPTIONS,
+  glAccountBranchLabel,
+  resolveBranchCode,
+} from '../../setup/gl-account-determination/gl-account-branch.options';
 import { PermissionService } from '../../../services/permission.service';
 import {
   APPLICATION_FORM_TABLE_FILTER,
@@ -58,6 +62,7 @@ interface ApplicationDetailViewState {
 export class RecruitmentComponent implements OnInit {
 
   readonly applicationFormTableFilter = APPLICATION_FORM_TABLE_FILTER;
+  readonly branchOptions = GL_ACCOUNT_BRANCH_OPTIONS;
 
   readonly loading = signal(true);
   readonly skeletonRows = [1, 2, 3, 4, 5, 6];
@@ -172,6 +177,7 @@ export class RecruitmentComponent implements OnInit {
 
   // Searching, Sorting, Pagination State
   searchText: string = '';
+  selectedBranch = '';
   sortColumn: ApplicationFormColumnKey = 'EmployeeCode';
   sortDirection: 'asc' | 'desc' = 'asc';
   currentPage: number = 1;
@@ -210,6 +216,13 @@ export class RecruitmentComponent implements OnInit {
   // Getters for searching, sorting, and pagination
   get filteredList(): ApplicationFormRecord[] {
     let list = this.tableFilter.filterItems([...this.sirList], this.applicationFormTableFilter);
+
+    if (this.selectedBranch) {
+      list = list.filter(
+        (item) =>
+          resolveBranchCode(item.detail?.personalInfo.branchLocation ?? '') === this.selectedBranch,
+      );
+    }
 
     // Search
     if (this.searchText) {
@@ -267,8 +280,13 @@ export class RecruitmentComponent implements OnInit {
     this.currentPage = 1;
   }
 
+  onBranchChange(branch: string): void {
+    this.selectedBranch = branch;
+    this.currentPage = 1;
+  }
+
   hasActiveListFilters(): boolean {
-    return this.tableFilter.hasActive(this.applicationFormTableFilter);
+    return this.tableFilter.hasActive(this.applicationFormTableFilter) || Boolean(this.selectedBranch);
   }
 
   sortData(column: ApplicationFormColumnKey) {

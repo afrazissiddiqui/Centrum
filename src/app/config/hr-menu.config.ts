@@ -43,6 +43,19 @@ export const HR_MENU_OPTIONS: HrMenuOption[] = [
         { moduleSlug: 'tax_computation_form', action: 'list' },
       ] } },
       { label: 'Employee Separation', value: 'Employee Separation', icon: 'feedback', route: '/termination', access: { moduleSlug: 'termination_form', action: 'list' } },
+      {
+        label: 'Comission Module',
+        value: 'comission',
+        icon: 'opportunities',
+        children: [
+          { label: 'Comission Dashboard', value: 'commission/dashboard', icon: 'bbyd-dashboard', route: '/commission/dashboard' },
+          { label: 'Monthly Processing', value: 'commission/monthly-processing', icon: 'time-entry-request', route: '/commission/monthly-processing' },
+          { label: 'Schema Setup', value: 'commission/schema-setup', icon: 'settings', route: '/commission/schema-setup' },
+          { label: 'Mapping & Teams', value: 'commission/mapping-teams', icon: 'org-chart', route: '/commission/mapping-teams' },
+          { label: 'Comission Register', value: 'commission/register', icon: 'table-view', route: '/commission/register' },
+          { label: 'Audit Trail', value: 'commission/audit-trail', icon: 'history' },
+        ],
+      },
     ],
   },
   { label: 'Gate Pass', value: 'gate-pass/ogp', icon: 'shipping-status', route: '/gate-pass' },
@@ -56,44 +69,6 @@ export const HR_MENU_OPTIONS: HrMenuOption[] = [
     { moduleSlug: 'issue_from_production_form', action: 'list' },
     { moduleSlug: 'purchase_request_form', action: 'list' },
   ] } },
-  {
-    label: 'Comission Module',
-    value: 'comission',
-    icon: 'opportunities',
-    children: [
-      {
-        label: 'Comission Dashboard',
-        value: 'commission/dashboard',
-        icon: 'bbyd-dashboard',
-        route: '/commission/dashboard',
-      },
-      {
-        label: 'Monthly Processing',
-        value: 'commission/monthly-processing',
-        icon: 'time-entry-request',
-        route: '/commission/monthly-processing',
-      },
-      {
-        label: 'Schema Setup',
-        value: 'commission/schema-setup',
-        icon: 'settings',
-        route: '/commission/schema-setup',
-      },
-      {
-        label: 'Mapping & Teams',
-        value: 'commission/mapping-teams',
-        icon: 'org-chart',
-        route: '/commission/mapping-teams',
-      },
-      {
-        label: 'Comission Register',
-        value: 'commission/register',
-        icon: 'table-view',
-        route: '/commission/register',
-      },
-      { label: 'Audit Trail', value: 'comission/audit-trail', icon: 'history' },
-    ],
-  },
   {
     label: 'Setup',
     value: 'setup',
@@ -178,26 +153,7 @@ export const HR_MENU_OPTIONS: HrMenuOption[] = [
 export function getNavigableHrMenuActions(options: HrMenuOption[] = HR_MENU_OPTIONS): HrMenuAction[] {
   const actions: HrMenuAction[] = [];
 
-  for (const option of options) {
-    if (option.value === 'login') {
-      continue;
-    }
-
-    if (option.children?.length) {
-      for (const child of option.children) {
-        if (child.route) {
-          actions.push({
-            label: child.label,
-            icon: child.icon,
-            route: child.route,
-            value: child.value,
-            access: child.access,
-          });
-        }
-      }
-      continue;
-    }
-
+  const collect = (option: HrMenuOption): void => {
     if (option.route) {
       actions.push({
         label: option.label,
@@ -206,6 +162,17 @@ export function getNavigableHrMenuActions(options: HrMenuOption[] = HR_MENU_OPTI
         value: option.value,
         access: option.access,
       });
+    }
+    if (option.children?.length) {
+      for (const child of option.children) {
+        collect(child);
+      }
+    }
+  };
+
+  for (const option of options) {
+    if (option.value !== 'login') {
+      collect(option);
     }
   }
 

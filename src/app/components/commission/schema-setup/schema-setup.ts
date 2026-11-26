@@ -1,6 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, CUSTOM_ELEMENTS_SCHEMA, computed, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Component, CUSTOM_ELEMENTS_SCHEMA, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { publicApiUrl } from '../../../config/api.config';
 
 type SchemeStatus = 'Active' | 'Inactive';
 type SchemeRateMode = 'Percentage' | 'Fixed amount';
@@ -35,83 +37,7 @@ interface SchemeDraft {
   maxCap: number | null;
 }
 
-const INITIAL_SCHEMES: CommissionScheme[] = [
-  {
-    id: '1',
-    code: 'SCH-SLS-01',
-    type: 'Employee Sales',
-    rate: 2,
-    rateMode: 'Percentage',
-    branch: 'All Branches',
-    effectiveFrom: '2026-07-01',
-    effectiveTo: '',
-    status: 'Active',
-    basis: '% of Eligible Amount',
-    employeeTeam: 'All Sales Employees',
-    minTarget: 100000,
-    maxCap: null,
-  },
-  {
-    id: '2',
-    code: 'SCH-EXC-01',
-    type: 'Executive',
-    rate: 1.5,
-    rateMode: 'Percentage',
-    branch: 'DHA',
-    effectiveFrom: '2026-01-01',
-    effectiveTo: '',
-    status: 'Active',
-    basis: '% of Eligible Amount',
-    employeeTeam: 'All Executives',
-    minTarget: 150000,
-    maxCap: 500000,
-  },
-  {
-    id: '3',
-    code: 'SCH-PRD-01',
-    type: 'Production',
-    rate: 5,
-    rateMode: 'Fixed amount',
-    branch: 'Johar Town',
-    effectiveFrom: '2026-08-01',
-    effectiveTo: '',
-    status: 'Active',
-    basis: 'Per Unit',
-    employeeTeam: 'Production Team',
-    minTarget: 500,
-    maxCap: null,
-  },
-  {
-    id: '4',
-    code: 'SCH-ASM-01',
-    type: 'Assembly',
-    rate: 1,
-    rateMode: 'Percentage',
-    branch: 'MB',
-    effectiveFrom: '2026-09-01',
-    effectiveTo: '',
-    status: 'Active',
-    basis: '% of Eligible Amount',
-    employeeTeam: 'Assembly Teams A, B, C',
-    minTarget: 80000,
-    maxCap: null,
-  },
-  {
-    id: '5',
-    code: 'SCH-SLS-00',
-    type: 'Employee Sales',
-    rate: 1.75,
-    rateMode: 'Percentage',
-    branch: 'All Branches',
-    effectiveFrom: '2026-01-01',
-    effectiveTo: '2026-06-30',
-    status: 'Inactive',
-    basis: '% of Eligible Amount',
-    employeeTeam: 'All Sales Employees',
-    minTarget: 80000,
-    maxCap: null,
-  },
-];
+const COMMISSION_SCHEME_LIST_URL = publicApiUrl('commission-scheme-list');
 
 const EMPTY_DRAFT: SchemeDraft = {
   code: '',
@@ -127,20 +53,6 @@ const EMPTY_DRAFT: SchemeDraft = {
   maxCap: null,
 };
 
-const INITIAL_DRAFT: SchemeDraft = {
-  code: 'SCH-SLS-01',
-  type: 'Employee Sales',
-  rate: 2,
-  rateMode: 'Percentage',
-  branch: 'All Branches',
-  effectiveFrom: '2026-07-01',
-  effectiveTo: '',
-  basis: '% of Eligible Amount',
-  employeeTeam: 'All Sales Employees',
-  minTarget: 100000,
-  maxCap: null,
-};
-
 @Component({
   selector: 'app-schema-setup',
   standalone: true,
@@ -149,7 +61,8 @@ const INITIAL_DRAFT: SchemeDraft = {
   templateUrl: './schema-setup.html',
   styleUrl: './schema-setup.css',
 })
-export class SchemaSetupComponent {
+export class SchemaSetupComponent implements OnInit {
+  private readonly http = inject(HttpClient);
   private editorResizeStart: {
     pointerId: number;
     pointerX: number;
@@ -157,14 +70,16 @@ export class SchemaSetupComponent {
     maxWidth: number;
   } | null = null;
 
-  readonly schemes = signal<CommissionScheme[]>(INITIAL_SCHEMES);
+  readonly schemes = signal<CommissionScheme[]>([]);
+  readonly isLoading = signal(true);
+  readonly loadError = signal('');
   readonly searchText = signal('');
   readonly selectedCategory = signal('All');
   readonly selectedBranch = signal('All Branches');
   readonly preventOverlap = signal(true);
   readonly notice = signal('');
-  readonly draft: SchemeDraft = { ...INITIAL_DRAFT };
-  readonly selectedSchemeId = signal<string | null>(INITIAL_SCHEMES[0].id);
+  readonly draft: SchemeDraft = { ...EMPTY_DRAFT };
+  readonly selectedSchemeId = signal<string | null>(null);
   readonly editorWidth = signal(434);
   readonly isResizingEditor = signal(false);
   readonly editorStatus = computed(
@@ -181,6 +96,25 @@ export class SchemaSetupComponent {
     'Production Team',
     'Assembly Teams A, B, C',
   ];
+
+  ngOnInit(): void {
+    this.http.get<unknown>(COMMISSION_SCHEME_LIST_URL).subscribe({
+      next: (response) => {
+        const schemes = this.mapSchemeListResponse(response);
+        if (schemes === null) {
+          this.loadError.set('Commission schemes could not be loaded. The API response was invalid.');
+        } else {
+          this.schemes.set(schemes);
+          this.loadError.set('');
+        }
+        this.isLoading.set(false);
+      },
+      error: () => {
+        this.loadError.set('Unable to load commission schemes. Please try again later.');
+        this.isLoading.set(false);
+      },
+    });
+  }
 
   startEditorResize(event: PointerEvent): void {
     if (window.matchMedia('(max-width: 1000px)').matches) {
@@ -406,6 +340,46 @@ export class SchemaSetupComponent {
       minTarget: scheme.minTarget,
       maxCap: scheme.maxCap,
     });
+  }
+
+  private mapSchemeListResponse(response: unknown): CommissionScheme[] | null {
+    if (
+      !this.isRecord(response) ||
+      response['status'] === false ||
+      !Array.isArray(response['data']) ||
+      !response['data'].every((item: unknown) => this.isRecord(item))
+    ) {
+      return null;
+    }
+
+    return response['data'].map((item: Record<string, unknown>) => ({
+      id: this.valueAsString(item['id']),
+      code: this.valueAsString(item['code']),
+      type: this.valueAsString(item['type']),
+      rate: this.valueAsNumber(item['rate']),
+      rateMode: item['rate_mode'] === 'Fixed amount' ? 'Fixed amount' : 'Percentage',
+      branch: this.valueAsString(item['branch']),
+      effectiveFrom: this.valueAsString(item['effective_from']),
+      effectiveTo: this.valueAsString(item['effective_to']),
+      status: item['status'] === 'Inactive' ? 'Inactive' : 'Active',
+      basis: this.valueAsString(item['basis']),
+      employeeTeam: this.valueAsString(item['employee_team']),
+      minTarget: this.valueAsNumber(item['min_target']),
+      maxCap: item['max_cap'] === null ? null : this.valueAsNumber(item['max_cap']),
+    }));
+  }
+
+  private valueAsString(value: unknown): string {
+    return value === null || value === undefined ? '' : String(value);
+  }
+
+  private valueAsNumber(value: unknown): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
   private datesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {

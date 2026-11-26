@@ -111,6 +111,21 @@
   flex-basis: 14px;
 }
 
+.hr-dropdown-submenu--nested {
+  background-color: #f3f6f9;
+}
+
+.hr-dropdown-item--grandchild {
+  padding-left: 56px;
+  font-size: 12px;
+}
+
+.hr-dropdown-item--grandchild .hr-dropdown-icon {
+  width: 14px;
+  height: 14px;
+  flex-basis: 14px;
+}
+
 .hr-dropdown-item.is-selected {
   background-color: #eaf3fc;
   box-shadow: inset 0 0 0 2px #0a6ed5;

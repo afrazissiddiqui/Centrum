@@ -6,7 +6,7 @@
       <label class="toolbar-select">
         <span class="visually-hidden">Filter by branch</span>
         <select [ngModel]="selectedBranch()" (ngModelChange)="selectedBranch.set($event)">
-          <option value="All Branches">All Branches (5)</option>
+          <option value="All Branches">All Branches ({{ schemes().length }})</option>
           <option *ngFor="let branch of branches.slice(1)" [value]="branch">{{ branch }}</option>
         </select>
       </label>
@@ -22,6 +22,9 @@
 
   @if (notice()) {
     <div class="notice" role="status">{{ notice() }}</div>
+  }
+  @if (loadError()) {
+    <div class="notice notice--error" role="alert">{{ loadError() }}</div>
   }
 
   <div class="commission-layout" [style.--editor-width]="editorWidth() + 'px'"
@@ -72,46 +75,56 @@
               </tr>
             </thead>
             <tbody>
-              @for (scheme of filteredSchemes(); track scheme.id) {
-                <tr [class.is-selected]="selectedSchemeId() === scheme.id">
-                  <td class="scheme-code">{{ scheme.code }}</td>
-                  <td>{{ scheme.type }}</td>
-                  <td class="numeric-cell">{{ rateLabel(scheme) }}</td>
-                  <td>{{ scheme.branch }}</td>
-                  <td class="validity-cell">{{ validityLabel(scheme) }}</td>
-                  <td>
-                    <span class="status-badge" [class.status-badge--inactive]="scheme.status === 'Inactive'">
-                      {{ scheme.status }}
-                    </span>
-                  </td>
-                  <td class="row-actions">
-                    <button
-                      *ngIf="scheme.status === 'Active'; else viewAction"
-                      type="button"
-                      class="icon-button"
-                      [attr.aria-label]="'Edit ' + scheme.code"
-                      [title]="'Edit ' + scheme.code"
-                      (click)="editScheme(scheme)"
-                    >
-                      <ui5-icon name="edit" aria-hidden="true"></ui5-icon>
-                    </button>
-                    <ng-template #viewAction>
+              @if (isLoading()) {
+                <tr>
+                  <td colspan="7" class="empty-state">Loading commission schemes...</td>
+                </tr>
+              } @else if (loadError()) {
+                <tr>
+                  <td colspan="7" class="empty-state">The commission scheme list is unavailable.</td>
+                </tr>
+              } @else {
+                @for (scheme of filteredSchemes(); track scheme.id) {
+                  <tr [class.is-selected]="selectedSchemeId() === scheme.id">
+                    <td class="scheme-code">{{ scheme.code }}</td>
+                    <td>{{ scheme.type }}</td>
+                    <td class="numeric-cell">{{ rateLabel(scheme) }}</td>
+                    <td>{{ scheme.branch }}</td>
+                    <td class="validity-cell">{{ validityLabel(scheme) }}</td>
+                    <td>
+                      <span class="status-badge" [class.status-badge--inactive]="scheme.status === 'Inactive'">
+                        {{ scheme.status }}
+                      </span>
+                    </td>
+                    <td class="row-actions">
                       <button
+                        *ngIf="scheme.status === 'Active'; else viewAction"
                         type="button"
                         class="icon-button"
-                        [attr.aria-label]="'View ' + scheme.code"
-                        [title]="'View ' + scheme.code"
-                        (click)="viewScheme(scheme)"
+                        [attr.aria-label]="'Edit ' + scheme.code"
+                        [title]="'Edit ' + scheme.code"
+                        (click)="editScheme(scheme)"
                       >
-                        <ui5-icon name="detail-view" aria-hidden="true"></ui5-icon>
+                        <ui5-icon name="edit" aria-hidden="true"></ui5-icon>
                       </button>
-                    </ng-template>
-                  </td>
-                </tr>
-              } @empty {
-                <tr>
-                  <td colspan="7" class="empty-state">No commission schemes match these filters.</td>
-                </tr>
+                      <ng-template #viewAction>
+                        <button
+                          type="button"
+                          class="icon-button"
+                          [attr.aria-label]="'View ' + scheme.code"
+                          [title]="'View ' + scheme.code"
+                          (click)="viewScheme(scheme)"
+                        >
+                          <ui5-icon name="detail-view" aria-hidden="true"></ui5-icon>
+                        </button>
+                      </ng-template>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="7" class="empty-state">No commission schemes match these filters.</td>
+                  </tr>
+                }
               }
             </tbody>
           </table>

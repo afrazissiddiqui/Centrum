@@ -31,6 +31,7 @@ export class App {
   protected readonly selectedHrOption = signal<string>('dashboard');
   /** Parent HR menu item whose child options are shown. */
   protected readonly expandedHrMenuValue = signal<string | null>(null);
+  protected readonly expandedNestedHrMenuValue = signal<string | null>(null);
   /** Hide HR shellbar on full-page routes (e.g. login). */
   protected readonly showMainChrome = signal(true);
 
@@ -95,10 +96,11 @@ export class App {
     this.shellbarSearch.setPlaceholder(resolveShellbarSearchPlaceholder(initialKey));
     if (initialKey.startsWith('setup/') || initialKey === 'setup') {
       this.expandedHrMenuValue.set('setup');
-    } else if (initialKey.startsWith('commission/')) {
-      this.expandedHrMenuValue.set('comission');
     } else if (this.isHrModuleRoute(initialKey)) {
       this.expandedHrMenuValue.set('hr');
+      if (initialKey.startsWith('commission/')) {
+        this.expandedNestedHrMenuValue.set('comission');
+      }
     }
 
     this.router.events
@@ -115,10 +117,11 @@ export class App {
         this.selectedHrOption.set(this.resolveHrOptionValue(routeKey));
         if (routeKey.startsWith('setup/') || routeKey === 'setup') {
           this.expandedHrMenuValue.set('setup');
-        } else if (routeKey.startsWith('commission/')) {
-          this.expandedHrMenuValue.set('comission');
         } else if (this.isHrModuleRoute(routeKey)) {
           this.expandedHrMenuValue.set('hr');
+          this.expandedNestedHrMenuValue.set(
+            routeKey.startsWith('commission/') ? 'comission' : null,
+          );
         }
         this.showMainChrome.set(routeKey !== 'login');
         this.shellbarSearch.setPlaceholder(resolveShellbarSearchPlaceholder(routeKey));
@@ -274,6 +277,21 @@ export class App {
     return !!option.children?.length && this.expandedHrMenuValue() === option.value;
   }
 
+  isNestedHrOptionExpanded(option: HrMenuOptionLocal): boolean {
+    return !!option.children?.length &&
+      this.expandedNestedHrMenuValue() === option.value;
+  }
+
+  selectNestedHrOption(option: HrMenuOptionLocal, event?: Event): void {
+    event?.stopPropagation();
+    if (!option.children?.length) {
+      this.selectHrOption(option, event);
+      return;
+    }
+    const isExpanded = this.expandedNestedHrMenuValue() === option.value;
+    this.expandedNestedHrMenuValue.set(isExpanded ? null : option.value);
+  }
+
   isHrOptionSelected(option: HrMenuOptionLocal): boolean {
     const selected = this.selectedHrOption();
     if (option.children?.length) {
@@ -296,6 +314,7 @@ export class App {
       !this.isHrModuleRoute(routeKey)
     ) {
       this.expandedHrMenuValue.set(null);
+      this.expandedNestedHrMenuValue.set(null);
     }
   }
 
@@ -308,7 +327,8 @@ export class App {
       routeKey === 'payroll-master' ||
       routeKey.startsWith('payroll-master/') ||
       routeKey === 'termination' ||
-      routeKey.startsWith('termination/')
+      routeKey.startsWith('termination/') ||
+      routeKey.startsWith('commission/')
     );
   }
 
