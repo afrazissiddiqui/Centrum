@@ -736,6 +736,7 @@
               </select>
             </div>
 
+            @if (!isMultipleAttachmentType(row.type) && !row.files.length) {
             <div class="cjr-row">
               <label>File Name:</label>
               <div class="cjr-field cjr-attachment-name-field">
@@ -750,10 +751,27 @@
                 }
               </div>
             </div>
+            } @else {
+            <div class="cjr-row">
+              <label>Selected Files:</label>
+              <ul class="cjr-selected-attachments">
+                @for (file of row.files; let fileIndex = $index; track fileIndex) {
+                <li>
+                  <span>{{ file.name }}</span>
+                  <button type="button" class="cjr-remove-attachment"
+                    (click)="removeAttachmentFile(i, fileIndex)" [attr.aria-label]="'Remove ' + file.name">
+                    ✕
+                  </button>
+                </li>
+                }
+              </ul>
+            </div>
+            }
 
             <div class="cjr-row">
               <label>Upload File:</label>
-              <input type="file" (change)="onAttachmentFileChange(i, $event)" class="cjr-file-input"
+              <input type="file" [multiple]="isMultipleAttachmentType(row.type)"
+                (change)="onAttachmentFileChange(i, $event)" class="cjr-file-input"
                 aria-label="Upload attachment file" />
             </div>
           </div>

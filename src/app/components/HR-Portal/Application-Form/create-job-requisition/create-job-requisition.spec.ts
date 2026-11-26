@@ -110,6 +110,33 @@ describe('CreateJobRequisitionComponent validation', () => {
     expect(editableComponent.isRequiredMissing('personName')).toBeFalse();
   });
 
+  it('adds multiple selected files to the Others attachment payload', () => {
+    const attachmentComponent = component as any;
+    attachmentComponent.attachmentRows.set([
+      {
+        type: 'Others',
+        fileName: '',
+        fileUrl: '',
+        files: [],
+      },
+    ]);
+    const input = {
+      files: [
+        new File(['first'], 'first.pdf', { type: 'application/pdf' }),
+        new File(['second'], 'second.pdf', { type: 'application/pdf' }),
+      ],
+      value: 'selected',
+    } as unknown as HTMLInputElement;
+
+    attachmentComponent.onAttachmentFileChange(0, { target: input } as unknown as Event);
+
+    expect(input.value).toBe('');
+    expect(attachmentComponent.buildAttachmentsPayload()).toEqual([
+      { type: 'Others', fileName: 'first.pdf', fileUrl: '' },
+      { type: 'Others', fileName: 'second.pdf', fileUrl: '' },
+    ]);
+  });
+
   it('populates Advance from the selected job specification', () => {
     (component as any).populateFromJobSpecification({
       jobTitle: '',

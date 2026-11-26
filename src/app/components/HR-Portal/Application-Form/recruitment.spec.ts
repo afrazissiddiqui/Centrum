@@ -41,6 +41,7 @@ describe('RecruitmentComponent', () => {
           provide: ApplicationFormService,
           useValue: {
             fetchEmployeeProfiles: () => of([]),
+            fetchCommissionBranches: () => of([{ id: '1', name: 'DHA' }]),
             getApplicationRecords: () => records,
           },
         },
@@ -81,5 +82,14 @@ describe('RecruitmentComponent', () => {
 
     expect(component.filteredList.length).toBe(3);
     expect(component.hasActiveListFilters()).toBe(false);
+  });
+
+  it('adds a separate Branch column and labels it from the branch lookup', () => {
+    const fixture = TestBed.createComponent(RecruitmentComponent);
+    const component = fixture.componentInstance;
+    component.branchOptions.set([{ id: '1', name: 'DHA' }]);
+
+    expect(component.columns.some((column) => column.key === 'Branch')).toBe(true);
+    expect(component.branchLabel('1')).toBe('DHA');
   });
 });

@@ -9,6 +9,7 @@ import { SidebarComponent, SidebarItem, SidebarSection } from '../../sidebar/sid
 import { AlertService } from '../../../services/alert.service';
 import {
   ApplicationFormAttachmentMeta,
+  ApplicationFormBranchOption,
   ApplicationFormRemuneration,
   ApplicationFormRecord,
   ApplicationFormService,
@@ -18,7 +19,6 @@ import { buildCompactPageNumbers } from '../../../utils/pagination.util';
 import { connectShellbarSearch } from '../../../utils/shellbar-search-connect.util';
 import { displayDateOnly } from '../../../utils/date-format.util';
 import {
-  GL_ACCOUNT_BRANCH_OPTIONS,
   glAccountBranchLabel,
   resolveBranchCode,
 } from '../../setup/gl-account-determination/gl-account-branch.options';
@@ -62,7 +62,7 @@ interface ApplicationDetailViewState {
 export class RecruitmentComponent implements OnInit {
 
   readonly applicationFormTableFilter = APPLICATION_FORM_TABLE_FILTER;
-  readonly branchOptions = GL_ACCOUNT_BRANCH_OPTIONS;
+  readonly branchOptions = signal<ApplicationFormBranchOption[]>([]);
 
   readonly loading = signal(true);
   readonly skeletonRows = [1, 2, 3, 4, 5, 6];
@@ -117,6 +117,10 @@ export class RecruitmentComponent implements OnInit {
         this.alertService.error('Error', 'Under Construction');
       },
     });
+    this.applicationFormService.fetchCommissionBranches().subscribe({
+      next: (branches) => this.branchOptions.set(branches),
+      error: () => this.alertService.error('Branch Load Failed', 'Unable to load branch options.'),
+    });
   }
 
   Math = Math;
@@ -158,6 +162,7 @@ export class RecruitmentComponent implements OnInit {
     { key: 'EmployeeCode', label: 'Employee ID', visible: true },
     { key: 'EmployeeName', label: 'Person Name', visible: true },
     { key: 'Department', label: 'Department', visible: true },
+    { key: 'Branch', label: 'Branch', visible: true },
     { key: 'EmployeeNature', label: 'Employee Nature', visible: true },
     { key: 'Designation', label: 'Designation', visible: true },
     { key: 'ReportingManager', label: 'Reporting Manager', visible: true },
@@ -220,7 +225,9 @@ export class RecruitmentComponent implements OnInit {
     if (this.selectedBranch) {
       list = list.filter(
         (item) =>
-          resolveBranchCode(item.detail?.personalInfo.branchLocation ?? '') === this.selectedBranch,
+          resolveBranchCode(
+            item.Branch ?? item.detail?.personalInfo.branchLocation ?? '',
+          ) === this.selectedBranch,
       );
     }
 
@@ -232,6 +239,9 @@ export class RecruitmentComponent implements OnInit {
         String(item.EmployeeName ?? '').toLowerCase().includes(search) ||
         String(item.detail?.personalInfo?.personName ?? '').toLowerCase().includes(search) ||
         String(item.Department ?? '').toLowerCase().includes(search) ||
+        this.branchLabel(item.Branch ?? item.detail?.personalInfo.branchLocation)
+          .toLowerCase()
+          .includes(search) ||
         String(item.EmployeeNature ?? '').toLowerCase().includes(search) ||
         String(item.Designation ?? '').toLowerCase().includes(search) ||
         String(item.ReportingManager ?? '').toLowerCase().includes(search) ||
@@ -420,7 +430,10 @@ export class RecruitmentComponent implements OnInit {
   }
 
   branchLabel(code: string | undefined | null): string {
-    const label = glAccountBranchLabel(code ?? '');
+    const branchCode = resolveBranchCode(code ?? '');
+    const label =
+      this.branchOptions().find((branch) => resolveBranchCode(branch.id) === branchCode)?.name ||
+      glAccountBranchLabel(code ?? '');
     return label ? this.displayDash(label) : this.displayDash(code);
   }
 

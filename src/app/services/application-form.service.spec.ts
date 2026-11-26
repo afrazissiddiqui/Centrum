@@ -196,6 +196,7 @@ describe('ApplicationFormService', () => {
       });
 
       expect(record.detail.personalInfo.branchLocation).toBe(dropdownBranch);
+      expect(record.Branch).toBe(dropdownBranch);
       expect(glAccountBranchLabel(record.detail.personalInfo.branchLocation)).toBe(expectedLabel);
       expect(service.buildFlatEmployeeProfilePayload(record.detail).branchLocation).toBe(dropdownBranch);
     }

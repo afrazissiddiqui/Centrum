@@ -923,6 +923,26 @@
   flex: 1;
 }
 
+.cjr-selected-attachments {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cjr-selected-attachments li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cjr-selected-attachments li span {
+  overflow-wrap: anywhere;
+}
+
 .cjr-file-input {
   padding: 8px 12px;
   border: 1px solid var(--mad-border);

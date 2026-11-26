@@ -193,6 +193,7 @@ export interface ApplicationFormDetail {
 export interface ApplicationFormRecord {
   EmployeeCode: string;
   EmployeeName: string;
+  Branch?: string;
   /** External attendance card number from the employee profile. */
   ExtEmpNo?: string;
   Department: string;
@@ -210,6 +211,11 @@ export interface ApplicationFormRecord {
   userId?: string;
   /** Populated when loaded from view API or saved locally */
   detail?: ApplicationFormDetail;
+}
+
+export interface ApplicationFormBranchOption {
+  id: string;
+  name: string;
 }
 
 export interface EmployeeRosterRow {
@@ -258,6 +264,7 @@ const EMPLOYEE_PROFILE_LIST_URL = publicApiUrl('employee-profile-list');
 const EMPLOYEE_PROFILE_VIEW_URL = publicApiUrl('employee-profile-detail');
 const EMPLOYEE_PROFILE_UPDATE_URL = publicApiUrl('employee-profile-update');
 const EMPLOYEE_PROFILE_DELETE_URL = apiUrl('employee-profile-delete');
+const COMMISSION_BRANCHES_LIST_URL = publicApiUrl('commission-branches');
 
 const LEGACY_EMPLOYEE_CODE_OVERRIDES = new Map<string, string>([
   ['Emp-00003283', 'Emp-00000254'],
@@ -581,6 +588,28 @@ export class ApplicationFormService {
     this.attachmentMetaCache.set(
       key,
       attachments.map((attachment) => ({ ...attachment })),
+    );
+  }
+
+  fetchCommissionBranches(): Observable<ApplicationFormBranchOption[]> {
+    return this.http.get<unknown>(COMMISSION_BRANCHES_LIST_URL).pipe(
+      map((response) => {
+        const payload = this.pickNestedRecord(response);
+        const branches = payload?.['branches'];
+        if (!payload || payload['status'] === false || !Array.isArray(branches)) {
+          throw new Error('Invalid commission branches response.');
+        }
+
+        return branches.map((item: unknown) => {
+          const branch = this.pickNestedRecord(item);
+          const id = branch ? String(branch['id'] ?? '').trim() : '';
+          const name = branch ? String(branch['name'] ?? '').trim() : '';
+          if (!id || !name) {
+            throw new Error('Invalid commission branch record.');
+          }
+          return { id: resolveBranchCode(id), name };
+        });
+      }),
     );
   }
 
@@ -1971,10 +2000,15 @@ export class ApplicationFormService {
       asString(item['ExtEmpNo']) ||
       asString(item['extEmpNo']) ||
       asString(item['ext_emp_no']);
+    const branchLocation =
+      pickFrom(personalInfoSource, 'branchLocation', 'branch_location') ||
+      asString(item['branchLocation']) ||
+      asString(item['branch_location']);
 
     return {
       EmployeeCode: employeeCode,
       EmployeeName: employeeName || '—',
+      ...(branchLocation ? { Branch: resolveApplicationProfileDropdownBranch(branchLocation) } : {}),
       Department:
         pickFrom(personalInfoSource, 'departmentInAhcp', 'department_in_ahcp') ||
         pickFrom(requisitionSource, 'department') ||

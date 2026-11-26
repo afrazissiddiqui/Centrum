@@ -45,7 +45,7 @@
           (ngModelChange)="onBranchChange($event)"
         >
           <option value="">All Branches</option>
-          <option *ngFor="let branch of branchOptions" [value]="branch.code">{{ branch.name }}</option>
+          <option *ngFor="let branch of branchOptions()" [value]="branch.id">{{ branch.name }}</option>
         </select>
         <app-table-filter
           [config]="applicationFormTableFilter"
@@ -138,6 +138,11 @@
                 <ng-container [ngSwitch]="col.key">
                   <!-- Person name column -->
                   <span *ngSwitchCase="'EmployeeName'">{{ displayPersonName(s) }}</span>
+
+                  <!-- Branch Column -->
+                  <span *ngSwitchCase="'Branch'">
+                    {{ branchLabel(s.Branch ?? s.detail?.personalInfo?.branchLocation) }}
+                  </span>
 
                   <!-- Status Column -->
                   <span *ngSwitchCase="'status'" [className]="'status-badge ' + (s.status || '').toLowerCase()">
