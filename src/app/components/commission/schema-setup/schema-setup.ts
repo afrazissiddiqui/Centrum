@@ -255,26 +255,6 @@ export class SchemaSetupComponent implements OnInit {
     }
 
     const selectedId = this.selectedSchemeId();
-    const collision = this.schemes().some(
-      (scheme) =>
-        scheme.id !== selectedId &&
-        scheme.status === 'Active' &&
-        scheme.type === this.draft.type &&
-        (scheme.branch === this.draft.branch ||
-          scheme.branch === 'All Branches' ||
-          this.draft.branch === 'All Branches') &&
-        this.datesOverlap(
-          this.draft.effectiveFrom,
-          this.draft.effectiveTo,
-          scheme.effectiveFrom,
-          scheme.effectiveTo,
-        ),
-    );
-    if (this.preventOverlap() && collision) {
-      this.notice.set('An active scheme of this type already overlaps this branch and date range.');
-      return;
-    }
-
     const payload = {
       code,
       type: this.draft.type,
@@ -507,10 +487,6 @@ export class SchemaSetupComponent implements OnInit {
       return messages.join(' ');
     }
     return '';
-  }
-
-  private datesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
-    return startA <= (endB || '9999-12-31') && startB <= (endA || '9999-12-31');
   }
 
   private formatDate(value: string): string {

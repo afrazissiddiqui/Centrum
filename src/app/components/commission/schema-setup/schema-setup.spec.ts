@@ -246,7 +246,7 @@ describe('SchemaSetupComponent', () => {
     expect(component.deletingSchemeId()).toBeNull();
   });
 
-  it('blocks overlapping active schemes when prevention is enabled', () => {
+  it('sends potential overlaps to the API for authoritative validation', () => {
     const fixture = TestBed.createComponent(SchemaSetupComponent);
     const component = fixture.componentInstance;
     component.schemes.set([createScheme()]);
@@ -255,8 +255,14 @@ describe('SchemaSetupComponent', () => {
     component.draft.rate = 2.5;
 
     component.saveScheme();
+    const request = httpMock.expectOne(publicApiUrl('commission-scheme-add'));
+    expect(request.request.method).toBe('POST');
+    request.flush(
+      { message: 'An overlapping active scheme exists.' },
+      { status: 422, statusText: 'Unprocessable Entity' },
+    );
 
     expect(component.schemes().length).toBe(1);
-    expect(component.notice()).toContain('overlaps this branch and date range');
+    expect(component.notice()).toBe('An overlapping active scheme exists.');
   });
 });
