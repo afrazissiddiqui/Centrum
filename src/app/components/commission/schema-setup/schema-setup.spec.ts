@@ -1,7 +1,9 @@
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { vi } from 'vitest';
 import { publicApiUrl } from '../../../config/api.config';
+import { AlertService } from '../../../services/alert.service';
 import { SchemaSetupComponent } from './schema-setup';
 
 function createScheme() {
@@ -113,19 +115,135 @@ describe('SchemaSetupComponent', () => {
     ]);
   });
 
-  it('updates the selected scheme without adding another row', () => {
+  it('posts the scheme editor fields to the add API before updating the list', () => {
     const fixture = TestBed.createComponent(SchemaSetupComponent);
     const component = fixture.componentInstance;
-    const original = createScheme();
-    component.schemes.set([original]);
-
-    component.editScheme(original);
-    component.draft.code = 'SCH-SLS-UPDATED';
+    component.draft.code = 'SCH-SLS-DHA-01';
+    component.draft.rate = 2;
+    component.draft.branch = 'DHA';
+    component.draft.effectiveFrom = '2026-07-01';
     component.saveScheme();
 
+    const request = httpMock.expectOne(publicApiUrl('commission-scheme-add'));
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      code: 'SCH-SLS-DHA-01',
+      type: 'Employee Sales',
+      basis: '% of Eligible Amount',
+      rate: 2,
+      rate_mode: 'Percentage',
+      branch: 'DHA',
+      employee_team: 'All Sales Employees',
+      min_target: 0,
+      max_cap: null,
+      effective_from: '2026-07-01',
+      effective_to: null,
+      prevent_overlap: true,
+      status: 'Active',
+    });
+    expect(component.schemes()).toEqual([]);
+    request.flush({ status: true, data: { id: 1 } });
+
     expect(component.schemes().length).toBe(1);
-    expect(component.schemes()[0].code).toBe('SCH-SLS-UPDATED');
-    expect(component.notice()).toBe('SCH-SLS-UPDATED saved successfully.');
+    expect(component.schemes()[0].code).toBe('SCH-SLS-DHA-01');
+    expect(component.schemes()[0].id).toBe('1');
+    expect(component.notice()).toBe('SCH-SLS-DHA-01 saved successfully.');
+  });
+
+  it('posts edits to the update API using the selected scheme id', () => {
+    const fixture = TestBed.createComponent(SchemaSetupComponent);
+    const component = fixture.componentInstance;
+    const original = { ...createScheme(), id: '2' };
+    component.schemes.set([original]);
+    component.editScheme(original);
+    component.draft.code = 'SCH-SLS-DHA-UPDATED';
+    component.draft.rate = 3;
+    component.draft.branch = 'DHA';
+
+    component.saveScheme();
+
+    const request = httpMock.expectOne(publicApiUrl('commission-scheme-update') + '/2');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      code: 'SCH-SLS-DHA-UPDATED',
+      type: 'Employee Sales',
+      basis: '% of Eligible Amount',
+      rate: 3,
+      rate_mode: 'Percentage',
+      branch: 'DHA',
+      employee_team: 'All Sales Employees',
+      min_target: 100000,
+      max_cap: null,
+      effective_from: '2026-07-01',
+      effective_to: null,
+      prevent_overlap: true,
+      status: 'Active',
+    });
+    request.flush({ status: true, data: { id: 2 } });
+
+    expect(component.schemes().length).toBe(1);
+    expect(component.schemes()[0].id).toBe('2');
+    expect(component.schemes()[0].code).toBe('SCH-SLS-DHA-UPDATED');
+  });
+
+  it('shows the API validation error when saving an overlapping scheme', () => {
+    const fixture = TestBed.createComponent(SchemaSetupComponent);
+    const component = fixture.componentInstance;
+    component.draft.code = 'SCH-SLS-DHA-01';
+    component.draft.effectiveFrom = '2026-11-01';
+    component.draft.rate = 2.5;
+
+    component.saveScheme();
+    httpMock.expectOne(publicApiUrl('commission-scheme-add')).flush(
+      { message: 'An overlapping active scheme exists.' },
+      { status: 422, statusText: 'Unprocessable Entity' },
+    );
+
+    expect(component.schemes()).toEqual([]);
+    expect(component.notice()).toBe('An overlapping active scheme exists.');
+    expect(component.isSaving()).toBe(false);
+  });
+
+  it('deletes the selected scheme using its id after confirmation', async () => {
+    const fixture = TestBed.createComponent(SchemaSetupComponent);
+    const component = fixture.componentInstance;
+    const scheme = { ...createScheme(), id: '2' };
+    const alertService = TestBed.inject(AlertService);
+    vi.spyOn(alertService, 'confirm').mockResolvedValue({ isConfirmed: true });
+    const successAlert = vi.spyOn(alertService, 'success').mockImplementation(() => undefined);
+    component.schemes.set([scheme]);
+    component.editScheme(scheme);
+
+    await component.deleteScheme(scheme);
+
+    const request = httpMock.expectOne(publicApiUrl('commission-scheme-delete') + '/2');
+    expect(request.request.method).toBe('DELETE');
+    request.flush({ status: true });
+
+    expect(component.schemes()).toEqual([]);
+    expect(component.selectedSchemeId()).toBeNull();
+    expect(successAlert).toHaveBeenCalledWith('Deleted', 'SCH-SLS-01 removed successfully.');
+  });
+
+  it('keeps the scheme in the list when the delete API fails', async () => {
+    const fixture = TestBed.createComponent(SchemaSetupComponent);
+    const component = fixture.componentInstance;
+    const scheme = createScheme();
+    const alertService = TestBed.inject(AlertService);
+    vi.spyOn(alertService, 'confirm').mockResolvedValue({ isConfirmed: true });
+    const errorAlert = vi.spyOn(alertService, 'error').mockImplementation(() => undefined);
+    component.schemes.set([scheme]);
+
+    await component.deleteScheme(scheme);
+
+    httpMock.expectOne(publicApiUrl('commission-scheme-delete') + '/1').flush(
+      { message: 'Delete was rejected.' },
+      { status: 500, statusText: 'Server Error' },
+    );
+
+    expect(component.schemes()).toEqual([scheme]);
+    expect(errorAlert).toHaveBeenCalledWith('Delete Failed', 'Delete was rejected.');
+    expect(component.deletingSchemeId()).toBeNull();
   });
 
   it('blocks overlapping active schemes when prevention is enabled', () => {

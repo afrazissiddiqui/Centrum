@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, CUSTOM_ELEMENTS_SCHEMA, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { publicApiUrl } from '../../../config/api.config';
+import { AlertService } from '../../../services/alert.service';
 
 type SchemeStatus = 'Active' | 'Inactive';
 type SchemeRateMode = 'Percentage' | 'Fixed amount';
@@ -38,6 +39,9 @@ interface SchemeDraft {
 }
 
 const COMMISSION_SCHEME_LIST_URL = publicApiUrl('commission-scheme-list');
+const COMMISSION_SCHEME_ADD_URL = publicApiUrl('commission-scheme-add');
+const COMMISSION_SCHEME_UPDATE_URL = publicApiUrl('commission-scheme-update');
+const COMMISSION_SCHEME_DELETE_URL = publicApiUrl('commission-scheme-delete');
 
 const EMPTY_DRAFT: SchemeDraft = {
   code: '',
@@ -63,6 +67,7 @@ const EMPTY_DRAFT: SchemeDraft = {
 })
 export class SchemaSetupComponent implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly alertService = inject(AlertService);
   private editorResizeStart: {
     pointerId: number;
     pointerX: number;
@@ -72,6 +77,8 @@ export class SchemaSetupComponent implements OnInit {
 
   readonly schemes = signal<CommissionScheme[]>([]);
   readonly isLoading = signal(true);
+  readonly isSaving = signal(false);
+  readonly deletingSchemeId = signal<string | null>(null);
   readonly loadError = signal('');
   readonly searchText = signal('');
   readonly selectedCategory = signal('All');
@@ -230,6 +237,10 @@ export class SchemaSetupComponent implements OnInit {
   }
 
   saveScheme(): void {
+    if (this.isSaving()) {
+      return;
+    }
+
     const code = this.draft.code.trim();
     if (!code || !this.draft.effectiveFrom || this.draft.rate === null || this.draft.rate < 0) {
       this.notice.set('Enter a scheme code, commission rate, and effective-from date.');
@@ -264,30 +275,115 @@ export class SchemaSetupComponent implements OnInit {
       return;
     }
 
-    const record: CommissionScheme = {
-      id: selectedId ?? `scheme-${Date.now()}`,
+    const payload = {
       code,
       type: this.draft.type,
-      rate: this.draft.rate,
-      rateMode: this.draft.rateMode,
-      branch: this.draft.branch,
-      effectiveFrom: this.draft.effectiveFrom,
-      effectiveTo: this.draft.effectiveTo,
-      status: this.draft.effectiveTo && this.draft.effectiveTo < this.today() ? 'Inactive' : 'Active',
       basis: this.draft.basis,
-      employeeTeam: this.draft.employeeTeam,
-      minTarget: this.draft.minTarget ?? 0,
-      maxCap: this.draft.maxCap,
+      rate: this.draft.rate,
+      rate_mode: this.draft.rateMode,
+      branch: this.draft.branch,
+      employee_team: this.draft.employeeTeam,
+      min_target: this.draft.minTarget ?? 0,
+      max_cap: this.draft.maxCap,
+      effective_from: this.draft.effectiveFrom,
+      effective_to: this.draft.effectiveTo || null,
+      prevent_overlap: this.preventOverlap(),
+      status: 'Active' as SchemeStatus,
     };
 
-    this.schemes.update((schemes) =>
-      selectedId
-        ? schemes.map((scheme) => (scheme.id === selectedId ? record : scheme))
-        : [record, ...schemes],
+    this.isSaving.set(true);
+    this.notice.set('');
+    const url = selectedId
+      ? `${COMMISSION_SCHEME_UPDATE_URL}/${encodeURIComponent(selectedId)}`
+      : COMMISSION_SCHEME_ADD_URL;
+    this.http.post<unknown>(url, payload).subscribe({
+      next: (response) => {
+        this.isSaving.set(false);
+        if (this.isRecord(response) && response['status'] === false) {
+          this.notice.set(this.apiMessage(response) || 'The commission scheme could not be saved.');
+          return;
+        }
+
+        const record: CommissionScheme = {
+          id: selectedId ?? this.savedId(response) ?? `scheme-${Date.now()}`,
+          code,
+          type: payload.type,
+          rate: payload.rate,
+          rateMode: payload.rate_mode,
+          branch: payload.branch,
+          effectiveFrom: payload.effective_from,
+          effectiveTo: payload.effective_to ?? '',
+          status: payload.status,
+          basis: payload.basis,
+          employeeTeam: payload.employee_team,
+          minTarget: payload.min_target,
+          maxCap: payload.max_cap,
+        };
+        this.schemes.update((schemes) =>
+          selectedId
+            ? schemes.map((scheme) => (scheme.id === selectedId ? record : scheme))
+            : [record, ...schemes],
+        );
+        this.selectedSchemeId.set(record.id);
+        this.copyToDraft(record);
+        this.notice.set(`${code} saved successfully.`);
+      },
+      error: (error: unknown) => {
+        this.isSaving.set(false);
+        this.notice.set(
+          this.apiErrorMessage(error, 'Unable to save the commission scheme. Please try again.'),
+        );
+      },
+    });
+  }
+
+  async deleteScheme(scheme: CommissionScheme): Promise<void> {
+    if (this.isSaving() || this.deletingSchemeId() !== null) {
+      return;
+    }
+    if (!scheme.id) {
+      this.alertService.error('Delete Failed', 'Unable to delete this scheme: missing scheme id.');
+      return;
+    }
+
+    const confirmation = await this.alertService.confirm(
+      'Delete commission scheme?',
+      `Remove ${scheme.code} from the configured schemes?`,
     );
-    this.selectedSchemeId.set(record.id);
-    this.copyToDraft(record);
-    this.notice.set(`${code} saved successfully.`);
+    if (!confirmation.isConfirmed) {
+      return;
+    }
+
+    this.deletingSchemeId.set(scheme.id);
+    this.notice.set('');
+    this.http.delete<unknown>(
+      `${COMMISSION_SCHEME_DELETE_URL}/${encodeURIComponent(scheme.id)}`,
+    ).subscribe({
+      next: (response) => {
+        this.deletingSchemeId.set(null);
+        if (this.isRecord(response) && response['status'] === false) {
+          this.alertService.error(
+            'Delete Failed',
+            this.apiMessage(response) || 'The commission scheme could not be deleted.',
+          );
+          return;
+        }
+
+        this.schemes.update((schemes) => schemes.filter((item) => item.id !== scheme.id));
+        if (this.selectedSchemeId() === scheme.id) {
+          this.selectedSchemeId.set(null);
+          Object.assign(this.draft, EMPTY_DRAFT);
+        }
+        this.alertService.success('Deleted', `${scheme.code} removed successfully.`);
+      },
+      error: (error: unknown) => {
+        this.deletingSchemeId.set(null);
+        this.alertService.error(
+          'Delete Failed',
+          this.apiErrorMessage(error, 'Unable to delete the commission scheme. Please try again.'),
+        );
+      },
+    });
   }
 
   fetchSapData(): void {
@@ -382,6 +478,37 @@ export class SchemaSetupComponent implements OnInit {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
+  private savedId(response: unknown): string | null {
+    if (!this.isRecord(response)) {
+      return null;
+    }
+    const data = this.isRecord(response['data']) ? response['data'] : response;
+    return data['id'] === null || data['id'] === undefined ? null : String(data['id']);
+  }
+
+  private apiErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof HttpErrorResponse && this.isRecord(error.error)) {
+      const message = this.apiMessage(error.error);
+      if (message) {
+        return message;
+      }
+    }
+    return fallback;
+  }
+
+  private apiMessage(response: Record<string, unknown>): string {
+    if (typeof response['message'] === 'string') {
+      return response['message'];
+    }
+    if (this.isRecord(response['errors'])) {
+      const messages = Object.values(response['errors']).flatMap((value) =>
+        Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [],
+      );
+      return messages.join(' ');
+    }
+    return '';
+  }
+
   private datesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
     return startA <= (endB || '9999-12-31') && startB <= (endA || '9999-12-31');
   }
@@ -395,7 +522,4 @@ export class SchemaSetupComponent implements OnInit {
     }).format(new Date(`${value}T00:00:00Z`));
   }
 
-  private today(): string {
-    return new Date().toISOString().slice(0, 10);
-  }
 }

@@ -118,6 +118,16 @@
                           <ui5-icon name="detail-view" aria-hidden="true"></ui5-icon>
                         </button>
                       </ng-template>
+                      <button
+                        type="button"
+                        class="icon-button"
+                        [attr.aria-label]="'Delete ' + scheme.code"
+                        [title]="'Delete ' + scheme.code"
+                        [disabled]="deletingSchemeId() !== null || isSaving()"
+                        (click)="deleteScheme(scheme)"
+                      >
+                        <ui5-icon name="delete" aria-hidden="true"></ui5-icon>
+                      </button>
                     </td>
                   </tr>
                 } @empty {
@@ -224,7 +234,9 @@
 
         <div class="form-actions">
           <button type="button" class="button button--secondary" (click)="resetDraft()">Reset</button>
-          <button type="submit" class="button button--primary">Save Scheme</button>
+          <button type="submit" class="button button--primary" [disabled]="isSaving()">
+            {{ isSaving() ? 'Saving...' : 'Save Scheme' }}
+          </button>
         </div>
       </form>
     </aside>
