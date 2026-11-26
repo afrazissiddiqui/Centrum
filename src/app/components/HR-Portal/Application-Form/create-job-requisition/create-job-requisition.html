@@ -755,6 +755,16 @@
             <div class="cjr-row">
               <label>File Names:</label>
               <ul class="cjr-selected-attachments">
+                @if (hasSeparateAttachmentFileName(row)) {
+                <li>
+                  <input type="text" [value]="row.fileName" readonly
+                    [attr.aria-label]="'File name: ' + row.fileName" />
+                  <button type="button" class="cjr-remove-attachment"
+                    (click)="clearAttachmentName(i)" [attr.aria-label]="'Remove ' + row.fileName">
+                    ✕
+                  </button>
+                </li>
+                }
                 @for (file of row.files; let fileIndex = $index; track fileIndex) {
                 <li>
                   <input type="text" [value]="file.name" readonly
@@ -764,7 +774,8 @@
                     ✕
                   </button>
                 </li>
-                } @empty {
+                }
+                @if (!hasSeparateAttachmentFileName(row) && !row.files.length) {
                 <li class="cjr-no-selected-attachments">No files selected</li>
                 }
               </ul>

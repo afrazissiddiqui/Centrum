@@ -137,6 +137,25 @@ describe('CreateJobRequisitionComponent validation', () => {
     ]);
   });
 
+  it('preserves a saved Others filename when new files are selected', () => {
+    const attachmentComponent = component as any;
+    attachmentComponent.attachmentRows.set([
+      {
+        type: 'Others',
+        fileName: 'saved.pdf',
+        fileUrl: '',
+        files: [new File(['new'], 'new.pdf', { type: 'application/pdf' })],
+      },
+    ]);
+
+    expect(attachmentComponent.hasSeparateAttachmentFileName(attachmentComponent.attachmentRows()[0]))
+      .toBeTrue();
+    expect(attachmentComponent.buildAttachmentsPayload()).toEqual([
+      { type: 'Others', fileName: 'saved.pdf', fileUrl: '' },
+      { type: 'Others', fileName: 'new.pdf', fileUrl: '' },
+    ]);
+  });
+
   it('populates Advance from the selected job specification', () => {
     (component as any).populateFromJobSpecification({
       jobTitle: '',

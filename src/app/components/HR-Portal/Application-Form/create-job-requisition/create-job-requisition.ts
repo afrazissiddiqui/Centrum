@@ -1224,6 +1224,15 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     return normalizedType === 'other' || normalizedType === 'others';
   }
 
+  protected hasSeparateAttachmentFileName(row: AttachmentRow): boolean {
+    const fileName = row.fileName.trim();
+    return Boolean(
+      fileName &&
+        (!this.isMultipleAttachmentType(row.type) ||
+          !row.files.some((file) => file.name === fileName)),
+    );
+  }
+
   protected onAttachmentFileChange(rowIndex: number, event: Event): void {
     const input = event.target as HTMLInputElement;
     const selectedFiles = Array.from(input.files ?? []);
@@ -1266,6 +1275,14 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     });
   }
 
+  protected clearAttachmentName(rowIndex: number): void {
+    this.attachmentRows.update((rows) => {
+      const updated = [...rows];
+      updated[rowIndex] = { ...updated[rowIndex], fileName: '' };
+      return updated;
+    });
+  }
+
   private createEmptyAttachmentRow(): AttachmentRow {
     return { type: '', fileName: '', fileUrl: '', files: [] };
   }
@@ -1275,7 +1292,14 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
       const type = row.type.trim();
       const fileUrl = row.fileUrl.trim();
       if (row.files.length) {
-        return row.files.map((file) => ({ type, fileName: file.name, fileUrl }));
+        const savedFileName = this.isMultipleAttachmentType(row.type) &&
+          this.hasSeparateAttachmentFileName(row)
+          ? [{ type, fileName: row.fileName.trim(), fileUrl }]
+          : [];
+        return [
+          ...savedFileName,
+          ...row.files.map((file) => ({ type, fileName: file.name, fileUrl })),
+        ];
       }
 
       const attachment = { type, fileName: row.fileName.trim(), fileUrl };
