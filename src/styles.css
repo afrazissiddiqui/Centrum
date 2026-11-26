@@ -83,6 +83,33 @@ body {
   overflow-y: auto;
 }
 
+@media print {
+  body.commission-register-print {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body.commission-register-print app-root {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: #fff !important;
+  }
+
+  body.commission-register-print app-root .header-wrapper {
+    display: none !important;
+  }
+
+  body.commission-register-print app-root .app-content {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+}
+
 .swal2-container {
   z-index: 2001 !important;
 }

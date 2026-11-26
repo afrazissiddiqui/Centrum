@@ -131,6 +131,21 @@
   font-size: 13px;
 }
 
+.notice--error {
+  color: #842029;
+  background: #f8d7da;
+  border-color: #f1aeb5;
+}
+
+.payable-content {
+  margin-top: 24px;
+  padding-bottom: 24px;
+}
+
+.payable-content .register-table tbody tr {
+  cursor: default;
+}
+
 .register-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -552,9 +567,23 @@
     display: none !important;
   }
 
+  :host,
+  .commission-register-page,
+  .commission-register-page * {
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
   .commission-register-page {
     height: auto;
     overflow: visible;
-    background: #fff;
+    min-height: 0;
+  }
+
+  .register-summary,
+  .register-content,
+  .document-panel {
+    padding-top: 8px;
+    background: #fff !important;
   }
 }
