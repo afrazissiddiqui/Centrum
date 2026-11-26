@@ -2,12 +2,12 @@
   <header class="processing-toolbar">
     <div class="processing-heading">
       <h1>Monthly Processing</h1>
-      <span class="toolbar-pill">Nov 2026 (Current)</span>
+      <span class="toolbar-pill">{{ periodLabel }} (Current)</span>
       <label class="toolbar-select">
         <span class="visually-hidden">Filter by branch</span>
         <select [ngModel]="selectedBranch()" (ngModelChange)="selectedBranch.set($event)">
-          <option value="All Branches">All Branches (4)</option>
-          <option *ngFor="let branch of branches.slice(1)" [value]="branch">{{ branch }}</option>
+          <option value="All Branches">All Branches ({{ batches().length }})</option>
+          <option *ngFor="let branch of branches()" [value]="branch">{{ branch }}</option>
         </select>
       </label>
     </div>
@@ -21,31 +21,59 @@
   </header>
 
   @if (notice()) {
-    <div class="notice" role="status">{{ notice() }}</div>
+    <div class="notice" [class.notice--error]="noticeIsError()" [attr.role]="noticeIsError() ? 'alert' : 'status'">
+      {{ notice() }}
+    </div>
+  }
+  @if (loadError()) {
+    <div class="notice notice--error" role="alert">{{ loadError() }}</div>
   }
 
   <section class="commission-run-card">
     <div class="run-copy">
-      <h2>Nov 2026 Commission Run</h2>
+      <h2>{{ periodLabel }} Commission Run</h2>
       <p>Select batches below to validate, calculate, approve, or transfer to payroll.</p>
     </div>
     <div class="run-actions">
-      <button type="button" class="button button--secondary" (click)="validateMappings()">
-        Validate Mappings
-      </button>
-      <button type="button" class="button button--secondary" (click)="calculateCommission()">
-        Calculate Commission
+      <button
+        type="button"
+        class="button button--secondary"
+        [disabled]="isValidating() || isCalculating() || isSubmitting() || isApproving() || isRejecting() || isClosingPeriod() || isTransferring() || isLoading() || !!loadError()"
+        (click)="validateBatches()"
+      >
+        {{ isValidating() ? 'Validating...' : 'Validate Batches' }}
       </button>
       <button
         type="button"
         class="button button--secondary"
-        [disabled]="periodClosed()"
+        [disabled]="isCalculating() || isValidating() || isSubmitting() || isApproving() || isRejecting() || isClosingPeriod() || isTransferring() || isLoading() || !!loadError() || periodClosed()"
+        (click)="calculateCommission()"
+      >
+        {{ isCalculating() ? 'Calculating...' : 'Calculate Commission' }}
+      </button>
+      <button
+        type="button"
+        class="button button--secondary"
+        [disabled]="isSubmitting() || isCalculating() || isValidating() || isApproving() || isRejecting() || isClosingPeriod() || isTransferring() || isLoading() || !!loadError() || periodClosed()"
+        (click)="submitBatchesForApproval()"
+      >
+        {{ isSubmitting() ? 'Submitting...' : 'Submit Batches for Approval' }}
+      </button>
+      <button
+        type="button"
+        class="button button--secondary"
+        [disabled]="periodClosed() || isClosingPeriod() || isTransferring() || isLoading() || isSubmitting() || isCalculating() || isValidating() || isApproving() || isRejecting()"
         (click)="closePeriod()"
       >
-        {{ periodClosed() ? 'Period Closed' : 'Close Period' }}
+        {{ isClosingPeriod() ? 'Closing Period...' : periodClosed() ? 'Period Closed' : 'Close Period' }}
       </button>
-      <button type="button" class="button button--primary" (click)="transferToPayroll()">
-        Transfer to Payroll
+      <button
+        type="button"
+        class="button button--primary"
+        [disabled]="isTransferring() || isClosingPeriod() || isSubmitting() || isCalculating() || isValidating() || isApproving() || isRejecting() || isLoading() || !!loadError() || periodClosed()"
+        (click)="transferToPayroll()"
+      >
+        {{ isTransferring() ? 'Transferring...' : 'Transfer to Payroll' }}
       </button>
     </div>
   </section>
@@ -53,8 +81,8 @@
   <div class="processing-layout">
     <section class="batches-section" aria-labelledby="batches-title">
       <div class="section-heading">
-        <h2 id="batches-title">Commission batches · Nov 2026</h2>
-        <span>Only draft batches may be recalculated</span>
+        <h2 id="batches-title">Commission batches · {{ periodLabel }}</h2>
+        <span>Draft, calculated, or rejected batches may be recalculated</span>
       </div>
 
       <div class="batch-table-wrap">
@@ -80,38 +108,48 @@
               </tr>
             </thead>
             <tbody>
-              @for (batch of visibleBatches(); track batch.id) {
-                <tr
-                  tabindex="0"
-                  [class.is-selected]="selectedBatch()?.id === batch.id"
-                  (click)="selectBatch(batch.id)"
-                  (keydown.enter)="selectBatch(batch.id)"
-                  (keydown.space)="selectBatch(batch.id); $event.preventDefault()"
-                >
-                  <td class="selection-cell" (click)="$event.stopPropagation()">
-                    <input
-                      type="checkbox"
-                      [attr.aria-label]="'Select batch ' + batch.id"
-                      [checked]="selectedBatchIds().includes(batch.id)"
-                      [disabled]="periodClosed()"
-                      (change)="onBatchCheckboxChange(batch.id, $event)"
-                    />
-                  </td>
-                  <td class="batch-id">{{ batch.id }}</td>
-                  <td>{{ batch.category }}</td>
-                  <td>{{ batch.branch }}</td>
-                  <td class="numeric-cell">{{ batch.documents }}</td>
-                  <td class="numeric-cell amount-cell">{{ formatPkr(batch.amount) }}</td>
-                  <td>
-                    <span class="status-badge" [ngClass]="'status-badge--' + batch.status.toLowerCase()">
-                      {{ batch.status }}
-                    </span>
-                  </td>
-                </tr>
-              } @empty {
+              @if (isLoading()) {
                 <tr>
-                  <td colspan="7" class="empty-state">No commission batches are available for this branch.</td>
+                  <td colspan="7" class="empty-state">Loading commission batches...</td>
                 </tr>
+              } @else if (loadError()) {
+                <tr>
+                  <td colspan="7" class="empty-state">The commission batch list is unavailable.</td>
+                </tr>
+              } @else {
+                @for (batch of visibleBatches(); track batch.id) {
+                  <tr
+                    tabindex="0"
+                    [class.is-selected]="selectedBatch()?.id === batch.id"
+                    (click)="selectBatch(batch.id)"
+                    (keydown.enter)="selectBatch(batch.id)"
+                    (keydown.space)="selectBatch(batch.id); $event.preventDefault()"
+                  >
+                    <td class="selection-cell" (click)="$event.stopPropagation()">
+                      <input
+                        type="checkbox"
+                        [attr.aria-label]="'Select batch ' + batch.code"
+                        [checked]="selectedBatchIds().includes(batch.id)"
+                        [disabled]="periodClosed()"
+                        (change)="onBatchCheckboxChange(batch.id, $event)"
+                      />
+                    </td>
+                    <td class="batch-id">{{ batch.code }}</td>
+                    <td>{{ batch.category }}</td>
+                    <td>{{ batch.branch }}</td>
+                    <td class="numeric-cell">{{ batch.documents }}</td>
+                    <td class="numeric-cell amount-cell">{{ formatPkr(batch.amount) }}</td>
+                    <td>
+                      <span class="status-badge" [ngClass]="'status-badge--' + batch.status.toLowerCase()">
+                        {{ batch.status }}
+                      </span>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="7" class="empty-state">No commission batches are available for this branch.</td>
+                  </tr>
+                }
               }
             </tbody>
             <tfoot>
@@ -133,7 +171,7 @@
         <div class="approval-heading">
           <div>
             <h2 id="approval-title">Approval Decision</h2>
-            <p class="approval-batch-id">{{ batch.id }}</p>
+            <p class="approval-batch-id">{{ batch.code }}</p>
           </div>
           <span class="status-badge" [ngClass]="'status-badge--' + batch.status.toLowerCase()">
             {{ batch.status }}
@@ -161,6 +199,7 @@
           <textarea
             rows="4"
             placeholder="Enter Finance / HR review notes..."
+            [disabled]="isApproving() || isRejecting() || isClosingPeriod() || isTransferring()"
             [ngModel]="approverComments()"
             (ngModelChange)="approverComments.set($event)"
           ></textarea>
@@ -170,18 +209,18 @@
           <button
             type="button"
             class="button button--reject"
-            [disabled]="batch.status !== 'Submitted' || periodClosed()"
+            [disabled]="(batch.status !== 'Submitted' && batch.status !== 'Calculated') || periodClosed() || isApproving() || isRejecting() || isClosingPeriod() || isTransferring() || isCalculating() || isSubmitting() || isValidating() || isLoading()"
             (click)="rejectSelectedBatch()"
           >
-            Reject
+            {{ isRejecting() ? 'Rejecting...' : 'Reject' }}
           </button>
           <button
             type="button"
             class="button button--primary"
-            [disabled]="batch.status !== 'Submitted' || periodClosed()"
+            [disabled]="(batch.status !== 'Submitted' && batch.status !== 'Calculated') || periodClosed() || isApproving() || isRejecting() || isClosingPeriod() || isTransferring() || isCalculating() || isSubmitting() || isValidating() || isLoading()"
             (click)="approveSelectedBatch()"
           >
-            Approve Batch
+            {{ isApproving() ? 'Approving...' : 'Approve Batch' }}
           </button>
         </div>
       </aside>

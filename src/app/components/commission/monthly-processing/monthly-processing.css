@@ -136,6 +136,12 @@ select:focus-visible,
   font-size: 13px;
 }
 
+.notice--error {
+  color: #842029;
+  background: #f8d7da;
+  border-color: #f1aeb5;
+}
+
 .commission-run-card {
   display: flex;
   align-items: center;
