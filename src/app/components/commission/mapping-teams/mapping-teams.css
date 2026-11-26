@@ -130,6 +130,17 @@
   font-size: 13px;
 }
 
+.notice--error {
+  color: #842029;
+  background: #f8d7da;
+  border-color: #f1aeb5;
+}
+
+.validation-warning-list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -223,6 +234,12 @@
   justify-content: space-between;
   gap: 16px;
   padding: 16px 0 9px;
+}
+
+.mapping-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .mapping-context p {

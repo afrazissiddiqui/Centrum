@@ -6,11 +6,8 @@
       <label class="toolbar-select">
         <span class="visually-hidden">Filter by branch</span>
         <select [ngModel]="selectedBranch()" (ngModelChange)="selectedBranch.set($event)">
-          <option value="All Branches">All Branches (4)</option>
-          <option value="Karachi South">Karachi South</option>
-          <option value="Islamabad North">Islamabad North</option>
-          <option value="Lahore Main">Lahore Main</option>
-          <option value="Faisalabad Plant">Faisalabad Plant</option>
+          <option value="All Branches">All Branches ({{ mappingTotals().total }})</option>
+          <option *ngFor="let branch of branches()" [value]="branch">{{ branch }}</option>
         </select>
       </label>
     </div>
@@ -26,6 +23,25 @@
   @if (notice()) {
     <div class="notice" role="status">{{ notice() }}</div>
   }
+  @if (loadError()) {
+    <div class="notice notice--error" role="alert">{{ loadError() }}</div>
+  }
+  @if (validationMessage()) {
+    <div
+      class="notice"
+      [class.notice--error]="validationResult() === 'invalid'"
+      [attr.role]="validationResult() === 'invalid' ? 'alert' : 'status'"
+    >
+      {{ validationMessage() }}
+      @if (validationWarnings().length) {
+        <ul class="validation-warning-list">
+          @for (warning of validationWarnings(); track warning) {
+            <li>{{ warning }}</li>
+          }
+        </ul>
+      }
+    </div>
+  }
 
   <section class="summary-cards" aria-label="Mapping summary">
     <article class="summary-card">
@@ -33,7 +49,7 @@
         <span>SAP Salespersons</span>
         <ui5-icon name="employee" aria-hidden="true"></ui5-icon>
       </div>
-      <strong>{{ mappedSalespeople() }} / 20 Mapped</strong>
+      <strong>{{ mappedSalespeople() }} / {{ mappingTotals().total }} Mapped</strong>
       <small>OSLP → Payroll EmployeeID</small>
     </article>
     <article class="summary-card">
@@ -41,24 +57,24 @@
         <span>Executive Pools</span>
         <ui5-icon name="dimension" aria-hidden="true"></ui5-icon>
       </div>
-      <strong>4 Branches</strong>
-      <small>All pool splits total 100%</small>
+      <strong>{{ rowsByTab().executive.length }} Branches</strong>
+      <small>Branch executive mappings</small>
     </article>
     <article class="summary-card">
       <div class="summary-card__top">
         <span>Production Splits</span>
         <ui5-icon name="factory" aria-hidden="true"></ui5-icon>
       </div>
-      <strong>2,400 / 2,400</strong>
-      <small>FG units reconciled to OIGN</small>
+      <strong>{{ rowsByTab().production.length }} Allocations</strong>
+      <small>Production allocation mappings</small>
     </article>
     <article class="summary-card">
       <div class="summary-card__top">
         <span>Assembly Teams</span>
         <ui5-icon name="group" aria-hidden="true"></ui5-icon>
       </div>
-      <strong>3 Active Teams</strong>
-      <small>Teams A, B, C · 100% split</small>
+      <strong>{{ rowsByTab().assembly.length }} Teams</strong>
+      <small>Assembly team mappings</small>
     </article>
   </section>
 
@@ -77,7 +93,24 @@
 
     <div class="mapping-context">
       <p>{{ activeTab().description }}</p>
-      <button type="button" class="button button--primary" (click)="saveMappings()">Save Mappings</button>
+      <div class="mapping-actions">
+        <button
+          type="button"
+          class="button button--secondary"
+          [disabled]="isValidating() || isSaving()"
+          (click)="validateMappings()"
+        >
+          {{ isValidating() ? 'Validating...' : 'Validate Mappings' }}
+        </button>
+        <button
+          type="button"
+          class="button button--primary"
+          [disabled]="isSaving() || isLoading() || !!loadError() || isValidating()"
+          (click)="saveMappings()"
+        >
+          {{ isSaving() ? 'Saving...' : 'Save Mappings' }}
+        </button>
+      </div>
     </div>
 
     <div class="mapping-table-wrap">
@@ -90,36 +123,48 @@
           </tr>
         </thead>
         <tbody>
-          @for (row of visibleRows(); track row.id) {
+          @if (isLoading()) {
             <tr>
-              <td class="mapping-code">{{ row.code }}</td>
-              <td>{{ row.source }}</td>
-              <td>
-                <select
-                  [attr.aria-label]="activeTab().columns[2] + ' for ' + row.code"
-                  [ngModel]="row.assignment"
-                  (ngModelChange)="updateAssignment(row.id, $event)"
-                >
-                  <option *ngIf="selectedTab() === 'sap'" value="">Select Payroll Employee...</option>
-                  <option *ngFor="let option of row.assignmentOptions" [value]="option">{{ option }}</option>
-                </select>
-              </td>
-              <td>{{ row.context }}</td>
-              <td>{{ row.effectiveFrom }}</td>
-              <td>
-                <span
-                  class="status-badge"
-                  [class.status-badge--unmapped]="row.status === 'Unmapped'"
-                  [class.status-badge--neutral]="row.status === 'Reconciled'"
-                >
-                  {{ row.status }}
-                </span>
-              </td>
+              <td class="empty-state" colspan="6">Loading mappings and teams...</td>
             </tr>
-          } @empty {
+          } @else if (loadError()) {
             <tr>
-              <td class="empty-state" colspan="6">No mappings are configured for this branch.</td>
+              <td class="empty-state" colspan="6">The mapping list is unavailable.</td>
             </tr>
+          } @else {
+            @for (row of visibleRows(); track row.id) {
+              <tr>
+                <td class="mapping-code">{{ row.code }}</td>
+                <td>{{ row.source }}</td>
+                <td>
+                  <select
+                    [attr.aria-label]="activeTab().columns[2] + ' for ' + row.code"
+                    [ngModel]="row.assignment"
+                    (ngModelChange)="updateAssignment(row.id, $event)"
+                  >
+                    <option *ngIf="selectedTab() === 'sap'" value="">Select Payroll Employee...</option>
+                    <option *ngFor="let option of row.assignmentOptions" [value]="option.label">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </td>
+                <td>{{ row.context }}</td>
+                <td>{{ row.effectiveFrom }}</td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [class.status-badge--unmapped]="row.status === 'Unmapped'"
+                    [class.status-badge--neutral]="row.status === 'Reconciled'"
+                  >
+                    {{ row.status }}
+                  </span>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="empty-state" colspan="6">No mappings are configured for this branch.</td>
+              </tr>
+            }
           }
         </tbody>
       </table>
