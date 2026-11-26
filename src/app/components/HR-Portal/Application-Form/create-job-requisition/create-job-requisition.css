@@ -926,6 +926,7 @@
 .cjr-selected-attachments {
   display: grid;
   gap: 6px;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -939,8 +940,15 @@
   min-width: 0;
 }
 
-.cjr-selected-attachments li span {
-  overflow-wrap: anywhere;
+.cjr-selected-attachments li input {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cjr-selected-attachments .cjr-no-selected-attachments {
+  color: #64748b;
+  font-size: 13px;
 }
 
 .cjr-file-input {

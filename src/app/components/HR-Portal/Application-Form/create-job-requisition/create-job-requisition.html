@@ -753,16 +753,19 @@
             </div>
             } @else {
             <div class="cjr-row">
-              <label>Selected Files:</label>
+              <label>File Names:</label>
               <ul class="cjr-selected-attachments">
                 @for (file of row.files; let fileIndex = $index; track fileIndex) {
                 <li>
-                  <span>{{ file.name }}</span>
+                  <input type="text" [value]="file.name" readonly
+                    [attr.aria-label]="'File name: ' + file.name" />
                   <button type="button" class="cjr-remove-attachment"
                     (click)="removeAttachmentFile(i, fileIndex)" [attr.aria-label]="'Remove ' + file.name">
                     ✕
                   </button>
                 </li>
+                } @empty {
+                <li class="cjr-no-selected-attachments">No files selected</li>
                 }
               </ul>
             </div>
