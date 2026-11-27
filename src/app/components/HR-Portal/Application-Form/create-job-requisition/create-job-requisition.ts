@@ -6,6 +6,7 @@ import { ViewportScroller } from '@angular/common';
 import { finalize, forkJoin } from 'rxjs';
 import { AlertService } from '../../../../services/alert.service';
 import {
+  ApplicationFormAttachmentMeta,
   ApplicationFormDetail,
   ApplicationFormRecord,
   ApplicationFormService,
@@ -44,6 +45,7 @@ interface AttachmentRow {
   fileName: string;
   fileUrl: string;
   files: File[];
+  uploadedFiles: ApplicationFormAttachmentMeta[];
 }
 
 const ATTACHMENT_FIELD_OPTIONS = [
@@ -57,7 +59,17 @@ const ATTACHMENT_FIELD_OPTIONS = [
   'Others',
 ] as const;
 
-const DEFAULT_ATTACHMENT_ROWS: AttachmentRow[] = [{ type: '', fileName: '', fileUrl: '', files: [] }];
+const DEFAULT_ATTACHMENT_ROWS: AttachmentRow[] = [{
+  type: '',
+  fileName: '',
+  fileUrl: '',
+  files: [],
+  uploadedFiles: [],
+}];
+const MAX_ATTACHMENT_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
+  'pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt',
+]);
 
 const WORK_GRADE_LEVEL_OPTIONS = [
   'WL 1A',
@@ -236,6 +248,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
   // Attachments — flat list of fileName + fileUrl (API shape)
   protected readonly attachmentFieldOptions = ATTACHMENT_FIELD_OPTIONS;
   protected readonly attachmentRows = signal<AttachmentRow[]>(DEFAULT_ATTACHMENT_ROWS);
+  protected readonly attachmentOperationsInProgress = signal(0);
 
   // Remuneration fields
   protected readonly basicSalary = signal('');
@@ -1203,11 +1216,36 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
   }
 
   protected removeAttachmentRow(rowIndex: number): void {
-    this.attachmentRows.update((rows) => {
-      if (rows.length <= 1) {
-        return rows;
-      }
-      return rows.filter((_, index) => index !== rowIndex);
+    if (this.attachmentOperationsInProgress() || this.submitting()) {
+      return;
+    }
+
+    const row = this.attachmentRows()[rowIndex];
+    if (!row) {
+      return;
+    }
+    if (this.attachmentRows().length <= 1) {
+      return;
+    }
+
+    if (!row.uploadedFiles.length) {
+      this.attachmentRows.update((rows) => rows.filter((_, index) => index !== rowIndex));
+      return;
+    }
+
+    this.attachmentOperationsInProgress.update((count) => count + 1);
+    forkJoin(row.uploadedFiles.map((attachment) =>
+      this.applicationFormService.deleteEmployeeAttachment(attachment),
+    )).pipe(finalize(() => {
+      this.attachmentOperationsInProgress.update((count) => Math.max(0, count - 1));
+      this.cdr.markForCheck();
+    })).subscribe({
+      next: () => {
+        this.attachmentRows.update((rows) => rows.filter((_, index) => index !== rowIndex));
+      },
+      error: (error: unknown) => {
+        this.alertService.error('Attachment Delete Failed', this.attachmentErrorMessage(error));
+      },
     });
   }
 
@@ -1228,6 +1266,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     const fileName = row.fileName.trim();
     return Boolean(
       fileName &&
+        !row.uploadedFiles.some((file) => file.fileName === fileName) &&
         (!this.isMultipleAttachmentType(row.type) ||
           !row.files.some((file) => file.name === fileName)),
     );
@@ -1235,28 +1274,126 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
 
   protected onAttachmentFileChange(rowIndex: number, event: Event): void {
     const input = event.target as HTMLInputElement;
+    if (this.attachmentOperationsInProgress() || this.submitting()) {
+      input.value = '';
+      return;
+    }
     const selectedFiles = Array.from(input.files ?? []);
     if (!selectedFiles.length) {
+      return;
+    }
+
+    const row = this.attachmentRows()[rowIndex];
+    if (!row?.type.trim()) {
+      this.alertService.warning('Attachment Type Required', 'Select an attachment type before uploading a file.');
+      input.value = '';
+      return;
+    }
+
+    const validFiles = selectedFiles.filter((file) => this.isAllowedAttachmentFile(file));
+    const invalidFiles = selectedFiles.filter((file) => !this.isAllowedAttachmentFile(file));
+    if (invalidFiles.length) {
+      this.alertService.warning(
+        'Invalid Attachment',
+        'Files must be 10 MB or smaller and use PDF, JPG, JPEG, PNG, GIF, WEBP, DOC, DOCX, XLS, XLSX, CSV, or TXT format.',
+      );
+    }
+
+    const multiple = this.isMultipleAttachmentType(row.type);
+    if (!multiple && row.uploadedFiles.length) {
+      this.alertService.warning(
+        'Remove Existing Attachment',
+        'Remove the existing uploaded file before choosing a replacement.',
+      );
+      input.value = '';
+      return;
+    }
+    const filesToUpload = multiple ? validFiles : validFiles.slice(0, 1);
+    if (!filesToUpload.length) {
+      input.value = '';
       return;
     }
 
     this.attachmentRows.update((rows) => {
       const updated = [...rows];
       const row = updated[rowIndex];
-      const files = this.isMultipleAttachmentType(row.type)
-        ? [...row.files, ...selectedFiles]
-        : [selectedFiles[0]];
       updated[rowIndex] = {
         ...row,
-        files,
-        fileName: this.isMultipleAttachmentType(row.type) ? row.fileName : selectedFiles[0].name,
+        files: [...row.files, ...filesToUpload],
       };
       return updated;
     });
     input.value = '';
+
+    const attachmentType = row.type.trim();
+    const uploadOptions = {
+      employeeProfileId: this.editingApiId() ?? undefined,
+      employeeCode: this.employeeCode().trim() || undefined,
+      type: attachmentType,
+    };
+
+    this.attachmentOperationsInProgress.update((count) => count + filesToUpload.length);
+    for (const file of filesToUpload) {
+      this.applicationFormService.uploadEmployeeAttachment(file, uploadOptions).pipe(
+        finalize(() => {
+          this.attachmentOperationsInProgress.update((count) => Math.max(0, count - 1));
+          this.cdr.markForCheck();
+        }),
+      ).subscribe({
+        next: (attachment) => {
+          const uploadedAttachment = {
+            ...attachment,
+            type: attachmentType,
+            attachmentFor: attachmentType,
+          };
+          this.attachmentRows.update((rows) => {
+            const updated = [...rows];
+            const currentRow = updated[rowIndex];
+            if (!currentRow) {
+              return rows;
+            }
+
+            const pendingFiles = currentRow.files.filter((pendingFile) => pendingFile !== file);
+            if (multiple) {
+              updated[rowIndex] = {
+                ...currentRow,
+                files: pendingFiles,
+                uploadedFiles: [...currentRow.uploadedFiles, uploadedAttachment],
+              };
+            } else {
+              updated[rowIndex] = {
+                ...currentRow,
+                files: pendingFiles,
+                fileName: uploadedAttachment.fileName,
+                fileUrl: uploadedAttachment.fileUrl,
+                uploadedFiles: [uploadedAttachment],
+              };
+            }
+            return updated;
+          });
+        },
+        error: (error: unknown) => {
+          this.attachmentRows.update((rows) => {
+            const updated = [...rows];
+            const currentRow = updated[rowIndex];
+            if (currentRow) {
+              updated[rowIndex] = {
+                ...currentRow,
+                files: currentRow.files.filter((pendingFile) => pendingFile !== file),
+              };
+            }
+            return updated;
+          });
+          this.alertService.error('Attachment Upload Failed', this.attachmentErrorMessage(error));
+        },
+      });
+    }
   }
 
   protected removeAttachmentFile(rowIndex: number, fileIndex: number): void {
+    if (this.attachmentOperationsInProgress() || this.submitting()) {
+      return;
+    }
     this.attachmentRows.update((rows) => {
       const updated = [...rows];
       updated[rowIndex] = {
@@ -1267,44 +1404,138 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
     });
   }
 
+  protected removeUploadedAttachment(rowIndex: number, fileIndex: number): void {
+    if (this.attachmentOperationsInProgress() || this.submitting()) {
+      return;
+    }
+    const attachment = this.attachmentRows()[rowIndex]?.uploadedFiles[fileIndex];
+    if (!attachment) {
+      return;
+    }
+
+    this.attachmentOperationsInProgress.update((count) => count + 1);
+    this.applicationFormService.deleteEmployeeAttachment(attachment).pipe(
+      finalize(() => {
+        this.attachmentOperationsInProgress.update((count) => Math.max(0, count - 1));
+        this.cdr.markForCheck();
+      }),
+    ).subscribe({
+      next: () => {
+        this.attachmentRows.update((rows) => {
+          const updated = [...rows];
+          const row = updated[rowIndex];
+          if (!row) {
+            return rows;
+          }
+          const uploadedFiles = row.uploadedFiles.filter((_, index) => index !== fileIndex);
+          const wasPrimaryFile = row.fileUrl === attachment.fileUrl;
+          updated[rowIndex] = {
+            ...row,
+            uploadedFiles,
+            fileName: wasPrimaryFile ? '' : row.fileName,
+            fileUrl: wasPrimaryFile ? '' : row.fileUrl,
+          };
+          return updated;
+        });
+      },
+      error: (error: unknown) => {
+        this.alertService.error('Attachment Delete Failed', this.attachmentErrorMessage(error));
+      },
+    });
+  }
+
   protected clearAttachmentFile(rowIndex: number): void {
+    if (this.attachmentOperationsInProgress() || this.submitting()) {
+      return;
+    }
+    const row = this.attachmentRows()[rowIndex];
+    if (row?.uploadedFiles.length) {
+      this.removeUploadedAttachment(rowIndex, 0);
+      return;
+    }
+
     this.attachmentRows.update((rows) => {
       const updated = [...rows];
-      updated[rowIndex] = { ...updated[rowIndex], files: [], fileName: '' };
+      updated[rowIndex] = { ...updated[rowIndex], files: [], fileName: '', fileUrl: '' };
       return updated;
     });
   }
 
   protected clearAttachmentName(rowIndex: number): void {
+    if (this.attachmentOperationsInProgress() || this.submitting()) {
+      return;
+    }
+    const row = this.attachmentRows()[rowIndex];
+    const uploadedIndex = row
+      ? row.uploadedFiles.findIndex((file) => file.fileName === row.fileName)
+      : -1;
+    if (uploadedIndex >= 0) {
+      this.removeUploadedAttachment(rowIndex, uploadedIndex);
+      return;
+    }
+
     this.attachmentRows.update((rows) => {
       const updated = [...rows];
-      updated[rowIndex] = { ...updated[rowIndex], fileName: '' };
+      updated[rowIndex] = { ...updated[rowIndex], fileName: '', fileUrl: '' };
       return updated;
     });
   }
 
   private createEmptyAttachmentRow(): AttachmentRow {
-    return { type: '', fileName: '', fileUrl: '', files: [] };
+    return { type: '', fileName: '', fileUrl: '', files: [], uploadedFiles: [] };
   }
 
   private buildAttachmentsPayload(): Array<{ type: string; fileName: string; fileUrl: string }> {
     return this.attachmentRows().flatMap((row) => {
       const type = row.type.trim();
+      const uploaded = row.uploadedFiles.map((attachment) => ({
+        type,
+        fileName: attachment.fileName,
+        fileUrl: attachment.fileUrl,
+      }));
+      const fileName = row.fileName.trim();
       const fileUrl = row.fileUrl.trim();
-      if (row.files.length) {
-        const savedFileName = this.isMultipleAttachmentType(row.type) &&
-          this.hasSeparateAttachmentFileName(row)
-          ? [{ type, fileName: row.fileName.trim(), fileUrl }]
+      const separateFile =
+        fileName &&
+        !uploaded.some((attachment) => attachment.fileName === fileName)
+          ? [{ type, fileName, fileUrl }]
           : [];
-        return [
-          ...savedFileName,
-          ...row.files.map((file) => ({ type, fileName: file.name, fileUrl })),
-        ];
-      }
-
-      const attachment = { type, fileName: row.fileName.trim(), fileUrl };
-      return attachment.type || attachment.fileName || attachment.fileUrl ? [attachment] : [];
+      return [...separateFile, ...uploaded];
     });
+  }
+
+  protected attachmentViewUrl(attachment: ApplicationFormAttachmentMeta, download = false): string {
+    return this.applicationFormService.getEmployeeAttachmentViewUrl(attachment, download);
+  }
+
+  private isAllowedAttachmentFile(file: File): boolean {
+    if (file.size > MAX_ATTACHMENT_FILE_SIZE) {
+      return false;
+    }
+    const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+    return ALLOWED_ATTACHMENT_EXTENSIONS.has(extension);
+  }
+
+  protected isAttachmentOperationInProgress(): boolean {
+    return this.attachmentOperationsInProgress() > 0;
+  }
+
+  private attachmentErrorMessage(error: unknown): string {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'error' in error &&
+      error.error &&
+      typeof error.error === 'object' &&
+      'message' in error.error &&
+      typeof error.error.message === 'string'
+    ) {
+      return error.error.message;
+    }
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+    return 'Please try again.';
   }
 
   private parseEmployeeCodeNumber(value: string): number {
@@ -1625,6 +1856,10 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
 
   protected submitApplication(): void {
     if (this.submitting()) {
+      return;
+    }
+    if (this.attachmentOperationsInProgress()) {
+      this.alertService.warning('Attachments Uploading', 'Wait for attachment uploads or deletions to finish before submitting.');
       return;
     }
 
@@ -2062,6 +2297,7 @@ export class CreateJobRequisitionComponent implements OnInit, OnDestroy {
             type: attachment.type ?? attachment.attachmentFor ?? '',
             fileName: attachment.fileName ?? '',
             fileUrl: attachment.fileUrl ?? '',
+            uploadedFiles: attachment.fileUrl || attachment.filePath ? [attachment] : [],
           }))
         : [this.createEmptyAttachmentRow()],
     );

@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, concatMap, forkJoin, from, last, map, of, scan, switchMap, tap } from 'rxjs';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable, catchError, concatMap, forkJoin, from, last, map, of, scan, switchMap, tap, throwError } from 'rxjs';
 import { apiUrl, publicApiUrl } from '../config/api.config';
 import { formatDateOfBirthFromApi, formatDateForInput, formatDateToApiIso } from '../utils/date-format.util';
 import { sanitizeApiText } from '../utils/api-text.util';
@@ -149,6 +149,9 @@ export interface ApplicationFormAttachmentMeta {
   attachmentFor?: string;
   fileName: string;
   fileUrl: string;
+  filePath?: string;
+  viewUrl?: string;
+  downloadUrl?: string;
 }
 
 export interface ApplicationFormRequisition {
@@ -265,6 +268,9 @@ const EMPLOYEE_PROFILE_VIEW_URL = publicApiUrl('employee-profile-detail');
 const EMPLOYEE_PROFILE_UPDATE_URL = publicApiUrl('employee-profile-update');
 const EMPLOYEE_PROFILE_DELETE_URL = apiUrl('employee-profile-delete');
 const COMMISSION_BRANCHES_LIST_URL = publicApiUrl('commission-branches');
+const EMPLOYEE_ATTACHMENT_UPLOAD_URL = publicApiUrl('employee-attachment-upload');
+const EMPLOYEE_ATTACHMENT_VIEW_URL = publicApiUrl('employee-attachment-view');
+const EMPLOYEE_ATTACHMENT_DELETE_URL = publicApiUrl('employee-attachment-delete');
 
 const LEGACY_EMPLOYEE_CODE_OVERRIDES = new Map<string, string>([
   ['Emp-00003283', 'Emp-00000254'],
@@ -647,6 +653,112 @@ export class ApplicationFormService {
 
   resolveAttachmentForLabel(attachment: ApplicationFormAttachmentMeta): string {
     return attachment.type?.trim() || attachment.attachmentFor?.trim() || '';
+  }
+
+  uploadEmployeeAttachment(
+    file: File,
+    options: { employeeProfileId?: string; employeeCode?: string; type?: string } = {},
+  ): Observable<ApplicationFormAttachmentMeta> {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    if (options.employeeProfileId?.trim()) {
+      formData.append('employee_profile_id', options.employeeProfileId.trim());
+    }
+    if (options.employeeCode?.trim()) {
+      formData.append('employeeCode', options.employeeCode.trim());
+    }
+    if (options.type?.trim()) {
+      formData.append('type', options.type.trim());
+    }
+
+    return this.http.post<unknown>(EMPLOYEE_ATTACHMENT_UPLOAD_URL, formData, {
+      headers: { Accept: 'application/json' },
+    }).pipe(
+      map((response) => {
+        if (!response || typeof response !== 'object' || Array.isArray(response)) {
+          throw new Error('Attachment upload returned an invalid response.');
+        }
+
+        const result = response as Record<string, unknown>;
+        const data = result['data'];
+        if (
+          result['status'] !== true ||
+          !data ||
+          typeof data !== 'object' ||
+          Array.isArray(data)
+        ) {
+          const message = typeof result['message'] === 'string' ? result['message'] : '';
+          throw new Error(message || 'Attachment upload failed.');
+        }
+
+        const attachment = data as Record<string, unknown>;
+        const fileName = String(attachment['fileName'] ?? '').trim();
+        const fileUrl = String(attachment['fileUrl'] ?? '').trim();
+        if (!fileName || !fileUrl) {
+          throw new Error('Attachment upload response is missing the file name or URL.');
+        }
+
+        const type = String(attachment['type'] ?? options.type ?? '').trim();
+        return {
+          type,
+          attachmentFor: type,
+          fileName,
+          fileUrl,
+          filePath: String(attachment['filePath'] ?? '').trim() || undefined,
+          viewUrl: String(attachment['viewUrl'] ?? '').trim() || undefined,
+          downloadUrl: String(attachment['downloadUrl'] ?? '').trim() || undefined,
+        };
+      }),
+    );
+  }
+
+  deleteEmployeeAttachment(attachment: Pick<ApplicationFormAttachmentMeta, 'fileUrl' | 'filePath'>): Observable<unknown> {
+    const fileUrl = attachment.fileUrl.trim();
+    const filePath = attachment.filePath?.trim() ?? '';
+    if (!fileUrl && !filePath) {
+      return throwError(() => new Error('Attachment URL or path is required for deletion.'));
+    }
+
+    return this.http.delete<unknown>(EMPLOYEE_ATTACHMENT_DELETE_URL, {
+      body: fileUrl ? { fileUrl } : { path: filePath },
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    }).pipe(
+      map((response) => {
+        if (
+          !response ||
+          typeof response !== 'object' ||
+          Array.isArray(response) ||
+          (response as Record<string, unknown>)['status'] !== true
+        ) {
+          const result = response as Record<string, unknown> | null;
+          const message = result && typeof result['message'] === 'string' ? result['message'] : '';
+          throw new Error(message || 'Attachment deletion failed.');
+        }
+        return response;
+      }),
+    );
+  }
+
+  getEmployeeAttachmentViewUrl(
+    attachment: ApplicationFormAttachmentMeta,
+    download = false,
+  ): string {
+    const suppliedUrl = download ? attachment.downloadUrl : attachment.viewUrl;
+    if (suppliedUrl?.trim()) {
+      return suppliedUrl.trim();
+    }
+
+    const path = attachment.filePath?.trim();
+    const fileUrl = attachment.fileUrl.trim();
+    if (!path && !fileUrl) {
+      return '';
+    }
+
+    let params = new HttpParams().set(path ? 'path' : 'fileUrl', path || fileUrl);
+    if (download) {
+      params = params.set('download', '1');
+    }
+    return `${EMPLOYEE_ATTACHMENT_VIEW_URL}?${params.toString()}`;
   }
 
   private mergeAttachmentsWithCache(
@@ -2200,6 +2312,9 @@ export class ApplicationFormService {
               attachmentFor,
               fileName: pickFrom(row, 'fileName', 'file_name') || pickFrom(row, 'file'),
               fileUrl: pickFrom(row, 'fileUrl', 'file_url'),
+              filePath: pickFrom(row, 'filePath', 'file_path'),
+              viewUrl: pickFrom(row, 'viewUrl', 'view_url'),
+              downloadUrl: pickFrom(row, 'downloadUrl', 'download_url'),
             };
           })
       : [];

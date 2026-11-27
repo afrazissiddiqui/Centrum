@@ -951,6 +951,18 @@
   font-size: 13px;
 }
 
+.cjr-attachment-links {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.cjr-remove-attachment:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .cjr-file-input {
   padding: 8px 12px;
   border: 1px solid var(--mad-border);

@@ -715,6 +715,7 @@
         <div class="cjr-education-section-header">
           <span class="cjr-dynamic-card__index">Doc {{ i + 1 }}</span>
           <button type="button" class="cjr-remove-section" (click)="removeAttachmentRow(i)"
+            [disabled]="isAttachmentOperationInProgress() || submitting()"
             aria-label="Remove attachment row">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
               <path d="M18 6L6 18M6 6l12 12" />
@@ -728,7 +729,7 @@
             <div class="cjr-row">
               <label>Attachment For:</label>
               <select [ngModel]="row.type" (ngModelChange)="updateAttachmentField(i, 'type', $event)"
-                (blur)="touch('attachmentType')">
+                (blur)="touch('attachmentType')" [disabled]="isAttachmentOperationInProgress() || submitting()">
                 <option value="">Select document type</option>
                 @for (option of attachmentFieldOptions; track option) {
                 <option [value]="option">{{ option }}</option>
@@ -742,9 +743,10 @@
               <div class="cjr-field cjr-attachment-name-field">
                 <input type="text" [ngModel]="row.fileName"
                   (ngModelChange)="updateAttachmentField(i, 'fileName', $event)" (blur)="touch('attachmentFileName')"
-                  placeholder="e.g. resume.pdf" />
+                  placeholder="e.g. resume.pdf" [readonly]="row.uploadedFiles.length > 0" />
                 @if (row.fileName) {
                 <button type="button" class="cjr-remove-attachment" (click)="clearAttachmentFile(i)"
+                  [disabled]="isAttachmentOperationInProgress() || submitting()"
                   aria-label="Clear file name">
                   ✕
                 </button>
@@ -760,7 +762,24 @@
                   <input type="text" [value]="row.fileName" readonly
                     [attr.aria-label]="'File name: ' + row.fileName" />
                   <button type="button" class="cjr-remove-attachment"
-                    (click)="clearAttachmentName(i)" [attr.aria-label]="'Remove ' + row.fileName">
+                    (click)="clearAttachmentName(i)" [disabled]="isAttachmentOperationInProgress() || submitting()"
+                    [attr.aria-label]="'Remove ' + row.fileName">
+                    ✕
+                  </button>
+                </li>
+                }
+                @for (attachment of row.uploadedFiles; let fileIndex = $index; track attachment.fileUrl) {
+                <li>
+                  @if (attachmentViewUrl(attachment); as viewUrl) {
+                  <a [href]="viewUrl" target="_blank" rel="noopener noreferrer">{{ attachment.fileName }}</a>
+                  <a [href]="attachmentViewUrl(attachment, true)" target="_blank" rel="noopener noreferrer">Download</a>
+                  } @else {
+                  <span>{{ attachment.fileName }}</span>
+                  }
+                  <button type="button" class="cjr-remove-attachment"
+                    (click)="removeUploadedAttachment(i, fileIndex)"
+                    [disabled]="isAttachmentOperationInProgress() || submitting()"
+                    [attr.aria-label]="'Delete ' + attachment.fileName">
                     ✕
                   </button>
                 </li>
@@ -770,12 +789,14 @@
                   <input type="text" [value]="file.name" readonly
                     [attr.aria-label]="'File name: ' + file.name" />
                   <button type="button" class="cjr-remove-attachment"
-                    (click)="removeAttachmentFile(i, fileIndex)" [attr.aria-label]="'Remove ' + file.name">
+                    (click)="removeAttachmentFile(i, fileIndex)"
+                    [disabled]="isAttachmentOperationInProgress() || submitting()"
+                    [attr.aria-label]="'Remove ' + file.name">
                     ✕
                   </button>
                 </li>
                 }
-                @if (!hasSeparateAttachmentFileName(row) && !row.files.length) {
+                @if (!hasSeparateAttachmentFileName(row) && !row.files.length && !row.uploadedFiles.length) {
                 <li class="cjr-no-selected-attachments">No files selected</li>
                 }
               </ul>
@@ -786,7 +807,12 @@
               <label>Upload File:</label>
               <input type="file" [multiple]="isMultipleAttachmentType(row.type)"
                 (change)="onAttachmentFileChange(i, $event)" class="cjr-file-input"
+                accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                [disabled]="isAttachmentOperationInProgress() || submitting()"
                 aria-label="Upload attachment file" />
+              @if (isAttachmentOperationInProgress()) {
+              <span class="cjr-no-selected-attachments" role="status">Uploading or deleting attachment...</span>
+              }
             </div>
           </div>
 
@@ -794,7 +820,16 @@
             <div class="cjr-row">
               <label>File URL:</label>
               <input type="url" [ngModel]="row.fileUrl" (ngModelChange)="updateAttachmentField(i, 'fileUrl', $event)"
-                (blur)="touch('attachmentFileUrl')" placeholder="https://example.com/resume.pdf" />
+                (blur)="touch('attachmentFileUrl')" placeholder="https://example.com/resume.pdf"
+                [readonly]="row.uploadedFiles.length > 0" />
+              @if (row.uploadedFiles.length && !isMultipleAttachmentType(row.type)) {
+              <div class="cjr-attachment-links">
+                @for (attachment of row.uploadedFiles; track attachment.fileUrl) {
+                <a [href]="attachmentViewUrl(attachment)" target="_blank" rel="noopener noreferrer">View file</a>
+                <a [href]="attachmentViewUrl(attachment, true)" target="_blank" rel="noopener noreferrer">Download</a>
+                }
+              </div>
+              }
             </div>
           </div>
         </div>
@@ -802,7 +837,8 @@
       }
 
       <div class="cjr-dynamic-footer">
-        <button type="button" class="cjr-add-education-btn" (click)="addAttachmentRow()">
+        <button type="button" class="cjr-add-education-btn" (click)="addAttachmentRow()"
+          [disabled]="isAttachmentOperationInProgress() || submitting()">
           <span class="cjr-add-icon">+</span> Add another attachment
         </button>
       </div>
@@ -1251,13 +1287,15 @@
     </div>
 
     <div class="cjr-actions-footer">
-      <button type="button" class="btn-secondary cjr-cancel-btn" (click)="back()" [disabled]="submitting()">
+      <button type="button" class="btn-secondary cjr-cancel-btn" (click)="back()"
+        [disabled]="submitting() || isAttachmentOperationInProgress()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M18 6L6 18M6 6l12 12" />
         </svg>
         Cancel
       </button>
-      <button type="button" class="cjr-submit-btn" (click)="submitApplication()" [disabled]="submitting()">
+      <button type="button" class="cjr-submit-btn" (click)="submitApplication()"
+        [disabled]="submitting() || isAttachmentOperationInProgress()">
         @if (submitting()) {
         <span class="cjr-submit-spinner" aria-hidden="true"></span>
         <span>Submitting...</span>

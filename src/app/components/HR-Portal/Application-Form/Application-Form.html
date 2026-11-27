@@ -379,14 +379,20 @@
                   <tr>
                     <th>Attachment for</th>
                     <th>File name</th>
-                    <th>File URL</th>
+                    <th>File actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let a of d.attachments">
                     <td>{{ displayDash(resolveAttachmentFor(a)) }}</td>
                     <td>{{ displayDash(a.fileName) }}</td>
-                    <td>{{ displayDash(a.fileUrl) }}</td>
+                    <td>
+                      <a *ngIf="attachmentViewUrl(a) as viewUrl" [href]="viewUrl" target="_blank"
+                        rel="noopener noreferrer">View</a>
+                      <a *ngIf="attachmentViewUrl(a, true) as downloadUrl" [href]="downloadUrl" target="_blank"
+                        rel="noopener noreferrer">Download</a>
+                      <span *ngIf="!a.fileUrl && !a.filePath">—</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>

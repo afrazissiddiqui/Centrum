@@ -114,6 +114,10 @@ export class ApplicationDetailDialogComponent {
     return this.applicationFormService.resolveAttachmentForLabel(attachment);
   }
 
+  attachmentViewUrl(attachment: ApplicationFormAttachmentMeta, download = false): string {
+    return this.applicationFormService.getEmployeeAttachmentViewUrl(attachment, download);
+  }
+
   displayMaximumLoanCapacity(remuneration: ApplicationFormRemuneration): string {
     const value =
       remuneration.loanAmountAllowed?.trim() || remuneration.maximumLoanCapacity?.trim() || '';

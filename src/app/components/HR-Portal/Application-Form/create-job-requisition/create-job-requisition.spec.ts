@@ -25,6 +25,16 @@ describe('CreateJobRequisitionComponent validation', () => {
         fetchEmployeeRosterList: () => of([]),
         formatEmployeeUserId: () => '',
         getNextEmployeeCode: () => '1234',
+        uploadEmployeeAttachment: jasmine.createSpy('uploadEmployeeAttachment').and.returnValue(of({
+          type: 'Resume / CV',
+          attachmentFor: 'Resume / CV',
+          fileName: 'resume.pdf',
+          fileUrl: 'https://example.test/resume.pdf',
+          filePath: 'employee-attachments/15/resume.pdf',
+        })),
+        deleteEmployeeAttachment: jasmine.createSpy('deleteEmployeeAttachment').and.returnValue(of({
+          status: true,
+        })),
       } as unknown as ApplicationFormService,
       { fetchJobSpecificationsForApplication: () => ({ subscribe: () => undefined }) } as unknown as JobSpecificationService,
       { listAllocatableAssets: () => [] } as unknown as GatePassItemMasterService,
@@ -118,6 +128,7 @@ describe('CreateJobRequisitionComponent validation', () => {
         fileName: '',
         fileUrl: '',
         files: [],
+        uploadedFiles: [],
       },
     ]);
     const input = {
@@ -145,6 +156,7 @@ describe('CreateJobRequisitionComponent validation', () => {
         fileName: 'saved.pdf',
         fileUrl: '',
         files: [new File(['new'], 'new.pdf', { type: 'application/pdf' })],
+        uploadedFiles: [],
       },
     ]);
 

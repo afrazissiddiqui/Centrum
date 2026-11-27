@@ -182,7 +182,7 @@
                   <tr>
                     <th>Attachment for</th>
                     <th>File name</th>
-                    <th>File URL</th>
+                    <th>File actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -190,7 +190,15 @@
                     <tr>
                       <td>{{ displayDash(resolveAttachmentFor(a)) }}</td>
                       <td>{{ displayDash(a.fileName) }}</td>
-                      <td>{{ displayDash(a.fileUrl) }}</td>
+                      <td>
+                        @if (attachmentViewUrl(a); as viewUrl) {
+                          <a [href]="viewUrl" target="_blank" rel="noopener noreferrer">View</a>
+                        }
+                        @if (attachmentViewUrl(a, true); as downloadUrl) {
+                          <a [href]="downloadUrl" target="_blank" rel="noopener noreferrer">Download</a>
+                        }
+                        @if (!a.fileUrl && !a.filePath) { — }
+                      </td>
                     </tr>
                   }
                 </tbody>
