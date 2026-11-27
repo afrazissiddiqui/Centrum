@@ -43,6 +43,7 @@ interface MappingEmployeeOption {
 const COMMISSION_MAPPING_LIST_URL = publicApiUrl('commission-mapping-list');
 const COMMISSION_MAPPING_SAVE_URL = publicApiUrl('commission-mapping-save');
 const COMMISSION_MAPPING_VALIDATE_URL = publicApiUrl('commission-mapping-validate');
+const COMMISSION_MAPPING_SYNC_SAP_URL = publicApiUrl('commission-mapping-sync-sap');
 
 @Component({
   selector: 'app-mapping-teams',
@@ -88,6 +89,7 @@ export class MappingTeamsComponent implements OnInit {
   readonly isLoading = signal(true);
   readonly isSaving = signal(false);
   readonly isValidating = signal(false);
+  readonly isFetchingSap = signal(false);
   readonly validationMessage = signal('');
   readonly validationWarnings = signal<string[]>([]);
   readonly validationResult = signal<'valid' | 'invalid' | null>(null);
@@ -117,6 +119,11 @@ export class MappingTeamsComponent implements OnInit {
   readonly mappedSalespeople = computed(() => this.mappingTotals().mapped);
 
   ngOnInit(): void {
+    this.loadMappings();
+  }
+
+  private loadMappings(onComplete?: (loaded: boolean) => void): void {
+    this.isLoading.set(true);
     this.http.get<unknown>(COMMISSION_MAPPING_LIST_URL).subscribe({
       next: (response) => {
         const mapped = this.mapMappingListResponse(response);
@@ -128,10 +135,12 @@ export class MappingTeamsComponent implements OnInit {
           this.loadError.set('');
         }
         this.isLoading.set(false);
+        onComplete?.(mapped !== null);
       },
       error: () => {
         this.loadError.set('Unable to load mappings and teams. Please try again later.');
         this.isLoading.set(false);
+        onComplete?.(false);
       },
     });
   }
@@ -225,7 +234,37 @@ export class MappingTeamsComponent implements OnInit {
   }
 
   fetchSapData(): void {
-    this.notice.set('SAP data fetch is a demo placeholder; no SAP connection is configured.');
+    if (this.isFetchingSap()) {
+      return;
+    }
+
+    this.isFetchingSap.set(true);
+    this.notice.set('');
+    this.http.post<unknown>(COMMISSION_MAPPING_SYNC_SAP_URL, {}).subscribe({
+      next: (response) => {
+        if (this.isRecord(response) && response['status'] === false) {
+          this.isFetchingSap.set(false);
+          this.notice.set(this.apiMessage(response) || 'SAP data could not be fetched.');
+          return;
+        }
+
+        this.loadMappings((loaded) => {
+          this.isFetchingSap.set(false);
+          this.notice.set(
+            loaded
+              ? this.apiMessage(this.isRecord(response) ? response : {}) ||
+                'SAP data fetched successfully.'
+              : 'SAP data was fetched, but mappings and teams could not be refreshed.',
+          );
+        });
+      },
+      error: (error: unknown) => {
+        this.isFetchingSap.set(false);
+        this.notice.set(
+          this.apiErrorMessage(error, 'Unable to fetch SAP data. Please try again.'),
+        );
+      },
+    });
   }
 
   exportSummary(): void {

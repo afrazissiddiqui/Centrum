@@ -206,6 +206,47 @@ describe('MappingTeamsComponent', () => {
     expect(component.isValidating()).toBe(false);
   });
 
+  it('syncs SAP data and reloads mappings and teams', () => {
+    const fixture = TestBed.createComponent(MappingTeamsComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+    httpMock.expectOne(publicApiUrl('commission-mapping-list')).flush({
+      status: true,
+      data: [],
+      employees: [],
+    });
+
+    component.fetchSapData();
+
+    const syncRequest = httpMock.expectOne(
+      publicApiUrl('commission-mapping-sync-sap'),
+    );
+    expect(syncRequest.request.method).toBe('POST');
+    expect(syncRequest.request.body).toEqual({});
+    expect(component.isFetchingSap()).toBe(true);
+    syncRequest.flush({ status: true });
+
+    const refreshRequest = httpMock.expectOne(publicApiUrl('commission-mapping-list'));
+    expect(refreshRequest.request.method).toBe('GET');
+    refreshRequest.flush({
+      status: true,
+      data: [{
+        id: 21,
+        tab_type: 'sap',
+        code: 'SLP-21',
+        source_label: 'Salesperson',
+        sap_slp_code: 21,
+        assignment_value: '',
+        branch: 'DHA',
+      }],
+      employees: [],
+    });
+
+    expect(component.rowsByTab().sap[0].code).toBe('SLP-21');
+    expect(component.notice()).toBe('SAP data fetched successfully.');
+    expect(component.isFetchingSap()).toBe(false);
+  });
+
   it('switches mapping tables with the selected category', () => {
     const fixture = TestBed.createComponent(MappingTeamsComponent);
     const component = fixture.componentInstance;

@@ -13,9 +13,14 @@
     </div>
     <div class="toolbar-actions">
       <button type="button" class="button button--secondary" (click)="exportSummary()">Export Summary</button>
-      <button type="button" class="button button--primary" (click)="fetchSapData()">
+      <button
+        type="button"
+        class="button button--primary"
+        [disabled]="isFetchingSap()"
+        (click)="fetchSapData()"
+      >
         <ui5-icon name="refresh" aria-hidden="true"></ui5-icon>
-        Fetch SAP Data
+        {{ isFetchingSap() ? 'Fetching SAP Data...' : 'Fetch SAP Data' }}
       </button>
     </div>
   </header>
